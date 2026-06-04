@@ -1,0 +1,66 @@
+"""jess — hermetic build of falcon firmware, tracked via rules_wasm_component.
+
+Status: bring-up (jess 0.2.0). The hermetic chain is authored here so the
+toolchain and inputs are version-pinned and auditable. What works hermetically
+TODAY: fetch + validate + optimize the falcon component via rules_wasm_component.
+
+BLOCKED upstream (tracked as AFD-005, see artifacts/findings.yaml):
+  - rules_wasm_component does not export a working `synth_compile` rule
+    (disabled in relay/BUILD.bazel — needs a `synth` toolchain attribute), and
+  - meld/synth are not bundled as hermetic toolchains, so expressing
+    meld_fuse -> synth_compile here would drag the verus/rocq/lean (Nix) proof
+    toolchains into jess's firmware build. jess builds firmware, not proofs.
+Until that is fixed upstream, the fuse->compile->renode targets in BUILD.bazel
+are commented and the forward chain runs via scripts/jess-build.sh (0.1.0).
+
+NOTE: the first `bazel build` is intentionally deferred — gale is using the
+hardware rig; jess stays emulation/software-only and avoids contention.
+"""
+
+module(name = "jess", version = "0.2.0")
+
+bazel_dep(name = "rules_rust", version = "0.70.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.0.0")
+
+# --- WebAssembly component toolchain + rules (the tracking spine) ----------
+bazel_dep(name = "rules_wasm_component", version = "1.0.0")
+git_override(
+    module_name = "rules_wasm_component",
+    remote = "https://github.com/pulseengine/rules_wasm_component.git",
+    commit = "43468cd52f6a09523fc4df08d17e88f67f1cfd82",  # v1.0.0 (matches synth)
+)
+
+# Hermetic, version-pinned wasm toolchain bundle (wasm-tools, wac, binaryen, ...)
+wasm = use_extension("@rules_wasm_component//wasm:extensions.bzl", "wasm_component_bundle")
+wasm.configure(bundle = "stable-2026-03")  # wasm-tools 1.245.1, wac 0.9.0, binaryen 128
+use_repo(wasm, "wasm_tools_toolchains", "binaryen_toolchain")
+
+# --- falcon's load-bearing artifact, pinned by sha256 (supply-chain gate) --
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+http_file(
+    name = "falcon_flight_wasm",
+    urls = ["https://github.com/pulseengine/relay/releases/download/falcon-v1.27.0/falcon-flight-v1.27.wasm"],
+    sha256 = "3213a135e2d694b169e0d415afe54397cb35faac4d9bd0cd953fe5a1ca1dc2f8",
+    downloaded_file_path = "falcon-flight-v1.27.wasm",
+)
+
+# --- on-target emulation (hermetic Renode, NOT the physical board) ---------
+# rules_renode provides Renode as a Bazel test toolchain — pure emulation, so it
+# does not touch gale's hardware. Enabled once the firmware ELF target exists
+# (blocked on synth_compile above).
+# bazel_dep(name = "rules_renode", version = "0.0.0")
+# git_override(
+#     module_name = "rules_renode",
+#     remote = "https://github.com/pulseengine/renode-bazel-rules.git",
+#     commit = "cf0dcfa9338e235a076542154e9f95ece5092b11",  # feat/macos-support
+# )
+# renode = use_extension("@rules_renode//renode:extensions.bzl", "renode")
+# use_repo(renode, "renode_toolchains")
+# register_toolchains("@renode_toolchains//:all")
+
+# --- INTENTIONALLY NOT depended on: meld, synth (and their verus/rocq/lean ---
+# Nix proof toolchains). Depending on them as modules would drag the whole
+# verification toolchain into a firmware build. The right fix is for
+# rules_wasm_component to export synth_compile + bundle meld/synth toolchains
+# (AFD-005). Until then jess uses the prebuilt CLIs via scripts/jess-build.sh.

@@ -24,3 +24,14 @@ artifacts:
     links:
       - type: satisfies
         target: META-REQ-001
+
+  - id: DD-003
+    type: design-decision
+    title: Drive jess firmware build via rules_wasm_component and rules_renode emulation
+    status: accepted
+    tags: [build, bazel, toolchain]
+    fields:
+      rationale: Track the falcon firmware build hermetically through rules_wasm_component (pinned wasm toolchain bundle + meld_fuse/synth_compile) and run on-target tests via rules_renode EMULATION rather than hand-rolled installs or the physical board. Emulation-only keeps jess from contending with gale's hardware rig. Verus/rocq/lean proof toolchains are intentionally NOT jess build deps (jess builds firmware, not proofs).
+    links:
+      - type: satisfies
+        target: REQ-001

@@ -4,3 +4,8 @@
 .rivet/repos/
 .rivet/supplier-cache/
 .scratch/
+bazel-bin
+bazel-out
+bazel-jess
+bazel-testlogs
+MODULE.bazel.lock
