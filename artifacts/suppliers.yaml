@@ -73,3 +73,18 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-003
+
+  - id: EXTERNALANCHOR-006
+    type: external-anchor
+    title: loom optimizer — supplier boundary
+    status: accepted
+    description: >
+      loom is the wasm optimizer used in the jess forward chain. It is an external supplier; its internal implementation is not traced in this repository. A defect was found against loom v0.3.0 prebuilt during the jess bootstrap forward-chain experiment on falcon-flight-v1.26.wasm and recorded as an ai-found-defect in findings.yaml.
+    tags: [supplier, optimizer]
+    fields:
+      expected-derived-types: ["ai-found-defect"]
+      received-status: not-received
+      source-of-truth: {"org": "pulseengine", "doc-id": "loom-optimizer-interface"}
+    links:
+      - type: traces-to
+        target: REQ-001

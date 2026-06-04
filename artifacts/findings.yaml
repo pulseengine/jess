@@ -51,3 +51,35 @@ artifacts:
       created-by: ai-assisted
       model: claude-sonnet-4-6
       timestamp: 2026-06-04T17:47:53Z
+
+  - id: AFD-002
+    type: ai-found-defect
+    title: loom optimize produces invalid modules on falcon-flight-v1.26
+    status: draft
+    description: >
+      Two of falcon's four inner modules failed loom optimization and fell back to
+      original bytes: module 0 'section size mismatch: unexpected data at the end
+      of the section' after the fused optimization pass; module 1 'unknown local
+      18: local index out of bounds' after loop_invariant_code_motion. Net
+      reduction only 0.1%. Reproducible. Upstream issue: TODO (file against
+      pulseengine/loom).
+    tags: [loom, optimizer, wasm, upstream]
+    fields:
+      severity: major
+      triage-status: open
+      detected-by: "jess bootstrap forward-chain experiment (loom v0.3.0 prebuilt) on falcon-flight-v1.26.wasm"
+      discovered-at: "2026-06-04"
+      notes: >
+        Affects two of four wasm inner modules in falcon-flight-v1.26.wasm. Module 0
+        fails with 'section size mismatch: unexpected data at the end of the section'
+        after the fused optimization pass. Module 1 fails with 'unknown local 18:
+        local index out of bounds' after loop_invariant_code_motion. Both fall back
+        to original bytes, resulting in only 0.1% net reduction. Upstream issue URL:
+        TODO — to be filed against pulseengine/loom.
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-006
+    provenance:
+      created-by: ai-assisted
+      model: claude-sonnet-4-6
+      timestamp: 2026-06-04T20:55:00Z
