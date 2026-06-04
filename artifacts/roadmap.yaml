@@ -1,0 +1,24 @@
+artifacts:
+  - id: FEATURE-001
+    type: feature
+    title: "Phase 1 - HIL: falcon on STM32F4/Renode vs relay simulation"
+    status: draft
+    tags: [roadmap, hil]
+    fields:
+      phase: phase-1
+
+  - id: FEATURE-002
+    type: feature
+    title: "Phase 2 - falcon on real drone hardware (bench/tethered)"
+    status: draft
+    tags: [roadmap, hardware]
+    fields:
+      phase: phase-2
+
+  - id: FEATURE-003
+    type: feature
+    title: "Phase 3 - real flying drone (DO-178C bridge added)"
+    status: draft
+    tags: [roadmap, airborne]
+    fields:
+      phase: phase-3
