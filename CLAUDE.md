@@ -10,11 +10,7 @@ Additional Claude Code settings:
 - Use `rivet list --format json` for machine-readable artifact queries
 <!-- END rivet-managed -->
 
-<!-- The content below was present before `rivet init --agents --migrate` wrapped this file. It is preserved verbatim; rivet will not touch it on subsequent regenerations. -->
-
-# CLAUDE.md
-
-See [AGENTS.md](AGENTS.md) for project instructions.
+<!-- Preserved outside the managed markers; rivet will not overwrite this on regeneration. -->
 
 Additional Claude Code settings:
 - Use `rivet validate` to verify changes to artifact YAML files
