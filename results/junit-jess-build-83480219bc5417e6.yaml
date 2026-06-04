@@ -1,0 +1,26 @@
+run:
+  id: junit-jess-build-83480219bc5417e6
+  timestamp: 1970-01-01T00:00:00Z
+  source: junit-xml
+results:
+- artifact: jess-build.sha256-verify
+  status: pass
+  duration: 0s
+- artifact: jess-build.sil-stabilization
+  status: pass
+  duration: 0s
+- artifact: jess-build.sil-position-hold
+  status: pass
+  duration: 0s
+- artifact: jess-build.meld-fuse
+  status: pass
+  duration: 0s
+- artifact: jess-build.loom-optimize
+  status: skip
+  duration: 0s
+- artifact: jess-build.synth-compile
+  status: pass
+  duration: 0s
+- artifact: jess-build.kiln-xruntime
+  status: pass
+  duration: 0s
