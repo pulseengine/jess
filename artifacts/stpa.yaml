@@ -1,0 +1,28 @@
+artifacts:
+  - id: L-001
+    type: loss
+    title: Loss of controlled flight resulting in crash
+    status: draft
+    description: >
+      The drone departs from controlled flight and crashes, causing damage to
+      the airframe, payload, and property, with potential injury to bystanders.
+    tags: [safety, flight]
+    fields:
+      stakeholders: operators, bystanders, regulators
+
+  - id: H-001
+    type: hazard
+    title: Drone departs the safe flight envelope
+    status: draft
+    description: >
+      The drone enters a system state (excessive attitude, airspeed, or altitude
+      rate) outside the safe flight envelope which, under worst-case conditions,
+      leads to loss of controlled flight.
+    tags: [safety, flight]
+    fields:
+      severity: catastrophic
+    links:
+      - type: leads-to-loss
+        target: L-001
+      - type: traces-to
+        target: gale:H-1

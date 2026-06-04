@@ -1,0 +1,20 @@
+artifacts:
+  - id: SG-001
+    type: safety-goal
+    title: Maintain the safe flight envelope (ASIL to be set from HARA)
+    status: draft
+    description: >
+      The flight control system shall keep the drone within the safe flight
+      envelope to prevent loss of controlled flight. ASIL classification is to
+      be assigned from the HARA.
+    tags: [safety, iso26262]
+    fields:
+      claim: |
+        The flight control system maintains the drone within the safe flight
+        envelope under all defined operating conditions, preventing departure
+        from controlled flight.
+      goal-type: system-level
+      undeveloped: true
+    links:
+      - type: goal-addresses-hazard
+        target: H-001
