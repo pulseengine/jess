@@ -1,5 +1,5 @@
 project:
-  name: falconeer
+  name: jess
   version: "0.1.0"
   schemas:
     - common

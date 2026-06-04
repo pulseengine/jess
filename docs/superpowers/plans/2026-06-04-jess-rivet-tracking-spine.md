@@ -1,8 +1,8 @@
-# falconeer rivet tracking spine — Implementation Plan
+# jess rivet tracking spine — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stand up falconeer's rivet tracking spine — schema set, the phased roadmap + integration requirements + standard-anchor decision + STPA/score safety artifacts, the upstream components as cross-repo externals/anchors, and a worked release-watch finding — all validating clean.
+**Goal:** Stand up jess's rivet tracking spine — schema set, the phased roadmap + integration requirements + standard-anchor decision + STPA/score safety artifacts, the upstream components as cross-repo externals/anchors, and a worked release-watch finding — all validating clean.
 
 **Architecture:** Everything is a rivet artifact ("evidence as code"). Upstream rivet repos are declared as `[externals]` and cross-linked by `prefix:ID`; non-rivet sources are `external-anchor`s. The release-watch loop is native rivet (`sync`/`lock`/`snapshot`/`impact`/`supplier`/`import-results`), wrapped in a runbook.
 
@@ -10,7 +10,7 @@
 
 **The oracle (our "tests"):** `rivet validate` (must end `Result: PASS`), `rivet schema list`, `rivet supplier check`, `rivet stats`. Each task ends by running the relevant oracle and committing.
 
-**Spec:** `docs/superpowers/specs/2026-06-04-falconeer-rivet-tracking-design.md`
+**Spec:** `docs/superpowers/specs/2026-06-04-jess-rivet-tracking-design.md`
 
 ---
 
@@ -23,7 +23,7 @@
 
 ```yaml
 project:
-  name: falconeer
+  name: jess
   version: "0.1.0"
   schemas:
     - common
@@ -172,7 +172,7 @@ git commit -m "feat(artifacts): add 3-phase roadmap features"
 **Files:**
 - Modify: `artifacts/requirements.yaml`
 
-- [ ] **Step 1: Seed falconeer's own integration requirements**, each linked to the phase it serves. Run (adjust phase target IDs to those printed in Task 4):
+- [ ] **Step 1: Seed jess's own integration requirements**, each linked to the phase it serves. Run (adjust phase target IDs to those printed in Task 4):
 
 ```bash
 rivet add -t requirement --title "falcon firmware image boots on the STM32F4 Renode target" \

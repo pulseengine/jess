@@ -13,8 +13,8 @@
 This project uses **Rivet** for SDLC artifact traceability.
 - Config: `rivet.yaml`
 - Schemas: common, dev, research, stpa, score, safety-case, supply-chain
-- Artifacts: 2 across 2 types
-- Validation: `rivet validate` (current status: pass)
+- Artifacts: 18 across 8 types
+- Validation: `rivet validate` (current status: 1 errors)
 
 ## Available Commands
 
@@ -35,10 +35,15 @@ This project uses **Rivet** for SDLC artifact traceability.
 
 | Type | Count | Description |
 |------|------:|-------------|
-| `feature` | 1 | A user-visible capability or feature |
-| `requirement` | 1 | A functional or non-functional requirement |
+| `ai-found-defect` | 1 | A defect introduced by an AI authoring step that rivet's detection machinery (validate, oracles, mutation, proofs, cited-source verification) caught. Closes the loop between "AI made an error" and "the tool reflected it back" — the operational primitive that raises rivet's TD claim (Tool error Detection per ISO 26262-8 §11.4.5.4) when the upstream author is non-human. |
+| `design-decision` | 2 | An architectural or design decision with rationale |
+| `external-anchor` | 5 | A typed leaf marking the point at which an in-house traceability chain hands off to an external supplier or organization. The chain is intentionally not followed further — the supplier owns what's downstream. Used to keep coverage honest at the organizational boundary (3-state coverage: satisfied / external-boundary / uncovered) instead of conflating "missing in our store" with "delegated to a supplier". |
+| `feature` | 3 | A user-visible capability or feature |
+| `hazard` | 1 | A system state or set of conditions that, together with worst-case environmental conditions, will lead to a loss. |
+| `loss` | 1 | An undesired or unplanned event involving something of value to stakeholders. Losses define what the analysis aims to prevent. |
+| `requirement` | 4 | A functional or non-functional requirement |
+| `safety-goal` | 1 | A claim about the system's safety that must be supported by evidence or decomposed into sub-goals via a strategy. |
 | `academic-reference` | 0 | An academic paper, thesis, or technical report that informs the product design — key findings and relevance. |
-| `ai-found-defect` | 0 | A defect introduced by an AI authoring step that rivet's detection machinery (validate, oracles, mutation, proofs, cited-source verification) caught. Closes the loop between "AI made an error" and "the tool reflected it back" — the operational primitive that raises rivet's TD claim (Tool error Detection per ISO 26262-8 §11.4.5.4) when the upstream author is non-human. |
 | `ai-session` | 0 | A Claude Code (or other AI assistant) session whose work product landed in the repo. Pins the session to a commit so the auditor can reconstruct *who/what* authored a change. Each `ai-session` is the unit of authorship that AI provenance trailers (created-by, model, session-id) ultimately resolve back to. |
 | `aou-req` | 0 | Assumption of use requirement — a condition or constraint that must hold for the system to operate safely. Documents the boundary conditions and operating assumptions. |
 | `assertion` | 0 | Trustable framework assertion (eclipse `assertion`) — a falsifiable claim derived from a tenet, demonstrated by evidence. |
@@ -56,20 +61,16 @@ This project uses **Rivet** for SDLC artifact traceability.
 | `dd-dyn` | 0 | Dynamic detailed design — a view of the architecture showing runtime behavior (sequence diagrams, state machines, activity flows). |
 | `dd-sta` | 0 | Static detailed design — a view of the architecture showing the structural relationships between components and modules (class diagrams, package structure, data types). |
 | `decision-record` | 0 | Architecture decision record (ADR) — documents a significant architectural or design decision, its context, alternatives considered, and rationale. |
-| `design-decision` | 0 | An architectural or design decision with rationale |
 | `dfa-entry` | 0 | Dependent failure analysis entry — documents analysis of common-cause and cascading failures between components (ISO 26262-9 clause 7). |
 | `doc` | 0 | Document — a general-purpose document artifact (specification, plan, report, manual) managed within the SCORE lifecycle. |
 | `dpia` | 0 | Data Protection Impact Assessment per DSGVO Art. 35. Required when a project's AI-provenance workflow systematically processes personal data (e.g. `ai-session.invoker`). The artifact captures the assessment outcome, the responsible Data Protection Officer sign-off, and the categories of personal data processed. Link `ai-session` artifacts to one or more `dpia` records via `derives-from`. |
-| `external-anchor` | 0 | A typed leaf marking the point at which an in-house traceability chain hands off to an external supplier or organization. The chain is intentionally not followed further — the supplier owns what's downstream. Used to keep coverage honest at the organizational boundary (3-state coverage: satisfied / external-boundary / uncovered) instead of conflating "missing in our store" with "delegated to a supplier". |
 | `feat` | 0 | Feature — a logical architectural element representing a user-visible capability. Acts as the top-level grouping in the logical architecture. |
 | `feat-arc-dyn` | 0 | Dynamic feature architecture — sequence/state view of a feature's runtime behaviour (eclipse `feat_arc_dyn`). |
 | `feat-arc-sta` | 0 | Static feature architecture — class/package-style view of a feature's internal structure (eclipse `feat_arc_sta`). |
 | `feat-req` | 0 | Feature requirement — a requirement derived from stakeholder needs that defines what a feature must provide. |
 | `fmea-entry` | 0 | FMEA failure mode — an entry in a Failure Mode and Effects Analysis identifying a potential failure mode, its effects, severity, and mitigations. |
 | `guidance` | 0 | A guidance document providing instructions, templates, or conventions for performing a development activity within SCORE. |
-| `hazard` | 0 | A system state or set of conditions that, together with worst-case environmental conditions, will lead to a loss. |
 | `logic-arc-int` | 0 | Logical architecture interface — the abstract, technology-neutral contract exposed by a feature or component (eclipse `logic_arc_int`). |
-| `loss` | 0 | An undesired or unplanned event involving something of value to stakeholders. Losses define what the analysis aims to prevent. |
 | `loss-scenario` | 0 | A causal pathway describing how a UCA could occur or how the control action could be improperly executed, leading to a hazard. |
 | `market-finding` | 0 | A finding about a target market or domain — pain points, current tools, standards, regulatory requirements, and opportunities. |
 | `mod` | 0 | Module — a fine-grained decomposition of a component into compilation units or logical groupings of source files. |
@@ -80,7 +81,6 @@ This project uses **Rivet** for SDLC artifact traceability.
 | `release-artifact` | 0 | A released binary, package, or container image. Tracks identity, digest, and signing status for integrity verification. |
 | `role` | 0 | Process role (eclipse `role`) — a responsibility assigned to a person or team in the development workflow. |
 | `safety-context` | 0 | Assumptions, environmental conditions, or scope bounding a safety goal or strategy. |
-| `safety-goal` | 0 | A claim about the system's safety that must be supported by evidence or decomposed into sub-goals via a strategy. |
 | `safety-justification` | 0 | Rationale explaining why a goal or strategy is appropriate. Provides reasoning that is not evidence but supports the argument structure. |
 | `safety-solution` | 0 | Evidence supporting a safety goal. References a concrete piece of evidence such as a test report, analysis, or formal proof. |
 | `safety-strategy` | 0 | The argument approach used to decompose a goal into sub-goals. Explains why the sub-goals are sufficient to support the parent goal. |

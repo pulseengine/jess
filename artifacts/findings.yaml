@@ -4,13 +4,13 @@ artifacts:
     title: synth graph unresolvable — broken CTRL-RA ref plus synth-sigil cycle
     status: draft
     description: >
-      During falconeer external-integration setup (Task 8/9 of the rivet tracking
+      During jess external-integration setup (Task 8/9 of the rivet tracking
       spine), `rivet validate` was run against the synth upstream repo
       (pulseengine/synth) to test whether it could be consumed as a cross-repo
       external. Validation failed with multiple graph errors.
 
       Detection method: `rivet validate` (rivet's own graph-resolution machinery)
-      during falconeer external integration on 2026-06-04.
+      during jess external integration on 2026-06-04.
 
       Root causes identified:
       1. Broken internal cross-reference `CTRL-RA` in
@@ -29,7 +29,7 @@ artifacts:
 
       Status: open.
       Upstream issue URL: TODO — to be filed via `gh issue create` against
-      pulseengine/synth once this falconeer task is committed.
+      pulseengine/synth once this jess task is committed.
     tags: [supplier, upstream, graph-error, blocked]
     fields:
       severity: major

@@ -13,7 +13,7 @@ feeding findings back to upstream suppliers.
 
 ## 1. Maintain and Pin Externals
 
-Keep `externals:` in `rivet.yaml` current with the upstream repos falconeer
+Keep `externals:` in `rivet.yaml` current with the upstream repos jess
 consumes. After any change to the externals list, re-sync and re-lock:
 
 ```bash
@@ -53,7 +53,7 @@ rivet impact --since <old-ref>          # show downstream impact of changes
 Review the diff output for:
 - New, removed, or renamed artifacts
 - Changed field values (especially severity, status, priority)
-- New or removed links that affect falconeer's traceability chains
+- New or removed links that affect jess's traceability chains
 
 ## 3. Exercise via the HIL Bench
 
@@ -115,11 +115,11 @@ gh issue create \
   --repo pulseengine/<component> \
   --title "<short description>" \
   --body "$(cat <<'EOF'
-Rivet finding AFD-XXX detected during falconeer external integration.
+Rivet finding AFD-XXX detected during jess external integration.
 
 <description of the issue>
 
-Reference: falconeer artifact AFD-XXX (artifacts/findings.yaml)
+Reference: jess artifact AFD-XXX (artifacts/findings.yaml)
 EOF
 )"
 ```
@@ -131,7 +131,7 @@ advance the triage lifecycle:
 |-------|------|
 | `open` | Initially filed |
 | `accepted` | Confirmed as a real defect, upstream notified |
-| `rejected` | Determined to be falconeer-local, or not a defect |
+| `rejected` | Determined to be jess-local, or not a defect |
 | `deduplicated` | Covered by an existing upstream issue |
 
 Add a `corrects: AFD-XXX` link on the artifact that eventually fixes the defect

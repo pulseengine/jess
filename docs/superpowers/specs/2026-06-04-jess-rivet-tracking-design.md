@@ -1,4 +1,4 @@
-# falconeer — rivet tracking spine (design)
+# jess — rivet tracking spine (design)
 
 Date: 2026-06-04
 Status: approved (brainstorming)
@@ -8,7 +8,7 @@ Status: approved (brainstorming)
 > and the order in which the artifacts get built. Anything that can be a rivet
 > artifact *is* one — including the standard-anchor decision (a `design-decision`).
 
-## What falconeer is
+## What jess is
 
 The physical / hardware-integration project that takes **falcon** (the drone
 software, built through the PulseEngine wasm→embedded pipeline) onto hardware,
@@ -65,7 +65,7 @@ safety-case↔stpa, supply-chain↔dev). `score` is rivet's ISO 26262 schema.
 | File / group | Type(s) | Purpose |
 |---|---|---|
 | `roadmap.yaml` | feature | The 3 phases (P1 HIL-vs-relay → P2 real drone HW → P3 flying drone), each a `feature` with a `phase` field |
-| `requirements.yaml` | requirement | falconeer's own integration/system requirements |
+| `requirements.yaml` | requirement | jess's own integration/system requirements |
 | `design-decisions.yaml` | design-decision | Standard anchor; "HIL mechanics = separate spec"; loop design |
 | `stpa/` | stpa types | Control structure, hazards, UCAs, loss scenarios (ref gale flight-control) |
 | `safety-goals.yaml` | score types | ISO 26262 safety goals + ASIL, derived from hazards |
