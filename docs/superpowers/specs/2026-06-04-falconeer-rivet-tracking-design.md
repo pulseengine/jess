@@ -35,21 +35,30 @@ compiled through the pipeline and flashed to the STM32F4 target.
    prebuilt; the local repo checkout was stale at `v0.4.3-85`).
 2. **Posture:** safety-forward from day one.
 3. **Standard anchor:** STPA as the methodology spine + **ISO 26262** (ASIL)
-   now — reuses gale's existing STPA flight-control controllers and ASIL-D
-   framing. **DO-178C bridge deferred to Phase 3** (airborne). Recorded as a
+   now — implemented with the **`score`** schema (Eclipse SCORE metamodel:
+   ISO 26262 V-model, FMEA, DFA); reuses gale's existing STPA flight-control
+   controllers and ASIL-D framing. **DO-178C preset deferred to Phase 3**
+   (airborne; `rivet init --preset do-178c` exists). Recorded as a
    `design-decision` artifact so the rationale is traceable and revisable.
-4. **Loop on native rivet, not bespoke scripts:** `[externals]` + `sync` +
-   `lock` (pin baseline); `external-anchor` + `supplier check` (3-state
-   supplier coverage); `ai-found-defect` + `stamp`/`audit` (findings with
-   provenance); `snapshot`/`impact`/`diff` (release deltas); `import-results`
+4. **Two cross-repo mechanisms, chosen per link** (per `rivet docs cross-repo`):
+   - `externals:` in `rivet.yaml` — for upstream components that are themselves
+     rivet projects. `rivet sync` clones to `.rivet/repos/`, `rivet lock` pins
+     exact SHAs, and artifacts cross-link with `prefix:ID` (e.g. reuse gale's
+     hazards as `gale:H-1`). This is the navigable "work back to the owner" graph.
+   - `external-anchor` + `cited-source` — sha256-pinned, for non-rivet sources
+     (relay's sim, a delivered compliance PDF). `rivet supplier pull` + `check`.
+5. **Loop on native rivet, not bespoke scripts:** the two mechanisms above +
+   `ai-found-defect` + `stamp`/`audit` (findings with provenance);
+   `snapshot`/`impact`/`diff` (release deltas); `import-results`
    (HIL junit/reqif → verification). Ingestion point: the ecosystem-wide
    `{name}-v{version}-compliance-report.tar.gz` release asset (per `reports.toml`).
 
 ## Schema set (`rivet.yaml`)
 
-`common, dev, research, stpa, iso-26262, safety-case, supply-chain`
-(+ available bridges: stpa↔dev, safety-case↔stpa, supply-chain↔dev).
-Exact preset names verified against rivet 0.15.0 during implementation.
+`common, dev, research, stpa, score, safety-case, supply-chain`
+(+ bridges that auto-load when both sides are present: stpa↔dev,
+safety-case↔stpa, supply-chain↔dev). `score` is rivet's ISO 26262 schema.
+`external-anchor`/`ai-found-defect`/`ai-session` are available from `common`.
 
 ## Artifact taxonomy (`artifacts/`)
 
@@ -59,8 +68,9 @@ Exact preset names verified against rivet 0.15.0 during implementation.
 | `requirements.yaml` | requirement | falconeer's own integration/system requirements |
 | `design-decisions.yaml` | design-decision | Standard anchor; "HIL mechanics = separate spec"; loop design |
 | `stpa/` | stpa types | Control structure, hazards, UCAs, loss scenarios (ref gale flight-control) |
-| `safety-goals.yaml` | iso-26262 types | Safety goals + ASIL, derived from hazards |
-| `externals` (in `rivet.yaml`) + `external-anchor`s | external-anchor | One supplier-boundary per upstream component |
+| `safety-goals.yaml` | score types | ISO 26262 safety goals + ASIL, derived from hazards |
+| `[externals]` (in `rivet.yaml`) | — | The upstream **rivet** repos, cross-linked via `prefix:ID`, pinned by `rivet lock` |
+| `external-anchor`s | external-anchor | Supplier boundary for **non-rivet** sources (relay sim, delivered docs) |
 | `findings.yaml` | ai-found-defect / defect | Loop findings → linked to supplier anchor + affected req/test + upstream issue URL |
 | `results/` | verification (via `import-results`) | HIL bench output (Renode/QEMU junit) linked to requirements |
 
