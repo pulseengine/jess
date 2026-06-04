@@ -1,0 +1,20 @@
+project:
+  name: falconeer
+  version: "0.1.0"
+  schemas:
+    - common
+    - dev
+    - research
+    - stpa
+    - score
+    - safety-case
+    - supply-chain
+
+sources:
+  - path: artifacts
+    format: generic-yaml
+
+docs:
+  - docs
+
+results: results
