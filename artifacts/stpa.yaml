@@ -25,4 +25,4 @@ artifacts:
       - type: leads-to-loss
         target: L-001
       - type: traces-to
-        target: gale:H-1
+        target: gale:L-1
