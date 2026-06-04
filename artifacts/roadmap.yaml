@@ -6,7 +6,14 @@ artifacts:
     tags: [roadmap, hil]
     fields:
       phase: phase-1
+    links:
+      - type: satisfies
+        target: REQ-001
 
+      - type: satisfies
+        target: REQ-002
+      - type: satisfies
+        target: REQ-003
   - id: FEATURE-002
     type: feature
     title: "Phase 2 - falcon on real drone hardware (bench/tethered)"

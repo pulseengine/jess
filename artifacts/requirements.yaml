@@ -1,1 +1,24 @@
-artifacts: []
+artifacts:
+  - id: REQ-001
+    type: requirement
+    title: falcon firmware image boots on the STM32F4 Renode target
+    status: draft
+    fields:
+      category: functional
+      priority: must
+
+  - id: REQ-002
+    type: requirement
+    title: HIL run reproduces relay-simulated flight scenarios within tolerance
+    status: draft
+    fields:
+      category: functional
+      priority: must
+
+  - id: REQ-003
+    type: requirement
+    title: Each adopted upstream component release is pinned and traceable
+    status: draft
+    fields:
+      category: non-functional
+      priority: must
