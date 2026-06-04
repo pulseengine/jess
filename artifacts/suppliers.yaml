@@ -1,0 +1,75 @@
+artifacts:
+  - id: EXTERNALANCHOR-001
+    type: external-anchor
+    title: relay flight simulation — supplier boundary
+    status: accepted
+    description: >
+      Non-rivet flight simulation that falcon is tested against in Phase 1. Falcon firmware must reproduce relay-simulated flight scenarios within tolerance (REQ-002). Relay is an external supplier; its internal implementation is not traced in this repository.
+    tags: [supplier, simulation]
+    fields:
+      expected-derived-types: ["test-spec", "requirement"]
+      received-status: not-received
+      source-of-truth: {"org": "relay-project", "doc-id": "relay-sim-interface"}
+    links:
+      - type: traces-to
+        target: REQ-002
+
+  - id: EXTERNALANCHOR-002
+    type: external-anchor
+    title: synth transcoder — supplier boundary (graph unresolved)
+    status: accepted
+    description: >
+      Upstream rivet repo that could not be added as a cross-repo external because its graph fails to resolve: broken ref CTRL-RA and a synth/sigil cycle. Until the synth graph resolves, traceability is anchored at this supplier boundary.
+    tags: [supplier, blocked]
+    fields:
+      expected-derived-types: ["requirement", "comp"]
+      received-status: not-received
+      source-of-truth: {"org": "synth-project", "doc-id": "synth-interface"}
+    links:
+      - type: traces-to
+        target: REQ-003
+
+  - id: EXTERNALANCHOR-003
+    type: external-anchor
+    title: meld component fusion — supplier boundary (graph unresolved)
+    status: accepted
+    description: >
+      Upstream rivet repo that could not be added as a cross-repo external because its graph fails to resolve: broken refs including Fiber Manager. Until the meld graph resolves, traceability is anchored at this supplier boundary.
+    tags: [supplier, blocked]
+    fields:
+      expected-derived-types: ["requirement", "comp"]
+      received-status: not-received
+      source-of-truth: {"org": "meld-project", "doc-id": "meld-interface"}
+    links:
+      - type: traces-to
+        target: REQ-003
+
+  - id: EXTERNALANCHOR-004
+    type: external-anchor
+    title: kiln runtime — supplier boundary (graph unresolved)
+    status: accepted
+    description: >
+      Upstream rivet repo that could not be added as a cross-repo external because its graph fails to resolve: broken ref CTRL-BUILTINS. Until the kiln graph resolves, traceability is anchored at this supplier boundary.
+    tags: [supplier, blocked]
+    fields:
+      expected-derived-types: ["requirement", "comp"]
+      received-status: not-received
+      source-of-truth: {"org": "kiln-project", "doc-id": "kiln-interface"}
+    links:
+      - type: traces-to
+        target: REQ-003
+
+  - id: EXTERNALANCHOR-005
+    type: external-anchor
+    title: sigil supply-chain — supplier boundary (graph unresolved)
+    status: accepted
+    description: >
+      Upstream rivet repo that could not be added as a cross-repo external because its graph fails to resolve: broken synth: prefix links. Until the sigil graph resolves, traceability is anchored at this supplier boundary.
+    tags: [supplier, blocked]
+    fields:
+      expected-derived-types: ["requirement", "comp"]
+      received-status: not-received
+      source-of-truth: {"org": "sigil-project", "doc-id": "sigil-interface"}
+    links:
+      - type: traces-to
+        target: REQ-003
