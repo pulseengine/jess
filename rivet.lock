@@ -1,0 +1,10 @@
+pins:
+  gale:
+    commit: 9c872cc68f3ef40bd1e02b38632877d74cafc1d1
+    prefix: gale
+  loom:
+    commit: 6bbb76318663c749b3e4f08a988000465d1e3717
+    prefix: loom
+  rivet:
+    commit: f44b825c63b6dd62bf9f62b077aa4ec9a6d2ff47
+    prefix: rivet

@@ -1,0 +1,5 @@
+
+# Rivet external project cache
+.rivet/
+.rivet/repos/
+.rivet/supplier-cache/

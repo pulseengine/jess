@@ -10,6 +10,11 @@ project:
     - safety-case
     - supply-chain
 
+externals:
+  gale:  { path: ../gale,  prefix: gale }
+  loom:  { path: ../loom,  prefix: loom }
+  rivet: { path: ../rivet, prefix: rivet }
+
 sources:
   - path: artifacts
     format: generic-yaml
