@@ -83,3 +83,33 @@ artifacts:
       created-by: ai-assisted
       model: claude-sonnet-4-6
       timestamp: 2026-06-04T20:55:00Z
+
+  - id: AFD-003
+    type: ai-found-defect
+    title: kilnd panics instantiating falcon component (component_instantiation 2703)
+    status: open
+    description: >
+      Running the falcon component directly on kiln panics at kiln-component/src/components/component_instantiation.rs:2703 (code 1005 'Item serialized size cannot be zero with non-zero capacity'). The meld-fused core-module path works and returns 0.0233998559 rad (matches wasmtime). Filed respectfully as https://github.com/pulseengine/kiln/issues/269. Status open; supervise for fix/comment.
+    tags: [release-watch, kiln]
+    fields:
+      detected-by: jess loop iter#1 — kilnd e43c415 on falcon-flight-v1.27.wasm
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-004
+
+  - id: AFD-004
+    type: ai-found-defect
+    title: meld CLI reports stale version v0.2.0 while release is v0.21.0
+    status: open
+    description: >
+      meld version prints 'meld v0.2.0' but the published release tag is v0.21.0 — CLI version string appears unbumped. Cosmetic/provenance; not yet filed upstream (low priority). meld fuse itself works (101207 to 79663 bytes on falcon).
+    tags: [release-watch, meld, minor]
+    fields:
+      detected-by: jess loop iter#1 — meld 0aed1b5 'meld version' output
+      severity: minor
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-003
