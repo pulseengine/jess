@@ -1,0 +1,26 @@
+artifacts:
+  - id: DD-001
+    type: design-decision
+    title: Anchor safety case to STPA + ISO 26262 (score), defer DO-178C to Phase 3
+    status: accepted
+    description: >
+      Toolchain is ISO-26262-aligned today (gale is ASIL-D); the drone is the demonstrator. STPA is the methodology spine; the score schema (tenet/assertion) plus safety-case (safety-goal/fmea-entry) carry the ISO 26262 argument. DO-178C (rivet preset) is added when the airborne Phase 3 needs it.
+    tags: [safety, standards]
+    fields:
+      rationale: Standards selection drives schema choices for the entire spine. ISO 26262 is already supported by the toolchain; committing to it now avoids rework. DO-178C is deferred to avoid premature complexity.
+    links:
+      - type: satisfies
+        target: META-REQ-001
+
+  - id: DD-002
+    type: design-decision
+    title: HIL build-flash mechanics are a separate Phase-1 spec
+    status: accepted
+    description: >
+      How falcon is compiled through meld->loom->synth->kiln and flashed to the STM32F4 target is out of scope for the tracking spine; it is brainstormed as its own spec.
+    tags: [scope]
+    fields:
+      rationale: Keeping build-flash mechanics separate prevents the tracking spine from becoming a build-system spec. A dedicated Phase-1 document keeps responsibilities clean.
+    links:
+      - type: satisfies
+        target: META-REQ-001

@@ -1,0 +1,9 @@
+artifacts:
+  - id: META-REQ-001
+    type: requirement
+    title: Establish artifact-tracking spine for falconeer safety case
+    status: accepted
+    description: >
+      The project shall maintain a traceable artifact spine anchored to STPA and ISO 26262 (score schema),
+      with design decisions recorded and linked to standards and safety goals.
+    tags: [meta, spine]
