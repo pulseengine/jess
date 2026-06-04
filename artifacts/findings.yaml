@@ -119,7 +119,7 @@ artifacts:
     title: rules_wasm_component lacks working synth_compile and hermetic meld synth toolchains
     status: open
     description: >
-      rules_wasm_component does not export a working synth_compile rule (disabled in relay/BUILD.bazel: 'requires a synth attribute that this file doesnt provide') and does not bundle meld/synth as hermetic Bazel toolchains. Consequence for jess: a downstream firmware build (meld_fuse -> synth_compile -> renode_test) cannot be expressed without depending on meld/synth as modules, which drags their verus/rocq/lean (Nix) proof toolchains into a firmware-only build. Suggested fix: export synth_compile with a synth toolchain attr and provide meld/synth toolchains from rules_wasm_component (or a thin rules_synth/rules_meld). Upstream issue TODO.
+      rules_wasm_component does not export a working synth_compile rule (disabled in relay/BUILD.bazel: 'requires a synth attribute that this file doesnt provide') and does not bundle meld/synth as hermetic Bazel toolchains. Consequence for jess: a downstream firmware build (meld_fuse -> synth_compile -> renode_test) cannot be expressed without depending on meld/synth as modules, which drags their verus/rocq/lean (Nix) proof toolchains into a firmware-only build. Suggested fix: export synth_compile with a synth toolchain attr and provide meld/synth toolchains from rules_wasm_component (or a thin rules_synth/rules_meld). Upstream issue https://github.com/pulseengine/rules_wasm_component/issues/489 (filed, supervising).
     tags: [release-watch, rules_wasm_component, build]
     fields:
       detected-by: jess 0.2.0 bazel wiring — relay BUILD.bazel disables synth_compile (missing synth attr)
