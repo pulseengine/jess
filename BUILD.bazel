@@ -1,11 +1,14 @@
 # jess hermetic build — falcon firmware chain, tracked via rules_wasm_component.
 # Run (deferred while gale uses the rig):  bazel build //:falcon-validate //:falcon-optimized
-load("@rules_wasm_component//wasm:defs.bzl", "wasm_validate", "wasm_optimize")
+load("@rules_wasm_component//wasm:defs.bzl", "wasm_validate")
+load("//bazel:adopt.bzl", "adopt_wasm_component")
 
-# falcon's verified flight component (fetched + sha256-pinned in MODULE.bazel)
-filegroup(
+# falcon's verified flight component (fetched + sha256-pinned in MODULE.bazel),
+# adopted into a WasmComponentInfo so rules_wasm_component rules can consume it
+# (rules_wasm_component lacks a prebuilt-component adopt rule — see rwc#489).
+adopt_wasm_component(
     name = "falcon-flight",
-    srcs = ["@falcon_flight_wasm//file"],
+    wasm = "@falcon_flight_wasm//file",
     visibility = ["//visibility:public"],
 )
 
@@ -15,13 +18,13 @@ wasm_validate(
     component = ":falcon-flight",
 )
 
-wasm_optimize(
-    name = "falcon-optimized",
-    component = ":falcon-flight",
-    # binaryen wasm-opt from the pinned bundle (note: loom is the project's own
-    # optimizer but is currently inert on falcon — AFD-002 — so binaryen is the
-    # hermetic stand-in here).
-)
+# wasm_optimize runs LOOM, but its LoomOptimize action can't see a fetched/
+# symlinked input under wasmtime's `--dir=.` preopen (rules_wasm_component#490).
+# Disabled until fixed upstream; loom is inert on falcon anyway (AFD-002).
+# wasm_optimize(
+#     name = "falcon-optimized",
+#     component = ":falcon-flight",
+# )
 
 # --- BLOCKED upstream (AFD-005): fuse -> compile -> emulate ------------------
 # Enable once rules_wasm_component exports synth_compile and bundles meld/synth

@@ -28,7 +28,7 @@ bazel_dep(name = "rules_wasm_component", version = "1.0.0")
 git_override(
     module_name = "rules_wasm_component",
     remote = "https://github.com/pulseengine/rules_wasm_component.git",
-    commit = "43468cd52f6a09523fc4df08d17e88f67f1cfd82",  # v1.0.0 (matches synth)
+    commit = "b6a641a2a9ec3a77b9771f19962243c7a99e7b3a",  # main @ 2026-06-01 (has wasm_optimize + stable-2026-03 bundle)
 )
 
 # Hermetic, version-pinned wasm toolchain bundle (wasm-tools, wac, binaryen, ...)
