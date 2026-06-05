@@ -158,3 +158,18 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-001
+
+  - id: AFD-008
+    type: ai-found-defect
+    title: synth arm backend compiles only exports not the reachable call graph
+    status: open
+    description: >
+      synth arm backend compiles only exported functions, not the reachable call graph. falcon component gives 4 funcs; the meld-fused core (280 funcs) gives 24 funcs, ELF ~5KB. Internal cascade functions are absent, so the ELF cannot execute run-stabilization on-target (Renode/QEMU/hardware) - it runs fine in wasmtime and kiln where the whole module is present. Complete-firmware path is backend w2c2 plus --link (w2c2 + arm-none-eabi-gcc + kiln builtins), but w2c2 reports not installed. This is the real blocker for jess 0.2.0/0.3.0 on-target HIL, beyond Renode not being installed. Filed https://github.com/pulseengine/synth/issues/275 - supervising.
+    tags: [release-watch, synth, on-target]
+    fields:
+      detected-by: jess on-target diagnosis (synth arm backend) on falcon fused core
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
