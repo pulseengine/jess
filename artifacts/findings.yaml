@@ -87,9 +87,8 @@ artifacts:
   - id: AFD-003
     type: ai-found-defect
     title: kilnd panics instantiating falcon component (component_instantiation 2703)
-    status: open
-    description: >
-      Running the falcon component directly on kiln panics at kiln-component/src/components/component_instantiation.rs:2703 (code 1005 'Item serialized size cannot be zero with non-zero capacity'). The meld-fused core-module path works and returns 0.0233998559 rad (matches wasmtime). Filed respectfully as https://github.com/pulseengine/kiln/issues/269. Status open; supervise for fix/comment.
+    status: resolved
+    description: "RESOLVED 2026-06-05 - kiln#269 closed, fixed in kiln main via PR #271 (graceful Result error instead of panic). jess confirmed the meld-first path (component -> meld fuse -> kiln core) is what we use; direct component instantiation is not on jess's critical path. Verify when kiln 0.3.0 releases (rebuild kilnd)."
     tags: [release-watch, kiln]
     fields:
       detected-by: jess loop iter#1 — kilnd e43c415 on falcon-flight-v1.27.wasm
