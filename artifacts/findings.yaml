@@ -132,9 +132,8 @@ artifacts:
   - id: AFD-006
     type: ai-found-defect
     title: falcon-v1.28.0 release dropped the falcon-flight wasm component asset
-    status: open
-    description: >
-      falcon-v1.28.0 ships no falcon-flight-v1.28.wasm (v1.27.0 had falcon-flight-v1.27.wasm + .sha256). jess's forward chain consumes that component, so v1.28.0 cannot be integrated; jess remains pinned on v1.27.0 (last-good). Filed https://github.com/pulseengine/relay/issues/100 — supervising.
+    status: resolved
+    description: RESOLVED 2026-06-05 - relay#100 closed; falcon-v1.33.0 restored the falcon-flight wasm component (+sha256) and jess-build.sh falcon-v1.33.0 is GREEN (sha256/SIL/meld/synth/kiln-stabilization). Note run-position-hold still hangs on kiln (kiln#270). Original regression spanned v1.28-v1.32.
     tags: [release-watch, relay, regression]
     fields:
       detected-by: jess loop iter#2 (2026-06-05) — falcon-v1.28.0 asset poll
