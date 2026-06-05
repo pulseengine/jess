@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="jess-build" tests="7" failures="0" skipped="1" errors="0" time="0">
+    <testcase name="sha256-verify" classname="jess-build" time="0"/>
+    <testcase name="sil-stabilization" classname="jess-build" time="0"/>
+    <testcase name="sil-position-hold" classname="jess-build" time="0"/>
+    <testcase name="meld-fuse" classname="jess-build" time="0"/>
+    <testcase name="loom-optimize" classname="jess-build" time="0"><skipped/></testcase>
+    <testcase name="synth-compile" classname="jess-build" time="0"/>
+    <testcase name="kiln-xruntime" classname="jess-build" time="0"/>
+  </testsuite>
+</testsuites>
