@@ -173,3 +173,18 @@ artifacts:
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
+
+  - id: AFD-009
+    type: ai-found-defect
+    title: kiln does not terminate on falcon run-position-hold (fused core)
+    status: open
+    description: >
+      kiln runs falcon run-stabilization fine (fuel 8081, matches wasmtime) but run-position-hold runs UNBOUNDED on kiln (4+ min at 99% CPU uncapped; a --fuel 100000 cap did not stop it in the observed window) while wasmtime returns 0.1317415 instantly. The embedded runtime cannot execute falcon position-hold - it would hang on-target. Found via the meld->kiln native simulation path (the priority path - all pieces present). Filed https://github.com/pulseengine/kiln/issues/270 - supervising.
+    tags: [release-watch, kiln, simulation, critical]
+    fields:
+      detected-by: jess meld->kiln differential sim vs wasmtime (source-built fused falcon)
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-004
