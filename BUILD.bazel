@@ -1,0 +1,51 @@
+# jess hermetic build — falcon firmware chain, tracked via rules_wasm_component.
+# Run (deferred while gale uses the rig):  bazel build //:falcon-validate //:falcon-optimized
+load("@rules_wasm_component//wasm:defs.bzl", "wasm_validate", "wasm_optimize")
+
+# falcon's verified flight component (fetched + sha256-pinned in MODULE.bazel)
+filegroup(
+    name = "falcon-flight",
+    srcs = ["@falcon_flight_wasm//file"],
+    visibility = ["//visibility:public"],
+)
+
+# --- HERMETIC TODAY: validate + optimize via rules_wasm_component toolchains ---
+wasm_validate(
+    name = "falcon-validate",
+    component = ":falcon-flight",
+)
+
+wasm_optimize(
+    name = "falcon-optimized",
+    component = ":falcon-flight",
+    # binaryen wasm-opt from the pinned bundle (note: loom is the project's own
+    # optimizer but is currently inert on falcon — AFD-002 — so binaryen is the
+    # hermetic stand-in here).
+)
+
+# --- BLOCKED upstream (AFD-005): fuse -> compile -> emulate ------------------
+# Enable once rules_wasm_component exports synth_compile and bundles meld/synth
+# as hermetic toolchains (so we don't drag the verus/rocq/lean proof toolchains).
+#
+# load("@meld//rules:meld.bzl", "meld_fuse")
+# load("@rules_wasm_component//wasm:defs.bzl", "synth_compile")
+# load("@rules_renode//renode:defs.bzl", "renode_test")
+#
+# meld_fuse(
+#     name = "falcon-fused",
+#     components = [":falcon-flight"],
+#     memory_strategy = "shared",
+#     attestation = True,
+# )
+# synth_compile(                       # <- currently unimplemented upstream
+#     name = "falcon-firmware",
+#     wasm_module = ":falcon-fused",
+#     target = "cortex-m4f",           # gale's STM32F4 target
+# )
+# renode_test(                         # <- hermetic emulation, not the board
+#     name = "falcon-renode-stm32f4",
+#     robot_test = "tests/falcon_stm32f4.robot",
+#     deps = ["tests/falcon_stm32f4.repl"],
+#     variables_with_label = {"ELF": ":falcon-firmware"},
+#     tags = ["renode", "manual"],     # 'manual' so CI never grabs hardware-adjacent emu unprompted
+# )

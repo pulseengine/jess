@@ -51,3 +51,95 @@ artifacts:
       created-by: ai-assisted
       model: claude-sonnet-4-6
       timestamp: 2026-06-04T17:47:53Z
+
+  - id: AFD-002
+    type: ai-found-defect
+    title: loom optimize produces invalid modules on falcon-flight-v1.26
+    status: draft
+    description: >
+      Two of falcon's four inner modules failed loom optimization and fell back to
+      original bytes: module 0 'section size mismatch: unexpected data at the end
+      of the section' after the fused optimization pass; module 1 'unknown local
+      18: local index out of bounds' after loop_invariant_code_motion. Net
+      reduction only 0.1%. Reproducible. Upstream issue: TODO (file against
+      pulseengine/loom).
+    tags: [loom, optimizer, wasm, upstream]
+    fields:
+      severity: major
+      triage-status: open
+      detected-by: "jess bootstrap forward-chain experiment (loom v0.3.0 prebuilt) on falcon-flight-v1.26.wasm"
+      discovered-at: "2026-06-04"
+      notes: >
+        Affects two of four wasm inner modules in falcon-flight-v1.26.wasm. Module 0
+        fails with 'section size mismatch: unexpected data at the end of the section'
+        after the fused optimization pass. Module 1 fails with 'unknown local 18:
+        local index out of bounds' after loop_invariant_code_motion. Both fall back
+        to original bytes, resulting in only 0.1% net reduction. Upstream issue URL:
+        TODO — to be filed against pulseengine/loom.
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-006
+    provenance:
+      created-by: ai-assisted
+      model: claude-sonnet-4-6
+      timestamp: 2026-06-04T20:55:00Z
+
+  - id: AFD-003
+    type: ai-found-defect
+    title: kilnd panics instantiating falcon component (component_instantiation 2703)
+    status: open
+    description: >
+      Running the falcon component directly on kiln panics at kiln-component/src/components/component_instantiation.rs:2703 (code 1005 'Item serialized size cannot be zero with non-zero capacity'). The meld-fused core-module path works and returns 0.0233998559 rad (matches wasmtime). Filed respectfully as https://github.com/pulseengine/kiln/issues/269. Status open; supervise for fix/comment.
+    tags: [release-watch, kiln]
+    fields:
+      detected-by: jess loop iter#1 — kilnd e43c415 on falcon-flight-v1.27.wasm
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-004
+
+  - id: AFD-004
+    type: ai-found-defect
+    title: meld CLI reports stale version v0.2.0 while release is v0.21.0
+    status: open
+    description: >
+      meld version prints 'meld v0.2.0' but the published release tag is v0.21.0 — CLI version string appears unbumped. Cosmetic/provenance; not yet filed upstream (low priority). meld fuse itself works (101207 to 79663 bytes on falcon).
+    tags: [release-watch, meld, minor]
+    fields:
+      detected-by: jess loop iter#1 — meld 0aed1b5 'meld version' output
+      severity: minor
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-003
+
+  - id: AFD-005
+    type: ai-found-defect
+    title: rules_wasm_component lacks working synth_compile and hermetic meld synth toolchains
+    status: open
+    description: >
+      rules_wasm_component does not export a working synth_compile rule (disabled in relay/BUILD.bazel: 'requires a synth attribute that this file doesnt provide') and does not bundle meld/synth as hermetic Bazel toolchains. Consequence for jess: a downstream firmware build (meld_fuse -> synth_compile -> renode_test) cannot be expressed without depending on meld/synth as modules, which drags their verus/rocq/lean (Nix) proof toolchains into a firmware-only build. Suggested fix: export synth_compile with a synth toolchain attr and provide meld/synth toolchains from rules_wasm_component (or a thin rules_synth/rules_meld). Upstream issue https://github.com/pulseengine/rules_wasm_component/issues/489 (filed, supervising).
+    tags: [release-watch, rules_wasm_component, build]
+    fields:
+      detected-by: jess 0.2.0 bazel wiring — relay BUILD.bazel disables synth_compile (missing synth attr)
+      severity: major
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-001
+
+  - id: AFD-006
+    type: ai-found-defect
+    title: falcon-v1.28.0 release dropped the falcon-flight wasm component asset
+    status: open
+    description: >
+      falcon-v1.28.0 ships no falcon-flight-v1.28.wasm (v1.27.0 had falcon-flight-v1.27.wasm + .sha256). jess's forward chain consumes that component, so v1.28.0 cannot be integrated; jess remains pinned on v1.27.0 (last-good). Filed https://github.com/pulseengine/relay/issues/100 — supervising.
+    tags: [release-watch, relay, regression]
+    fields:
+      detected-by: jess loop iter#2 (2026-06-05) — falcon-v1.28.0 asset poll
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-001
