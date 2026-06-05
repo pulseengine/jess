@@ -9,16 +9,25 @@
 # Usage: scripts/jess-build.sh [falcon-vX.Y.Z]   (default: falcon-v1.27.0)
 set -euo pipefail
 
-VERSION="${1:-falcon-v1.27.0}"
+ARG="${1:-falcon-v1.27.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SIB="$(cd "$ROOT/.." && pwd -P)"
-BUILD="$ROOT/.scratch/build/$VERSION"
 RESULTS="$ROOT/results"
-mkdir -p "$BUILD" "$RESULTS"
 
-# falcon-vMAJOR.MINOR.PATCH -> asset falcon-flight-vMAJOR.MINOR.wasm
-mm="${VERSION#falcon-v}"; mm="${mm%.*}"          # strip leading 'falcon-v' and trailing '.PATCH'
+# Input modes (DD-004 — resilient to the relay release-asset regression):
+#   --source            build falcon-flight from relay source (cargo component)
+#   /path/to/comp.wasm  use a local prebuilt component
+#   falcon-vX.Y.Z       download the released component asset (default)
+MODE=release; LOCAL_WASM=""
+case "$ARG" in
+  --source|source) MODE=source; VERSION="source-$(git -C "$SIB/relay" rev-parse --short HEAD 2>/dev/null || echo unknown)" ;;
+  *.wasm) [ -f "$ARG" ] || { echo "no such wasm: $ARG" >&2; exit 1; }; MODE=local; LOCAL_WASM="$ARG"; VERSION="local-$(basename "$ARG" .wasm)" ;;
+  *) VERSION="$ARG" ;;
+esac
+mm="${VERSION#falcon-v}"; mm="${mm%.*}"
 WASM_NAME="falcon-flight-v${mm}.wasm"
+BUILD="$ROOT/.scratch/build/$VERSION"
+mkdir -p "$BUILD" "$RESULTS"
 
 note() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 fail() { printf '\033[31mFAIL: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -35,16 +44,29 @@ cli() { # $1 = crate/dir name, $2 = binary name
 note "0.1.0 forward chain for $VERSION (asset $WASM_NAME)"
 LOOM="$(cli loom loom)"; MELD="$(cli meld meld)"; SYNTH="$(cli synth synth)"; KILND="$(cli kiln kilnd)"
 
-# --- gate: download + sha256 verify --------------------------------------
-note "fetch + verify"
-gh release download "$VERSION" --repo pulseengine/relay \
-  --pattern "$WASM_NAME" --pattern "${WASM_NAME}.sha256" --dir "$BUILD" --clobber
-W="$BUILD/$WASM_NAME"
-[ -f "$W" ] || fail "wasm not downloaded"
-want="$(awk '{print $1}' "$BUILD/${WASM_NAME}.sha256")"
-got="$(shasum -a 256 "$W" | awk '{print $1}')"
-[ "$want" = "$got" ] || fail "sha256 mismatch: want $want got $got"
-SHA_OK=1; echo "sha256 OK ($got)"
+# --- acquire the component (source build | local | released asset) -------
+note "acquire component ($MODE)"
+if [ "$MODE" = source ]; then
+  SRC="$SIB/relay/wasm/cm/flight"
+  echo "cargo component build (relay source @ ${VERSION#source-}) ..."
+  ( cd "$SRC" && CARGO_BUILD_JOBS=4 cargo component build --release >/dev/null 2>&1 ) || fail "cargo component build failed"
+  SRCW="$(ls "$SRC"/target/wasm32-wasip*/release/falcon_flight_component.wasm 2>/dev/null | head -1)"
+  [ -f "$SRCW" ] || fail "source build produced no component"
+  W="$BUILD/falcon-flight-${VERSION}.wasm"; cp "$SRCW" "$W"
+  SHA_OK=1; echo "source build OK ($(shasum -a 256 "$W" | awk '{print $1}'))"
+elif [ "$MODE" = local ]; then
+  W="$BUILD/$(basename "$LOCAL_WASM")"; cp "$LOCAL_WASM" "$W"
+  SHA_OK=1; echo "local component ($(shasum -a 256 "$W" | awk '{print $1}'))"
+else
+  gh release download "$VERSION" --repo pulseengine/relay \
+    --pattern "$WASM_NAME" --pattern "${WASM_NAME}.sha256" --dir "$BUILD" --clobber
+  W="$BUILD/$WASM_NAME"
+  [ -f "$W" ] || fail "wasm not downloaded"
+  want="$(awk '{print $1}' "$BUILD/${WASM_NAME}.sha256")"
+  got="$(shasum -a 256 "$W" | awk '{print $1}')"
+  [ "$want" = "$got" ] || fail "sha256 mismatch: want $want got $got"
+  SHA_OK=1; echo "sha256 OK ($got)"
+fi
 
 # --- gate: SIL in wasmtime ----------------------------------------------
 note "SIL gate (wasmtime)"

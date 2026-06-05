@@ -35,3 +35,22 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-001
+
+  - id: DD-004
+    type: design-decision
+    title: Build falcon from relay source as the resilient integration input
+    status: accepted
+    tags: [resilience, build, relay]
+    fields:
+      rationale: >-
+        relay dropped the released falcon-flight wasm asset for 5 consecutive
+        releases (v1.28-v1.32; relay#100/AFD-006). Tying jess integration to a
+        release artifact that can vanish is fragile. Decision - jess builds the
+        falcon-flight component from relay's pinned SOURCE (relay/wasm/cm/flight
+        via cargo component build) as the primary input, and consumes the
+        published release asset only as an additional cross-check when present.
+        This keeps the goal (falcon onto hardware) progressing regardless of
+        release-pipeline state.
+    links:
+      - type: satisfies
+        target: REQ-003
