@@ -176,8 +176,7 @@ artifacts:
     type: ai-found-defect
     title: kiln does not terminate on falcon run-position-hold (fused core)
     status: open
-    description: >
-      kiln runs falcon run-stabilization fine (fuel 8081, matches wasmtime) but run-position-hold runs UNBOUNDED on kiln (4+ min at 99% CPU uncapped; a --fuel 100000 cap did not stop it in the observed window) while wasmtime returns 0.1317415 instantly. The embedded runtime cannot execute falcon position-hold - it would hang on-target. Found via the meld->kiln native simulation path (the priority path - all pieces present). Filed https://github.com/pulseengine/kiln/issues/270 - supervising.
+    description: "RECLASSIFIED 2026-06-06: NOT a correctness/non-termination bug. Reduced 200-step repro shows kiln terminates AND matches wasmtime (3.131192207 == 3.1311922). The 30000-step run-position-hold is finite-but-slow on kiln's tree-walker (>1B instructions), not infinite. Fuel-bounding (bug b) fixed in kiln 0.3.1 (#276), so it is now safe (--fuel traps). Implication for jess: the kiln interpreter is correct but too slow for large real-time control loops; real-time embedded needs synth native compilation (synth#275). kiln#270 (a) is a performance characteristic, not a correctness defect."
     tags: [release-watch, kiln, simulation, critical]
     fields:
       detected-by: jess meld->kiln differential sim vs wasmtime (source-built fused falcon)
