@@ -185,3 +185,18 @@ artifacts:
     links:
       - type: defect-against
         target: EXTERNALANCHOR-004
+
+  - id: AFD-010
+    type: ai-found-defect
+    title: rivet lacks DO-178C and IEC 61508 schemas - DAL-A/SIL-4 not natively modelable
+    status: open
+    description: >
+      jess targets DO-178C DAL-A + IEC 61508 SIL-4 + ISO 26262 ASIL-D. rivet models ASIL natively (safety-goal asil field) but has no DO-178C or IEC 61508 schema, so DAL-A/SIL-4 are recorded only in DD-005 + descriptions, not as typed checkable artifacts. Tracked upstream at rivet#102 (closed enhancement) - commented with jess's concrete pull. Workaround in place; revisit if the domain-schema packages land.
+    tags: [rivet, safety, schema]
+    fields:
+      detected-by: jess bootstrap-verification (rivet 0.15.0 has 13 schemas, no DO-178C/IEC-61508)
+      severity: minor
+      triage-status: open
+    links:
+      - type: traces-to
+        target: DD-005
