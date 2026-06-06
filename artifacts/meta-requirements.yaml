@@ -7,3 +7,5 @@ artifacts:
       The project shall maintain a traceable artifact spine anchored to STPA and ISO 26262 (score schema),
       with design decisions recorded and linked to standards and safety goals.
     tags: [meta, spine]
+    fields:
+      release: v0.1.0

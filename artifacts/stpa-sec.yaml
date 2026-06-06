@@ -12,6 +12,7 @@ artifacts:
     fields:
       cia-impact: [integrity, availability]
       stakeholders: [operators, customers, regulators]
+      release: v0.8.0
     links:
       - type: traces-to
         target: L-004
@@ -29,6 +30,7 @@ artifacts:
       cia-impact: [integrity]
       stakeholders: [operators, regulators]
 
+      release: v0.8.0
   # ---- STPA-Sec hazards ----
   - id: SH-001
     type: sec-hazard
@@ -43,6 +45,7 @@ artifacts:
     fields:
       cia-impact: [integrity]
       severity: critical
+      release: v0.8.0
     links:
       - type: leads-to-sec-loss
         target: SL-001
@@ -59,6 +62,7 @@ artifacts:
     fields:
       cia-impact: [integrity]
       severity: critical
+      release: v0.8.0
     links:
       - type: leads-to-sec-loss
         target: SL-002
@@ -75,6 +79,7 @@ artifacts:
     fields:
       cia-impact: [integrity]
       severity: critical
+      release: v0.8.0
     links:
       - type: leads-to-sec-loss
         target: SL-001
@@ -92,6 +97,8 @@ artifacts:
     links:
       - type: prevents-sec-hazard
         target: SH-001
+    fields:
+      release: v0.8.0
 
   - id: SSC-002
     type: sec-constraint
@@ -104,6 +111,8 @@ artifacts:
     links:
       - type: prevents-sec-hazard
         target: SH-002
+    fields:
+      release: v0.8.0
 
   - id: SSC-003
     type: sec-constraint
@@ -117,6 +126,8 @@ artifacts:
     links:
       - type: prevents-sec-hazard
         target: SH-003
+    fields:
+      release: v0.8.0
 
   # ---- STPA-Sec UCA (adversarial) ----
   - id: SU-001
@@ -145,6 +156,7 @@ artifacts:
         acts on.
       attacker-type: external-network
 
+      release: v0.8.0
   # ---- STPA-Sec scenario ----
   - id: SS-001
     type: sec-scenario
@@ -169,3 +181,4 @@ artifacts:
         - GNSS receiver accepts counterfeit signals (no anti-spoof)
         - estimator lacks cross-sensor plausibility checks
         - controller has no geofence-violation safe-state response
+      release: v0.8.0

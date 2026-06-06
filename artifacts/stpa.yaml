@@ -10,6 +10,7 @@ artifacts:
     fields:
       stakeholders: operators, bystanders, regulators
 
+      release: v0.8.0
   - id: H-001
     type: hazard
     title: Drone departs the safe flight envelope
@@ -21,6 +22,7 @@ artifacts:
     tags: [safety, flight]
     fields:
       severity: catastrophic
+      release: v0.8.0
     links:
       - type: leads-to-loss
         target: L-001
@@ -39,6 +41,7 @@ artifacts:
     fields:
       stakeholders: [bystanders, operators, third-parties, regulators]
 
+      release: v0.8.0
   - id: L-003
     type: loss
     title: Damage to property, vehicle, or payload
@@ -50,6 +53,7 @@ artifacts:
     fields:
       stakeholders: [operators, property-owners, customers]
 
+      release: v0.8.0
   - id: L-004
     type: loss
     title: Loss of the vehicle (flyaway or unrecoverable)
@@ -61,6 +65,7 @@ artifacts:
     fields:
       stakeholders: [operators, customers, regulators]
 
+      release: v0.8.0
   - id: L-005
     type: loss
     title: Mission failure (fails to reach or hold commanded state)
@@ -73,6 +78,7 @@ artifacts:
     fields:
       stakeholders: [operators, customers]
 
+      release: v0.8.0
   # ---- Step 2 hazards (extends H-001) ----
   - id: H-002
     type: hazard
@@ -86,6 +92,7 @@ artifacts:
     tags: [safety, flight, actuation]
     fields:
       severity: catastrophic
+      release: v0.8.0
     links:
       - type: leads-to-loss
         target: L-001
@@ -104,6 +111,7 @@ artifacts:
     tags: [safety, flight, estimation]
     fields:
       severity: catastrophic
+      release: v0.8.0
     links:
       - type: leads-to-loss
         target: L-001
@@ -123,6 +131,7 @@ artifacts:
     tags: [safety, flight, real-time]
     fields:
       severity: catastrophic
+      release: v0.8.0
     links:
       - type: leads-to-loss
         target: L-001
@@ -146,6 +155,7 @@ artifacts:
     tags: [safety, flight, geofence]
     fields:
       severity: critical
+      release: v0.8.0
     links:
       - type: leads-to-loss
         target: L-002
@@ -169,6 +179,8 @@ artifacts:
     links:
       - type: prevents
         target: H-001
+    fields:
+      release: v0.8.0
 
   - id: SC-002
     type: system-constraint
@@ -182,6 +194,8 @@ artifacts:
     links:
       - type: prevents
         target: H-002
+    fields:
+      release: v0.8.0
 
   - id: SC-003
     type: system-constraint
@@ -195,6 +209,8 @@ artifacts:
     links:
       - type: prevents
         target: H-003
+    fields:
+      release: v0.8.0
 
   - id: SC-004
     type: system-constraint
@@ -210,6 +226,8 @@ artifacts:
         target: H-004
       - type: traces-to
         target: AFD-009
+    fields:
+      release: v0.8.0
 
   - id: SC-005
     type: system-constraint
@@ -222,6 +240,8 @@ artifacts:
     links:
       - type: prevents
         target: H-005
+    fields:
+      release: v0.8.0
 
   # ---- Step 4 control structure: controller, process, action ----
   - id: CP-001
@@ -232,6 +252,8 @@ artifacts:
       The physical vehicle - its motors/actuators and rigid-body flight
       dynamics - whose attitude and trajectory are the process being controlled.
     tags: [flight, control-structure]
+    fields:
+      release: v0.8.0
 
   - id: C-001
     type: controller
@@ -249,6 +271,7 @@ artifacts:
         - actuator authority and saturation limits
       source-file: relay/wasm/cm/flight
 
+      release: v0.8.0
   - id: CA-001
     type: control-action
     title: Issue motor command to the vehicle
@@ -265,6 +288,7 @@ artifacts:
     fields:
       action: issue motor command to the vehicle each control cycle
 
+      release: v0.8.0
   # ---- Step 4 UCA chain (motor command too-late / wrong-value) ----
   - id: U-001
     type: uca
@@ -292,6 +316,7 @@ artifacts:
         A late motor command means the actuators are driven from a stale control
         solution, which can drive the vehicle outside the safe flight envelope.
 
+      release: v0.8.0
   - id: U-002
     type: uca
     title: FlightCore provides a motor command with the wrong value
@@ -317,6 +342,7 @@ artifacts:
         A wrong-value motor command produces forces and moments inconsistent
         with the commanded ones, departing from controlled flight.
 
+      release: v0.8.0
   # ---- Step 4 loss scenario (runtime too slow -> missed deadline) ----
   - id: LS-001
     type: loss-scenario
@@ -342,3 +368,4 @@ artifacts:
         - execution runtime too slow for the required step rate (AFD-009)
         - no deadline-overrun detection or safe-state fallback
         - control loop assumes bounded per-step execution time
+      release: v0.8.0
