@@ -6,6 +6,7 @@ project:
     - dev
     - research
     - stpa
+    - stpa-sec
     - score
     - safety-case
     - supply-chain
