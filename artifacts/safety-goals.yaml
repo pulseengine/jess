@@ -16,6 +16,7 @@ artifacts:
       goal-type: system-level
       asil: D
       undeveloped: true
+      release: v0.8.0
     links:
       - type: goal-addresses-hazard
         target: H-001
@@ -40,6 +41,7 @@ artifacts:
       goal-type: derived
       asil: D
       undeveloped: true
+      release: v0.8.0
     links:
       - type: goal-addresses-hazard
         target: H-004
@@ -66,6 +68,7 @@ artifacts:
       goal-type: derived
       asil: D
       undeveloped: true
+      release: v0.8.0
     links:
       - type: goal-addresses-hazard
         target: H-005

@@ -7,6 +7,7 @@ artifacts:
       category: functional
       priority: must
 
+      release: v0.2.0
   - id: REQ-002
     type: requirement
     title: HIL run reproduces relay-simulated flight scenarios within tolerance
@@ -15,6 +16,7 @@ artifacts:
       category: functional
       priority: must
 
+      release: v0.3.0
   - id: REQ-003
     type: requirement
     title: Each adopted upstream component release is pinned and traceable
@@ -22,3 +24,4 @@ artifacts:
     fields:
       category: non-functional
       priority: must
+      release: v0.5.0

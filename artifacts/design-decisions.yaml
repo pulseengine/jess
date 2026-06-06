@@ -8,6 +8,7 @@ artifacts:
     tags: [safety, standards]
     fields:
       rationale: Standards selection drives schema choices for the entire spine. ISO 26262 is already supported by the toolchain; committing to it now avoids rework. DO-178C is deferred to avoid premature complexity.
+      release: v0.1.0
     links:
       - type: satisfies
         target: META-REQ-001
@@ -21,6 +22,7 @@ artifacts:
     tags: [scope]
     fields:
       rationale: Keeping build-flash mechanics separate prevents the tracking spine from becoming a build-system spec. A dedicated Phase-1 document keeps responsibilities clean.
+      release: v0.1.0
     links:
       - type: satisfies
         target: META-REQ-001
@@ -32,6 +34,7 @@ artifacts:
     tags: [build, bazel, toolchain]
     fields:
       rationale: Track the falcon firmware build hermetically through rules_wasm_component (pinned wasm toolchain bundle + meld_fuse/synth_compile) and run on-target tests via rules_renode EMULATION rather than hand-rolled installs or the physical board. Emulation-only keeps jess from contending with gale's hardware rig. Verus/rocq/lean proof toolchains are intentionally NOT jess build deps (jess builds firmware, not proofs).
+      release: v0.2.0
     links:
       - type: satisfies
         target: REQ-001
@@ -51,6 +54,7 @@ artifacts:
         published release asset only as an additional cross-check when present.
         This keeps the goal (falcon onto hardware) progressing regardless of
         release-pipeline state.
+      release: v0.1.0
     links:
       - type: satisfies
         target: REQ-003
@@ -84,6 +88,7 @@ artifacts:
         the demonstrator should validate the airborne assurance posture from
         commit one. Target a single domain only - rejected because falcon/relay
         carry multi-domain ambition.
+      release: v0.1.0
     links:
       - type: satisfies
         target: REQ-003
