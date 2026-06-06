@@ -1,20 +1,73 @@
 artifacts:
   - id: SG-001
     type: safety-goal
-    title: Maintain the safe flight envelope (ASIL to be set from HARA)
+    title: Maintain the safe flight envelope
     status: draft
     description: >
       The flight control system shall keep the drone within the safe flight
-      envelope to prevent loss of controlled flight. ASIL classification is to
-      be assigned from the HARA.
-    tags: [safety, iso26262]
+      envelope to prevent loss of controlled flight. Integrity - ISO 26262
+      ASIL-D (asil field), DO-178C DAL-A, IEC 61508 SIL-4 (per DD-005).
+    tags: [safety, iso26262, do178c, iec61508]
     fields:
       claim: |
         The flight control system maintains the drone within the safe flight
         envelope under all defined operating conditions, preventing departure
         from controlled flight.
       goal-type: system-level
+      asil: D
       undeveloped: true
     links:
       - type: goal-addresses-hazard
         target: H-001
+      - type: traces-to
+        target: DD-005
+
+  - id: SG-002
+    type: safety-goal
+    title: Bound control-loop execution time to the real-time deadline
+    status: draft
+    description: >
+      The flight control loop shall complete each cycle within its real-time
+      deadline so the vehicle is never effectively open-loop (ties H-004 and
+      finding AFD-009/kiln#270). Integrity - ISO 26262 ASIL-D (asil field),
+      DO-178C DAL-A, IEC 61508 SIL-4 (per DD-005).
+    tags: [safety, real-time, do178c, iec61508]
+    fields:
+      claim: |
+        The flight control loop completes every cycle within its real-time
+        deadline under all defined operating conditions, so stale or late
+        commands never drive the vehicle.
+      goal-type: derived
+      asil: D
+      undeveloped: true
+    links:
+      - type: goal-addresses-hazard
+        target: H-004
+      - type: traces-to
+        target: DD-005
+      - type: traces-to
+        target: AFD-009
+
+  - id: SG-003
+    type: safety-goal
+    title: Maintain geofence containment
+    status: draft
+    description: >
+      The flight control system shall keep the vehicle within the authorized
+      operating volume (geofence) and never act on a commanded setpoint that
+      leaves it (ties H-005). Integrity - ISO 26262 ASIL-D (asil field),
+      DO-178C DAL-A, IEC 61508 SIL-4 (per DD-005).
+    tags: [safety, geofence, do178c, iec61508]
+    fields:
+      claim: |
+        The flight control system confines commanded setpoints and the vehicle
+        to the authorized operating volume under all defined operating
+        conditions.
+      goal-type: derived
+      asil: D
+      undeveloped: true
+    links:
+      - type: goal-addresses-hazard
+        target: H-005
+      - type: traces-to
+        target: DD-005

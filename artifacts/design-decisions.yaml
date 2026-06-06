@@ -54,3 +54,38 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-003
+
+  - id: DD-005
+    type: design-decision
+    title: jess targets DO-178C DAL-A, ISO 26262 ASIL-D, IEC 61508 SIL-4 with STPA and STPA-Sec
+    status: accepted
+    tags: [safety, standards, integrity]
+    fields:
+      rationale: >-
+        jess seeds its safety V at the highest integrity across three domains -
+        DO-178C Design Assurance Level A (catastrophic), ISO 26262 ASIL-D, and
+        IEC 61508 SIL-4 - with STPA and STPA-Sec as the hazard spine. This
+        mirrors the falcon/relay six-domain ambition and matches gale's ASIL-D
+        toolchain integrity, so the demonstrator is held to the same bar as the
+        platform it certifies. DO-178C is therefore brought forward, not
+        deferred. DD-001 is SUPERSEDED with respect to its DO-178C-timing aspect
+        (DD-001 deferred DO-178C to Phase 3); the STPA + ISO 26262 spine of
+        DD-001 is retained and extended with STPA-Sec for the security
+        dimension. NOTE - rivet 0.15.0 ships no do-178c or iec-61508 schema or
+        preset (the 13 built-in schemas are common, dev, research, supply-chain,
+        stpa, stpa-sec, stpa-ai, safety-case, aspice, cybersecurity, aadl,
+        score, eu-ai-act), so the DAL-A and SIL-4 assignments are recorded here
+        in this decision rather than as dedicated DO-178C/IEC-61508 artifacts.
+        The ISO 26262 ASIL-D assignment is carried on the safety goals via the
+        safety-case schema asil field (set to D); DAL-A and SIL-4 are noted in
+        each safety goal description.
+      alternatives: >-
+        Defer DO-178C to Phase 3 (DD-001 original position) - rejected because
+        the demonstrator should validate the airborne assurance posture from
+        commit one. Target a single domain only - rejected because falcon/relay
+        carry multi-domain ambition.
+    links:
+      - type: satisfies
+        target: REQ-003
+      - type: traces-to
+        target: DD-001

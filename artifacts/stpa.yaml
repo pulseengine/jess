@@ -26,3 +26,319 @@ artifacts:
         target: L-001
       - type: traces-to
         target: gale:L-1
+
+  # ---- Step 1 losses (extends L-001) ----
+  - id: L-002
+    type: loss
+    title: Injury to people from the vehicle
+    status: draft
+    description: >
+      A person (bystander, operator, or third party) is injured or killed by the
+      vehicle, its rotating components, or debris during operation.
+    tags: [safety, flight]
+    fields:
+      stakeholders: [bystanders, operators, third-parties, regulators]
+
+  - id: L-003
+    type: loss
+    title: Damage to property, vehicle, or payload
+    status: draft
+    description: >
+      The vehicle damages property in the environment, or the airframe or its
+      payload is damaged, resulting in financial loss.
+    tags: [safety, flight]
+    fields:
+      stakeholders: [operators, property-owners, customers]
+
+  - id: L-004
+    type: loss
+    title: Loss of the vehicle (flyaway or unrecoverable)
+    status: draft
+    description: >
+      The vehicle is lost - it flies away beyond recovery, ditches, or otherwise
+      becomes unrecoverable, with total loss of the asset.
+    tags: [safety, flight]
+    fields:
+      stakeholders: [operators, customers, regulators]
+
+  - id: L-005
+    type: loss
+    title: Mission failure (fails to reach or hold commanded state)
+    status: draft
+    description: >
+      The vehicle fails to reach or maintain the commanded state (position,
+      attitude, or trajectory), so the mission objective is not met even though
+      the vehicle is not necessarily destroyed.
+    tags: [safety, mission]
+    fields:
+      stakeholders: [operators, customers]
+
+  # ---- Step 2 hazards (extends H-001) ----
+  - id: H-002
+    type: hazard
+    title: Actuator or motor commands saturate or are mis-mixed
+    status: draft
+    description: >
+      The control-allocation/mixing stage produces motor or actuator commands
+      that saturate, are misallocated across effectors, or are otherwise
+      inconsistent with the commanded body forces and moments, so the achieved
+      control authority departs from the commanded one.
+    tags: [safety, flight, actuation]
+    fields:
+      severity: catastrophic
+    links:
+      - type: leads-to-loss
+        target: L-001
+      - type: leads-to-loss
+        target: L-004
+
+  - id: H-003
+    type: hazard
+    title: State estimate (IEKF) diverges or goes NaN
+    status: draft
+    description: >
+      The invariant extended Kalman filter state estimate diverges, becomes
+      numerically invalid (NaN/Inf), or otherwise produces a grossly wrong
+      attitude/position/velocity estimate, so the controller acts on a false
+      process model.
+    tags: [safety, flight, estimation]
+    fields:
+      severity: catastrophic
+    links:
+      - type: leads-to-loss
+        target: L-001
+      - type: leads-to-loss
+        target: L-004
+
+  - id: H-004
+    type: hazard
+    title: Control loop misses its real-time deadline
+    status: draft
+    description: >
+      The flight control loop does not complete a cycle within its real-time
+      deadline, so commands are issued late or stale and the vehicle is
+      effectively open-loop for one or more cycles. NOTE - this ties to finding
+      AFD-009/kiln#270 - the kiln interpreter is too slow for 30000-step loops,
+      making real-time execution a direct safety concern for jess.
+    tags: [safety, flight, real-time]
+    fields:
+      severity: catastrophic
+    links:
+      - type: leads-to-loss
+        target: L-001
+      - type: leads-to-loss
+        target: L-004
+      - type: leads-to-loss
+        target: L-005
+      - type: traces-to
+        target: AFD-009
+      - type: traces-to
+        target: gale:H-2
+
+  - id: H-005
+    type: hazard
+    title: Commanded setpoint leads the vehicle outside the geofence
+    status: draft
+    description: >
+      The commanded setpoint or trajectory directs the vehicle beyond the
+      authorized operating volume (geofence), so the vehicle leaves the
+      permitted airspace.
+    tags: [safety, flight, geofence]
+    fields:
+      severity: critical
+    links:
+      - type: leads-to-loss
+        target: L-002
+      - type: leads-to-loss
+        target: L-003
+      - type: leads-to-loss
+        target: L-004
+      - type: leads-to-loss
+        target: L-005
+
+  # ---- Step 2 system constraints (inverse of each hazard) ----
+  - id: SC-001
+    type: system-constraint
+    title: Vehicle shall remain within the safe flight envelope
+    status: draft
+    description: >
+      The flight control system shall keep the vehicle within the safe flight
+      envelope (attitude, airspeed, altitude-rate bounds) under all defined
+      operating conditions.
+    tags: [safety, flight]
+    links:
+      - type: prevents
+        target: H-001
+
+  - id: SC-002
+    type: system-constraint
+    title: Actuator commands shall stay within authority and be correctly mixed
+    status: draft
+    description: >
+      The control-allocation stage shall produce motor and actuator commands
+      that remain within actuator authority and are correctly mixed so the
+      achieved forces and moments match the commanded ones.
+    tags: [safety, flight, actuation]
+    links:
+      - type: prevents
+        target: H-002
+
+  - id: SC-003
+    type: system-constraint
+    title: State estimate shall remain bounded, numerically valid, and monitored
+    status: draft
+    description: >
+      The state estimator shall remain bounded and numerically valid (no
+      NaN/Inf), and divergence shall be detected and handled so the controller
+      never acts on an invalid estimate.
+    tags: [safety, flight, estimation]
+    links:
+      - type: prevents
+        target: H-003
+
+  - id: SC-004
+    type: system-constraint
+    title: Control loop shall complete each cycle within the real-time deadline
+    status: draft
+    description: >
+      The flight control loop shall complete every cycle within its real-time
+      deadline; the execution environment shall be fast enough that the loop is
+      never effectively open-loop due to missed deadlines (addresses AFD-009).
+    tags: [safety, flight, real-time]
+    links:
+      - type: prevents
+        target: H-004
+      - type: traces-to
+        target: AFD-009
+
+  - id: SC-005
+    type: system-constraint
+    title: Commanded setpoints shall be confined within the geofence
+    status: draft
+    description: >
+      Commanded setpoints and trajectories shall be confined to the authorized
+      operating volume so the vehicle is never commanded outside the geofence.
+    tags: [safety, flight, geofence]
+    links:
+      - type: prevents
+        target: H-005
+
+  # ---- Step 4 control structure: controller, process, action ----
+  - id: CP-001
+    type: controlled-process
+    title: Vehicle flight dynamics (actuators and airframe)
+    status: draft
+    description: >
+      The physical vehicle - its motors/actuators and rigid-body flight
+      dynamics - whose attitude and trajectory are the process being controlled.
+    tags: [flight, control-structure]
+
+  - id: C-001
+    type: controller
+    title: FlightCore controller (falcon flight control)
+    status: draft
+    description: >
+      The automated flight controller (falcon FlightCore) that runs the
+      estimation and control loop and issues motor commands to the vehicle.
+    tags: [flight, control-structure]
+    fields:
+      controller-type: automated
+      process-model:
+        - estimated attitude/position/velocity from the IEKF
+        - commanded setpoint and geofence bounds
+        - actuator authority and saturation limits
+      source-file: relay/wasm/cm/flight
+
+  - id: CA-001
+    type: control-action
+    title: Issue motor command to the vehicle
+    status: draft
+    description: >
+      The FlightCore controller issues a motor command (mixed actuator
+      setpoints) to the vehicle flight dynamics each control cycle.
+    tags: [flight, control-structure]
+    links:
+      - type: issued-by
+        target: C-001
+      - type: acts-on
+        target: CP-001
+    fields:
+      action: issue motor command to the vehicle each control cycle
+
+  # ---- Step 4 UCA chain (motor command too-late / wrong-value) ----
+  - id: U-001
+    type: uca
+    title: FlightCore provides the motor command too late
+    status: draft
+    description: >
+      The FlightCore controller provides the motor command after the control
+      deadline has passed, so the vehicle acts on a stale command.
+    tags: [safety, flight, real-time]
+    links:
+      - type: issued-by
+        target: C-001
+      - type: leads-to-hazard
+        target: H-004
+      - type: traces-to
+        target: AFD-009
+    fields:
+      uca-type: too-early-too-late
+      control-action: issue motor command to the vehicle
+      context: >
+        When the control loop overruns its real-time deadline (e.g. the
+        execution environment is too slow - see AFD-009), the motor command is
+        delivered late and the vehicle is effectively open-loop for that cycle.
+      rationale: >
+        A late motor command means the actuators are driven from a stale control
+        solution, which can drive the vehicle outside the safe flight envelope.
+
+  - id: U-002
+    type: uca
+    title: FlightCore provides a motor command with the wrong value
+    status: draft
+    description: >
+      The FlightCore controller provides a motor command whose value is wrong -
+      saturated or mis-mixed across effectors - so the achieved control authority
+      departs from the commanded one.
+    tags: [safety, flight, actuation]
+    links:
+      - type: issued-by
+        target: C-001
+      - type: leads-to-hazard
+        target: H-002
+    fields:
+      uca-type: providing
+      control-action: issue motor command to the vehicle
+      context: >
+        When control allocation saturates or mis-mixes the command (e.g. on a
+        diverged state estimate or an out-of-range setpoint), the issued motor
+        command does not produce the commanded forces and moments.
+      rationale: >
+        A wrong-value motor command produces forces and moments inconsistent
+        with the commanded ones, departing from controlled flight.
+
+  # ---- Step 4 loss scenario (runtime too slow -> missed deadline) ----
+  - id: LS-001
+    type: loss-scenario
+    title: Execution runtime too slow to meet the control deadline
+    status: draft
+    description: >
+      The flight control loop runs on an execution runtime that cannot sustain
+      the required step rate, so the loop overruns its real-time deadline and the
+      motor command is issued late (U-001), leading to H-004. This ties directly
+      to AFD-009/kiln#270 - the kiln interpreter is too slow for 30000-step
+      loops - which is why real-time execution is treated as a safety concern.
+    tags: [safety, flight, real-time]
+    links:
+      - type: caused-by-uca
+        target: U-001
+      - type: leads-to-hazard
+        target: H-004
+      - type: traces-to
+        target: AFD-009
+    fields:
+      scenario-type: inadequate-control-algorithm
+      causal-factors:
+        - execution runtime too slow for the required step rate (AFD-009)
+        - no deadline-overrun detection or safe-state fallback
+        - control loop assumes bounded per-step execution time
