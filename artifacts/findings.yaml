@@ -209,7 +209,7 @@ artifacts:
       rivet list --format json does not include the artifact fields map, so a custom field like release cannot be queried/grouped from the CLI - the per-release readiness burndown had to be built by parsing YAML. Suggested - expose fields in JSON, or add a field filter, or a release burndown view. Filed https://github.com/pulseengine/rivet/issues/511 - supervising.
     tags: [rivet, release-planning]
     fields:
-      detected-by: jess release-planning (assigning release: field, building burndown)
+      detected-by: jess release-planning (assigning the release field, building burndown)
       severity: minor
       triage-status: open
     links:
