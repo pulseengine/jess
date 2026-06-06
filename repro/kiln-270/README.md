@@ -18,3 +18,10 @@ kilnd falcon.fused.wasm --function run-position-hold --fuel 100000   # did NOT s
 ```
 Same module, two exports: `run-stabilization` terminates, `run-position-hold` does not.
 sha256: d07c0f06527e6ab85a173d2d9289b65a755c9056187e784d4a20967c604260a4
+
+## Update — reduced repro (200 steps) proves it's perf, not correctness
+`reduced-200step.fused.wasm` = same component with `run_position_hold`'s loop set to `0..200`.
+- kiln: `run-position-hold` = **3.131192207** (terminates in <20s)
+- wasmtime: `run-position-hold` = **3.1311922**  → MATCH
+So kiln is numerically correct and terminating; the 30000-step case is finite-but-slow
+on the tree-walker (>~1B instructions), not an infinite loop. Fuel (b) bounds it (kiln 0.3.1).
