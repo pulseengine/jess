@@ -62,7 +62,13 @@ artifacts:
     title: loom fused pass invalidates core module 0 (section size mismatch)
     status: resolved
     description: >
-      RESOLVED 2026-06-10 (jess loop iter#4): fixed in loom v1.1.11 (closes loom#172).
+      RESOLUTION AMENDED 2026-06-10 (iter#5): the v1.1.11 encoding fix is real but
+      unmasked a CRITICAL behavioral regression in the same remap path - the rebuilt
+      element table holds wrong functions in wrong slots, scrambling call_indirect
+      dispatch (SIL gate: position-hold 0.13m -> 593.8m). Tracked as AFD-014 /
+      loom#196; correction posted on loom#172. v1.1.10's invalid-module fallback was
+      accidentally protecting correctness. ORIGINAL RESOLUTION (structural only,
+      premature): fixed in loom v1.1.11 (closes loom#172).
       Root cause: remap_element_section_refs extracted the wasm_encoder payload as if
       it had an id+len section header and skipped a phantom id byte, stripping the
       element segment-count prefix. Re-verified on the same artifact
@@ -272,3 +278,38 @@ artifacts:
     links:
       - type: defect-against
         target: EXTERNALANCHOR-001
+
+  - id: AFD-014
+    type: ai-found-defect
+    title: loom v1.1.11 element remap scrambles the function-pointer table - valid-but-wrong code, SIL gate fails
+    status: open
+    description: >
+      CRITICAL silent miscompilation found 2026-06-10 (iter#5) by running the
+      BEHAVIORAL differential that the structural checks missed. loom v1.1.11's
+      element-section fix (loom#172) makes module 0 encode correctly, but the
+      rebuilt element segment holds the wrong functions in the wrong slot order
+      (slot 1: core::fmt float Debug -> libm atan2f; entries shifted, substituted,
+      last slot cabi_realloc -> cabi_realloc_wit_bindgen_0_41_0). Since the slot
+      index IS the function-pointer value, all 61 call_indirect sites dispatch to
+      wrong signature-compatible functions - wasm-tools validate and loom --verify
+      both pass. SIL gate catches it - run-stabilization 0.023->0.329 rad (FAIL
+      <0.1), run-position-hold 0.132->593.8 m (FAIL <0.6). Deterministic
+      (byte-identical re-runs), input-independent (v1.34 and v1.44 give identical
+      wrong values), not in any per-module pass (all 16 --passes selections
+      reproduce it -> the unconditional component fused/remap path). v1.1.10 was
+      accidentally SAFE: its invalid encoding triggered the fallback to original
+      bytes. Worst failure class for jess - flight code that compiles, validates,
+      and flies wrong. DECISION - loom v1.1.11 quarantined from the jess chain;
+      loom adoption now gated on the SIL differential (runbook updated). Filed
+      https://github.com/pulseengine/loom/issues/196 - supervising. Correction
+      posted on loom#172 retracting the premature structural confirmation.
+    tags: [release-watch, loom, miscompilation, critical, sil-gate]
+    fields:
+      detected-by: jess loop iter#5 (2026-06-10) - behavioral SIL differential original-vs-loom-optimized on wasmtime
+      severity: critical
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-006
+      - type: traces-to
+        target: REQ-002
