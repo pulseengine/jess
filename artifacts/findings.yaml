@@ -60,8 +60,15 @@ artifacts:
   - id: AFD-002
     type: ai-found-defect
     title: loom fused pass invalidates core module 0 (section size mismatch)
-    status: open
+    status: resolved
     description: >
+      RESOLVED 2026-06-10 (jess loop iter#4): fixed in loom v1.1.11 (closes loom#172).
+      Root cause: remap_element_section_refs extracted the wasm_encoder payload as if
+      it had an id+len section header and skipped a phantom id byte, stripping the
+      element segment-count prefix. Re-verified on the same artifact
+      (falcon-flight-v1.34.wasm, sha256 3213a135...): 4/4 core modules now optimize
+      (was 3/4), component 101207->97256 bytes (0.2%->3.9%), output passes
+      wasm-tools validate. Confirmed on loom#172 (issuecomment-4671422858). ORIGINAL:
       RE-TESTED 2026-06-10 on loom v1.1.10 (jess loop iter#3): module 0 STILL
       fails the fused optimization pass with 'section size mismatch: unexpected
       data at the end of the section (at offset 0x252)' and falls back to original
@@ -169,7 +176,7 @@ artifacts:
     title: synth arm backend compiles only exports not the reachable call graph
     status: open
     description: >
-      synth arm backend compiles only exported functions, not the reachable call graph. falcon component gives 4 funcs; the meld-fused core (280 funcs) gives 24 funcs, ELF ~5KB. Internal cascade functions are absent, so the ELF cannot execute run-stabilization on-target (Renode/QEMU/hardware) - it runs fine in wasmtime and kiln where the whole module is present. Complete-firmware path is backend w2c2 plus --link (w2c2 + arm-none-eabi-gcc + kiln builtins), but w2c2 reports not installed. This is the real blocker for jess 0.2.0/0.3.0 on-target HIL, beyond Renode not being installed. Filed https://github.com/pulseengine/synth/issues/275 - supervising. UPDATE 2026-06-10 (loop iter#3): answered the maintainer's requested scoping input on the fused core - call_indirect count = 61, 2 funcref tables (15+34=49 slots), 187 funcs, 26 exports. This is the 'many' case the maintainer defined, confirming the blocker is the broken call_indirect DISPATCH (select_with_stack drop + R11 table-base collision), not a direct-call closure bug; reachability closure already fixed in v0.11.33. Comment synth#275 issuecomment-4667039061.
+      synth arm backend compiles only exported functions, not the reachable call graph. falcon component gives 4 funcs; the meld-fused core (280 funcs) gives 24 funcs, ELF ~5KB. Internal cascade functions are absent, so the ELF cannot execute run-stabilization on-target (Renode/QEMU/hardware) - it runs fine in wasmtime and kiln where the whole module is present. Complete-firmware path is backend w2c2 plus --link (w2c2 + arm-none-eabi-gcc + kiln builtins), but w2c2 reports not installed. This is the real blocker for jess 0.2.0/0.3.0 on-target HIL, beyond Renode not being installed. Filed https://github.com/pulseengine/synth/issues/275 - supervising. UPDATE 2026-06-10 (loop iter#3): answered the maintainer's requested scoping input on the fused core - call_indirect count = 61, 2 funcref tables (15+34=49 slots), 187 funcs, 26 exports. This is the 'many' case the maintainer defined, confirming the blocker is the broken call_indirect DISPATCH (select_with_stack drop + R11 table-base collision), not a direct-call closure bug; reachability closure already fixed in v0.11.33. Comment synth#275 issuecomment-4667039061. UPDATE 2026-06-10 (iter#4): maintainer accepted the scoping and SCHEDULED the dispatch fix as synth v0.11.42 (10-release plan, #242). jess confirmed normal-queue priority is fine - not blocking Phase-1 HIL (falcon runs whole-module in wasmtime/kiln), but it is the long pole for the on-target Cortex-M milestone (jess 0.2.0/0.3.0); will ping to queue-jump if on-target becomes active before v0.11.42. Comment issuecomment-4671423102.
     tags: [release-watch, synth, on-target]
     fields:
       detected-by: jess on-target diagnosis (synth arm backend) on falcon fused core
@@ -228,7 +235,7 @@ artifacts:
     title: rivet 0.16.0 canonical status enum is breaking - no migration, drops 'accepted', misfits ai-found-defect
     status: open
     description: >
-      Adopting rivet 0.16.0 flips the jess store from PASS (4 warnings) on 0.15.0 to FAIL (21 errors) with no artifact changes - all 21 are the new canonical status enum (PR #419 / #352): status values accepted (x12), open (x7), resolved (x2) are no longer allowed; the enum is [draft, proposed, approved, implemented, verified, released, deprecated, rejected]. Three friction points: (1) breaking with no migration path - a previously-valid store needs 21 manual edits; (2) 'accepted' was the documented terminal lifecycle state (draft->...->verified->accepted in rivet's own release/agent guidance) and is now gone; (3) one global document-lifecycle enum doesn't fit ai-found-defect, whose natural vocabulary is open/triaged/resolved/wontfix. Suggested: ship a status remap (rivet migrate / validate --fix) + documented mapping, reconcile 'accepted', and allow per-schema status enums. jess stays on rivet 0.15.0 for now to keep the store valid and defect semantics correct. Filed https://github.com/pulseengine/rivet/issues/522 - supervising.
+      Adopting rivet 0.16.0 flips the jess store from PASS (4 warnings) on 0.15.0 to FAIL (21 errors) with no artifact changes - all 21 are the new canonical status enum (PR #419 / #352): status values accepted (x12), open (x7), resolved (x2) are no longer allowed; the enum is [draft, proposed, approved, implemented, verified, released, deprecated, rejected]. Three friction points: (1) breaking with no migration path - a previously-valid store needs 21 manual edits; (2) 'accepted' was the documented terminal lifecycle state (draft->...->verified->accepted in rivet's own release/agent guidance) and is now gone; (3) one global document-lifecycle enum doesn't fit ai-found-defect, whose natural vocabulary is open/triaged/resolved/wontfix. Suggested: ship a status remap (rivet migrate / validate --fix) + documented mapping, reconcile 'accepted', and allow per-schema status enums. jess stays on rivet 0.15.0 for now to keep the store valid and defect semantics correct. Filed https://github.com/pulseengine/rivet/issues/522 - supervising. UPDATE 2026-06-10 (iter#4): maintainer triaged and confirmed all three points as independently actionable; at their request jess added an Acceptance-Criteria block to the issue for slice 2 (re-add 'accepted' to the canonical enum - clears 12 of 21 errors, one-line schema change), with slices 1 (rivet migrate / validate --fix) and 3 (per-schema defect status enum) scoped out for separate PRs. jess stays on 0.15.0 until at least slice 2 ships.
     tags: [release-watch, rivet, schema, breaking]
     fields:
       detected-by: jess loop iter#3 (2026-06-10) - rivet 0.16.0 validate on the jess store
@@ -237,3 +244,31 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-003
+
+  - id: AFD-013
+    type: ai-found-defect
+    title: falcon-v1.45.0 again ships no falcon-flight wasm component asset (recurrence of relay#100)
+    status: open
+    description: >
+      RELEASE REGRESSION found in jess loop iter#4 (2026-06-10): falcon-v1.45.0 ships
+      no falcon-flight-v*.wasm component asset (0 wasm assets) - only platform CLI
+      tarballs, cdx, rivet snapshot, SHA256SUMS; the darwin tarball contains only
+      falcon-hello + docs. The wasm component was present through falcon-v1.44.0
+      (falcon-flight-v1.44.wasm + .sha256) and earlier (v1.33, v1.34). CHANGELOG has
+      no entry announcing the removal, so it looks unintentional - same signature as
+      the v1.28-v1.32 drop tracked in AFD-006 / relay#100 (restored in v1.33).
+      Impact: jess's whole forward chain (wasmtime SIL gate, meld fusion, kiln
+      execution, synth Cortex-M compile) consumes the published falcon-flight wasm;
+      with it absent, falcon-v1.45.0 cannot be adopted and the loop stalls at v1.44.0.
+      Suggested: re-add the wasm emission to the release workflow and add a CI
+      release-asset guard (fail the release if falcon-flight-*.wasm is missing) so it
+      cannot silently recur a third time. Filed https://github.com/pulseengine/relay/issues/140
+      - supervising. Recurrence of AFD-006.
+    tags: [release-watch, relay, regression]
+    fields:
+      detected-by: jess loop iter#4 (2026-06-10) - falcon-v1.45.0 asset poll (0 wasm assets vs 2 in v1.44.0)
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-001
