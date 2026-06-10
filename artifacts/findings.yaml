@@ -27,9 +27,14 @@ artifacts:
       four is anchored at supplier-boundary external-anchor artifacts until the
       upstream graphs are fixed.
 
-      Status: open.
-      Upstream issue URL: TODO — to be filed via `gh issue create` against
-      pulseengine/synth once this jess task is committed.
+      Status: largely resolved 2026-06-10 (jess loop iter#3). The concrete
+      broken ref is fixed upstream: CTRL-RA is now a defined artifact in
+      synth/safety/stpa/control-structure.yaml (`- id: CTRL-RA`), so the
+      dangling internal reference no longer exists. The synth↔sigil cross-repo
+      cycle could not be re-confirmed this iteration (requires a full
+      externals sync of synth+sigil+kiln) — left for a future iteration before
+      attempting cross-repo external consumption again. No upstream issue filed:
+      the citable defect (CTRL-RA) was already fixed by the time it was checked.
     tags: [supplier, upstream, graph-error, blocked]
     fields:
       severity: major
@@ -54,15 +59,17 @@ artifacts:
 
   - id: AFD-002
     type: ai-found-defect
-    title: loom optimize produces invalid modules on falcon-flight-v1.26
-    status: draft
+    title: loom fused pass invalidates core module 0 (section size mismatch)
+    status: open
     description: >
-      Two of falcon's four inner modules failed loom optimization and fell back to
-      original bytes: module 0 'section size mismatch: unexpected data at the end
-      of the section' after the fused optimization pass; module 1 'unknown local
-      18: local index out of bounds' after loop_invariant_code_motion. Net
-      reduction only 0.1%. Reproducible. Upstream issue: TODO (file against
-      pulseengine/loom).
+      RE-TESTED 2026-06-10 on loom v1.1.10 (jess loop iter#3): module 0 STILL
+      fails the fused optimization pass with 'section size mismatch: unexpected
+      data at the end of the section (at offset 0x252)' and falls back to original
+      bytes; module 1's old 'unknown local 18: local index out of bounds' is now
+      FIXED (modules 1-3 optimize cleanly). Net reduction ~0.2% because module 0
+      (the ~96KB hot module) is untouched. Reproducible on the public asset
+      falcon-flight-v1.34.wasm (sha256 3213a135...). Filed upstream:
+      https://github.com/pulseengine/loom/issues/172 — supervising.
     tags: [loom, optimizer, wasm, upstream]
     fields:
       severity: major
@@ -101,9 +108,9 @@ artifacts:
   - id: AFD-004
     type: ai-found-defect
     title: meld CLI reports stale version v0.2.0 while release is v0.21.0
-    status: open
+    status: resolved
     description: >
-      meld version prints 'meld v0.2.0' but the published release tag is v0.21.0 — CLI version string appears unbumped. Cosmetic/provenance; not yet filed upstream (low priority). meld fuse itself works (101207 to 79663 bytes on falcon).
+      RESOLVED 2026-06-10 (jess loop iter#3): the bogus 'v0.2.0' string is gone — meld now reports a real, consistent version ('meld v0.19.0' from both `meld version` and `meld --version` on the installed binary). The version string is no longer unbumped/wrong, so no upstream issue is needed. (Installed binary is 0.19.0; latest release is v0.21.0 — a routine binary refresh, not a defect.) meld fuse continues to work on falcon.
     tags: [release-watch, meld, minor]
     fields:
       detected-by: jess loop iter#1 — meld 0aed1b5 'meld version' output
@@ -162,7 +169,7 @@ artifacts:
     title: synth arm backend compiles only exports not the reachable call graph
     status: open
     description: >
-      synth arm backend compiles only exported functions, not the reachable call graph. falcon component gives 4 funcs; the meld-fused core (280 funcs) gives 24 funcs, ELF ~5KB. Internal cascade functions are absent, so the ELF cannot execute run-stabilization on-target (Renode/QEMU/hardware) - it runs fine in wasmtime and kiln where the whole module is present. Complete-firmware path is backend w2c2 plus --link (w2c2 + arm-none-eabi-gcc + kiln builtins), but w2c2 reports not installed. This is the real blocker for jess 0.2.0/0.3.0 on-target HIL, beyond Renode not being installed. Filed https://github.com/pulseengine/synth/issues/275 - supervising.
+      synth arm backend compiles only exported functions, not the reachable call graph. falcon component gives 4 funcs; the meld-fused core (280 funcs) gives 24 funcs, ELF ~5KB. Internal cascade functions are absent, so the ELF cannot execute run-stabilization on-target (Renode/QEMU/hardware) - it runs fine in wasmtime and kiln where the whole module is present. Complete-firmware path is backend w2c2 plus --link (w2c2 + arm-none-eabi-gcc + kiln builtins), but w2c2 reports not installed. This is the real blocker for jess 0.2.0/0.3.0 on-target HIL, beyond Renode not being installed. Filed https://github.com/pulseengine/synth/issues/275 - supervising. UPDATE 2026-06-10 (loop iter#3): answered the maintainer's requested scoping input on the fused core - call_indirect count = 61, 2 funcref tables (15+34=49 slots), 187 funcs, 26 exports. This is the 'many' case the maintainer defined, confirming the blocker is the broken call_indirect DISPATCH (select_with_stack drop + R11 table-base collision), not a direct-call closure bug; reachability closure already fixed in v0.11.33. Comment synth#275 issuecomment-4667039061.
     tags: [release-watch, synth, on-target]
     fields:
       detected-by: jess on-target diagnosis (synth arm backend) on falcon fused core
@@ -175,8 +182,8 @@ artifacts:
   - id: AFD-009
     type: ai-found-defect
     title: kiln does not terminate on falcon run-position-hold (fused core)
-    status: open
-    description: "RECLASSIFIED 2026-06-06: NOT a correctness/non-termination bug. Reduced 200-step repro shows kiln terminates AND matches wasmtime (3.131192207 == 3.1311922). The 30000-step run-position-hold is finite-but-slow on kiln's tree-walker (>1B instructions), not infinite. Fuel-bounding (bug b) fixed in kiln 0.3.1 (#276), so it is now safe (--fuel traps). Implication for jess: the kiln interpreter is correct but too slow for large real-time control loops; real-time embedded needs synth native compilation (synth#275). kiln#270 (a) is a performance characteristic, not a correctness defect."
+    status: resolved
+    description: "RESOLVED 2026-06-10 (loop iter#3): kiln#270 CLOSED by maintainer; reduced-repro diagnosis independently re-verified (kiln F32 3.131192207 == wasmtime 3.1311922 on reduced-200step.fused.wasm) and captured upstream as design-decision SM-PERF-001 (kiln PR #290). No correctness defect: the tree-walker is the QM reference/validation runtime, fuel-bounded since 0.3.1 (slow is bounded, never an unbounded hang); real-time embedded control is the synth native path (synth#275) by architecture. ORIGINAL RECLASSIFICATION 2026-06-06: NOT a correctness/non-termination bug. Reduced 200-step repro shows kiln terminates AND matches wasmtime (3.131192207 == 3.1311922). The 30000-step run-position-hold is finite-but-slow on kiln's tree-walker (>1B instructions), not infinite. Fuel-bounding (bug b) fixed in kiln 0.3.1 (#276), so it is now safe (--fuel traps). Implication for jess: the kiln interpreter is correct but too slow for large real-time control loops; real-time embedded needs synth native compilation (synth#275). kiln#270 (a) is a performance characteristic, not a correctness defect."
     tags: [release-watch, kiln, simulation, critical]
     fields:
       detected-by: jess meld->kiln differential sim vs wasmtime (source-built fused falcon)
@@ -204,13 +211,28 @@ artifacts:
   - id: AFD-011
     type: ai-found-defect
     title: rivet list --format json omits custom fields - release readiness not natively queryable
-    status: open
+    status: resolved
     description: >
-      rivet list --format json does not include the artifact fields map, so a custom field like release cannot be queried/grouped from the CLI - the per-release readiness burndown had to be built by parsing YAML. Suggested - expose fields in JSON, or add a field filter, or a release burndown view. Filed https://github.com/pulseengine/rivet/issues/511 - supervising.
+      RESOLVED 2026-06-10 (loop iter#3): fixed upstream via `rivet list --full` (REQ-211, PR #507), shipped in rivet v0.16.0. Verified on the jess store: `rivet list --format json --full | jq '.artifacts[] | select(.fields.release)'` returns all 53 release-tagged artifacts, and `rivet list --filter '(= release "vX")'` filters without --full. Confirmed on rivet#511 (issuecomment-4667096156); jess can drop the YAML-parsing burndown workaround. ORIGINAL: rivet list --format json did not include the artifact fields map, so a custom field like release could not be queried/grouped from the CLI - the per-release readiness burndown had to be built by parsing YAML. Filed https://github.com/pulseengine/rivet/issues/511.
     tags: [rivet, release-planning]
     fields:
       detected-by: jess release-planning (assigning the release field, building burndown)
       severity: minor
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-003
+
+  - id: AFD-012
+    type: ai-found-defect
+    title: rivet 0.16.0 canonical status enum is breaking - no migration, drops 'accepted', misfits ai-found-defect
+    status: open
+    description: >
+      Adopting rivet 0.16.0 flips the jess store from PASS (4 warnings) on 0.15.0 to FAIL (21 errors) with no artifact changes - all 21 are the new canonical status enum (PR #419 / #352): status values accepted (x12), open (x7), resolved (x2) are no longer allowed; the enum is [draft, proposed, approved, implemented, verified, released, deprecated, rejected]. Three friction points: (1) breaking with no migration path - a previously-valid store needs 21 manual edits; (2) 'accepted' was the documented terminal lifecycle state (draft->...->verified->accepted in rivet's own release/agent guidance) and is now gone; (3) one global document-lifecycle enum doesn't fit ai-found-defect, whose natural vocabulary is open/triaged/resolved/wontfix. Suggested: ship a status remap (rivet migrate / validate --fix) + documented mapping, reconcile 'accepted', and allow per-schema status enums. jess stays on rivet 0.15.0 for now to keep the store valid and defect semantics correct. Filed https://github.com/pulseengine/rivet/issues/522 - supervising.
+    tags: [release-watch, rivet, schema, breaking]
+    fields:
+      detected-by: jess loop iter#3 (2026-06-10) - rivet 0.16.0 validate on the jess store
+      severity: major
       triage-status: open
     links:
       - type: traces-to
