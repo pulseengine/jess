@@ -74,6 +74,37 @@ Link imported test execution artifacts to the relevant requirement (REQ-001,
 REQ-002) automatically via the import-results mapping config, or manually with
 `rivet link`.
 
+## 3a. Behavioral Differential Gate (MANDATORY for transform tools)
+
+> Added 2026-06-10 after AFD-014: loom v1.1.11 produced a component that passed
+> `wasm-tools validate` and loom `--verify` but scrambled the function-pointer
+> table — flight code that compiles, validates, and flies wrong (position-hold
+> 0.13 m → 593.8 m). Structural checks CANNOT catch valid-but-wrong code.
+
+Any new release of a tool that **transforms** the wasm (loom, meld, synth) must
+pass a behavioral differential BEFORE adoption — structural validation is
+necessary but never sufficient:
+
+```bash
+# 1. Transform with the candidate tool version
+loom optimize falcon-flight.wasm -o falcon.opt.wasm     # (or meld fuse / synth)
+
+# 2. Structural gate (necessary, not sufficient)
+wasm-tools validate falcon.opt.wasm
+
+# 3. BEHAVIORAL differential — same runtime, original vs transformed.
+#    Both must pass the SIL gate AND match each other:
+wasmtime run --invoke 'run-stabilization()'  falcon-flight.wasm   # reference
+wasmtime run --invoke 'run-stabilization()'  falcon.opt.wasm      # must match, < 0.1 rad
+wasmtime run --invoke 'run-position-hold()'  falcon-flight.wasm   # reference
+wasmtime run --invoke 'run-position-hold()'  falcon.opt.wasm      # must match, < 0.6 m
+```
+
+A transformed artifact that diverges from the reference output is quarantined
+(do not adopt, do not feed downstream) and the divergence filed upstream with
+both numbers. The same differential applies across runtimes (wasmtime vs kiln)
+when adopting a new runtime version — see AFD-009 for the kiln precedent.
+
 ## 4. Log Findings
 
 Any optimization opportunity, regression, or upstream defect found during the
