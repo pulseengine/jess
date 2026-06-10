@@ -94,3 +94,42 @@ artifacts:
         target: REQ-003
       - type: traces-to
         target: DD-001
+
+  - id: DD-006
+    type: design-decision
+    title: gale-maximal-wasm - drivers compile to wasm components; native trusted base is gale primitives plus a thin bus interface
+    status: accepted
+    description: >
+      jess's stack is based on gale (the formally verified Verus/Rocq/Lean
+      ASIL-D replacement for Zephyr kernel primitives), and the architecture
+      maximizes what is built AS WASM. Drivers (Rust no_std no_alloc, e.g. the
+      ImuDriver/RegBus pattern from relay's falcon-imu-icm42688) are compiled as
+      wasm32-unknown-unknown components too - not left as host-side native rlibs.
+      meld fuses driver components with the falcon core; the open imports that
+      remain after fusion ARE the host-component interface jess requires from
+      gale/Zephyr - bus primitives (SPI transfer / register read-write-burst),
+      time, and motor PWM out. That native surface is small and sits directly on
+      gale's verified primitives. Consequence for testing (jess as the
+      system-above authority) - the SAME driver component bytes run against a
+      mock-bus host on wasmtime/kiln in host CI and against the real SPI on
+      target, giving a backend-swap differential identical in shape to the
+      SimBackend-inside vs HardwareBackend-outside cascade differential.
+    tags: [architecture, gale, wasm, drivers]
+    fields:
+      rationale: >-
+        Everything compiled to wasm is portable, deterministic, host-testable,
+        and travels through the verified toolchain (meld, loom, synth) - so
+        maximizing the wasm surface minimizes the native trusted base down to
+        gale's formally verified primitives plus the thinnest bus/MMIO host
+        functions. Relay's host-side rlib seam is the upstream interim pattern,
+        not jess's end state.
+      alternatives: >-
+        Host-side native driver rlibs behind the ImuDriver seam (relay's current
+        pattern) - rejected as the end state because it grows the unverified
+        native surface and forks the test path between host and target.
+      release: v0.4.0
+    links:
+      - type: satisfies
+        target: REQ-002
+      - type: traces-to
+        target: DD-003
