@@ -269,7 +269,10 @@ artifacts:
       Suggested: re-add the wasm emission to the release workflow and add a CI
       release-asset guard (fail the release if falcon-flight-*.wasm is missing) so it
       cannot silently recur a third time. Filed https://github.com/pulseengine/relay/issues/140
-      - supervising. Recurrence of AFD-006.
+      - supervising. Recurrence of AFD-006. UPDATE 2026-06-11 (iter#7): regression
+      WIDENED to 10 releases - v1.45.0 through v1.54.0 all ship zero wasm assets
+      (v1.54.0 re-checked). jess stays pinned to v1.44.0; range update posted on
+      relay#140 (issuecomment-4677414340).
     tags: [release-watch, relay, regression]
     fields:
       detected-by: jess loop iter#4 (2026-06-10) - falcon-v1.45.0 asset poll (0 wasm assets vs 2 in v1.44.0)
@@ -303,6 +306,17 @@ artifacts:
       loom adoption now gated on the SIL differential (runbook updated). Filed
       https://github.com/pulseengine/loom/issues/196 - supervising. Correction
       posted on loom#172 retracting the premature structural confirmation.
+      UPDATE 2026-06-11 (iter#7): maintainer's re-trace confirmed the corruption
+      is DEEPER than the element remap - loom's whole parse->optimize->re-encode
+      of table-bearing modules was behaviorally unsound; v1.1.12 fixes by
+      SKIPPING any core module with a function-referencing element segment
+      (deliberate return to safe inertness). jess re-ran the SIL gate on the
+      v1.1.12 code (built with v1.1.11 dep pins due to the broken tag, AFD-015):
+      EXACT behavioral match (0.023399856 / 0.1317415 both sides), module 0
+      safely inert. Confirmed on loom#196 (issuecomment-4677414075). Quarantine
+      lifts when loom#198 (broken tag, no release binaries) ships a buildable
+      release. Cosmetic: log still claims 'Module 0 optimized successfully' for
+      a skipped module - noted on the issue.
     tags: [release-watch, loom, miscompilation, critical, sil-gate]
     fields:
       detected-by: jess loop iter#5 (2026-06-10) - behavioral SIL differential original-vs-loom-optimized on wasmtime
@@ -313,3 +327,36 @@ artifacts:
         target: EXTERNALANCHOR-006
       - type: traces-to
         target: REQ-002
+
+  - id: AFD-015
+    type: ai-found-defect
+    title: loom v1.1.12 tag does not compile and loom releases ship no platform binaries
+    status: open
+    description: >
+      Found 2026-06-11 (iter#7) attempting to adopt the loom#196 fix: the
+      v1.1.12 tag fails to build on a clean checkout - cargo build -p loom-cli
+      (locked and unlocked) errors with E0063, missing fields emit_logging /
+      match_arm_split_threshold / prefixes in the CodegenOptions literal at
+      loom-shared/build.rs:48, caused by the cranelift-isle 0.113 -> 0.132 bump
+      landing without updating build.rs. Compounding factor: loom releases ship
+      NO platform binaries (v1.1.11/v1.1.12 assets = compliance report only,
+      unlike meld/synth/spar/kiln/rivet which ship 5-platform tarballs +
+      SHA256SUMS + cosign), so the release pipeline never compiles the tag and
+      a non-building release shipped silently - and downstream cannot adopt the
+      release at all (no binary AND no building source). Workaround: built the
+      v1.1.12 tree with v1.1.11's dependency pins to run the #196 SIL
+      verification. Suggested: fix build.rs for isle 0.132; adopt the standard
+      pulseengine release.yml (binary matrix + signed SHA256SUMS) so every tag
+      is compile-gated and downstream can checksum-verify instead of building.
+      Commented with repro on https://github.com/pulseengine/loom/issues/198
+      (existing report, tool-friction label added) - supervising.
+    tags: [release-watch, loom, build, release-pipeline, tool-friction]
+    fields:
+      detected-by: jess loop iter#7 (2026-06-11) - cargo build of the v1.1.12 tag during loom#196 fix adoption
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-006
+      - type: traces-to
+        target: REQ-003
