@@ -254,7 +254,7 @@ artifacts:
   - id: AFD-013
     type: ai-found-defect
     title: falcon-v1.45.0 again ships no falcon-flight wasm component asset (recurrence of relay#100)
-    status: open
+    status: resolved
     description: >
       RELEASE REGRESSION found in jess loop iter#4 (2026-06-10): falcon-v1.45.0 ships
       no falcon-flight-v*.wasm component asset (0 wasm assets) - only platform CLI
@@ -273,7 +273,14 @@ artifacts:
       WIDENED to 10 releases - v1.45.0 through v1.54.0 all ship zero wasm assets
       (v1.54.0 re-checked). jess stays pinned to v1.44.0; range update posted on
       relay#140 (issuecomment-4677414340). iter#9: v1.55.0 also zero wasm assets
-      - range now 11 releases; noted on relay#140.
+      - range now 11 releases; noted on relay#140. RESOLVED 2026-06-11 (iter#10):
+      falcon-v1.56.0 restores falcon-flight-v1.56.wasm (+.sha256, sha256
+      3fb275db... verified) plus a falcon-components bundle + manifest; root
+      cause fixed structurally (component build wired into the release workflow
+      via scripts/build-components.sh, so the 11-release class cannot recur
+      silently). jess UNPINNED v1.44.0 -> v1.56.0 after the full per-piece chain
+      went green (SIL exact, loom differential exact, meld+kiln exact, synth
+      compile). relay#140 closed; unpin confirmed (issuecomment-4681803088).
     tags: [release-watch, relay, regression]
     fields:
       detected-by: jess loop iter#4 (2026-06-10) - falcon-v1.45.0 asset poll (0 wasm assets vs 2 in v1.44.0)
@@ -394,7 +401,12 @@ artifacts:
       data (issuecomment-4679702503) and offers a re-run each VCR-RA release.
       NOTE iter#7 reported 'compile path OK' without grepping warnings - the
       49KB v0.11.37 ELF was already missing 34 functions; lesson folded into
-      the loop (always count skip warnings on synth output).
+      the loop (always count skip warnings on synth output). iter#10: v0.11.39
+      (verified release binary) measured 27 on both the v1.44 and v1.56 fused
+      cores - flat as expected (v0.11.39 = validator #323 + cost-gate deletion
+      #322; the pair-spill that should move this number is v0.11.40 scope per
+      the VCR-RA-001 acceptance review). Series 34 -> 27 -> 27 posted on
+      synth#242 (issuecomment-4681799356).
     tags: [release-watch, synth, regalloc, on-target]
     fields:
       detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
