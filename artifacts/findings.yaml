@@ -272,7 +272,8 @@ artifacts:
       - supervising. Recurrence of AFD-006. UPDATE 2026-06-11 (iter#7): regression
       WIDENED to 10 releases - v1.45.0 through v1.54.0 all ship zero wasm assets
       (v1.54.0 re-checked). jess stays pinned to v1.44.0; range update posted on
-      relay#140 (issuecomment-4677414340).
+      relay#140 (issuecomment-4677414340). iter#9: v1.55.0 also zero wasm assets
+      - range now 11 releases; noted on relay#140.
     tags: [release-watch, relay, regression]
     fields:
       detected-by: jess loop iter#4 (2026-06-10) - falcon-v1.45.0 asset poll (0 wasm assets vs 2 in v1.44.0)
@@ -372,3 +373,35 @@ artifacts:
         target: EXTERNALANCHOR-006
       - type: traces-to
         target: REQ-003
+
+  - id: AFD-016
+    type: ai-found-defect
+    title: synth arm regalloc skips functions on the falcon fused core - 27 absent from the ELF (was 34)
+    status: open
+    description: >
+      Found 2026-06-11 (iter#9), and a correction of iter#7's too-shallow check:
+      synth compile --cortex-m --all-exports silently emits 'warning: skipping
+      function' for functions the arm register allocator cannot handle - the
+      skipped functions are ABSENT from the ELF, an on-target completeness gap
+      additional to the call_indirect dispatch issue (AFD-008/synth#275).
+      Measured on the falcon-v1.44 meld-fused core, input held constant across
+      meld v0.27/v0.29: synth v0.11.37 skips 34 functions, v0.11.38 skips 27
+      (the -7 from the spill-on-exhaustion retry, synth#320). Remaining failure
+      classes on this artifact: 'i64 register pair: no high register available
+      for R8' and 'i64 spill-slot pool exhausted'. Tracked upstream as the
+      VCR-RA allocator track of the verified-codegen epic synth#242 (VCR-RA-001
+      SSA allocator is the cure); jess posted the per-release burndown fixture
+      data (issuecomment-4679702503) and offers a re-run each VCR-RA release.
+      NOTE iter#7 reported 'compile path OK' without grepping warnings - the
+      49KB v0.11.37 ELF was already missing 34 functions; lesson folded into
+      the loop (always count skip warnings on synth output).
+    tags: [release-watch, synth, regalloc, on-target]
+    fields:
+      detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-001
