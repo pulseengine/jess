@@ -316,7 +316,11 @@ artifacts:
       safely inert. Confirmed on loom#196 (issuecomment-4677414075). Quarantine
       lifts when loom#198 (broken tag, no release binaries) ships a buildable
       release. Cosmetic: log still claims 'Module 0 optimized successfully' for
-      a skipped module - noted on the issue.
+      a skipped module - noted on the issue. QUARANTINE LIFTED 2026-06-11
+      (iter#8): loom v1.1.13 from-tag locked build succeeds and the behavioral
+      gate is green on falcon v1.34 AND v1.44 (exact match 0.023399856 /
+      0.1317415, structural valid, table module safely inert). v1.1.13 adopted
+      into the jess chain; confirmed on loom#198 (issuecomment-4677880669).
     tags: [release-watch, loom, miscompilation, critical, sil-gate]
     fields:
       detected-by: jess loop iter#5 (2026-06-10) - behavioral SIL differential original-vs-loom-optimized on wasmtime
@@ -331,7 +335,7 @@ artifacts:
   - id: AFD-015
     type: ai-found-defect
     title: loom v1.1.12 tag does not compile and loom releases ship no platform binaries
-    status: open
+    status: resolved
     description: >
       Found 2026-06-11 (iter#7) attempting to adopt the loom#196 fix: the
       v1.1.12 tag fails to build on a clean checkout - cargo build -p loom-cli
@@ -350,6 +354,14 @@ artifacts:
       is compile-gated and downstream can checksum-verify instead of building.
       Commented with repro on https://github.com/pulseengine/loom/issues/198
       (existing report, tool-friction label added) - supervising.
+      RESOLVED 2026-06-11 (iter#8): loom v1.1.13 fixes the tag build (4 layers:
+      CodegenOptions ..Default, duplicate type decl, extern crate alloc,
+      wasmparser 0.251 Imports-enum migration with Compact1/2 left fail-safe).
+      jess confirmed cargo install --path loom-cli --locked from the clean tag
+      plus the full behavioral gate; loom#198 closed. Residual (non-blocking):
+      releases still ship no platform binaries - maintainer noted committing
+      Cargo.lock as the durable fix for the class (loom#142); revisit if a tag
+      breaks again.
     tags: [release-watch, loom, build, release-pipeline, tool-friction]
     fields:
       detected-by: jess loop iter#7 (2026-06-11) - cargo build of the v1.1.12 tag during loom#196 fix adoption
