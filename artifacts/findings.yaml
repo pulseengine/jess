@@ -450,7 +450,15 @@ artifacts:
       Filed https://github.com/pulseengine/synth/issues/329 - supervising.
       Suggested fix: seed the abstract value stack from the function signature +
       block/loop result types before the instruction walk, and verify the Select
-      lowering accounts for all three pops.
+      lowering accounts for all three pops. ROOT-CAUSE NARROWED 2026-06-13
+      (iter#12): maintainer reproduced byte-exactly from the committed repro and
+      isolated it to the multi-value-CALL-result x select interaction (NOT block
+      results, which seed fine). jess independently verified all 4 discriminating
+      fixtures on synth v0.11.40 - only multi-value-call -> select skips; block
+      multi-result -> select, single-result-call x2 -> select, and
+      multi-value-call -> drop all compile. Fixtures kept in
+      repro/synth-underflow/f1..f4.wat; maintainer to PR them into synth
+      tests/fixtures. Confirmed on synth#329 (issuecomment-4698279815).
     tags: [release-watch, synth, selector, validator, on-target]
     fields:
       detected-by: jess loop iter#11 (2026-06-13) - class-breakdown of synth skip warnings on the falcon-v1.56 fused core
