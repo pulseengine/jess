@@ -406,10 +406,54 @@ artifacts:
       cores - flat as expected (v0.11.39 = validator #323 + cost-gate deletion
       #322; the pair-spill that should move this number is v0.11.40 scope per
       the VCR-RA-001 acceptance review). Series 34 -> 27 -> 27 posted on
-      synth#242 (issuecomment-4681799356).
+      synth#242 (issuecomment-4681799356). iter#11 (2026-06-13): v0.11.40
+      (VCR-RA-001 acceptance, pair-spill) drops to 25 - isolated as a clean
+      synth gain via a 2x2 (meld v0.29/v0.30 x synth v0.11.39/v0.11.40): 25 on
+      both meld inputs with v0.11.40, 27 with v0.11.39, so the -2 is synth-only
+      and meld-version-independent. Series 34 -> 27 -> 27 -> 25. Surviving 25 by
+      class: 14 i64 spill-slot-pool, 7 i64 R8-pair, 2 callee-saved-param, 2
+      value-stack-underflow (the last split out as AFD-017). Pair-exhaustion
+      class gone, matching the maintainer prediction. Posted on synth#242
+      (issuecomment-4697908929).
     tags: [release-watch, synth, regalloc, on-target]
     fields:
       detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-001
+
+  - id: AFD-017
+    type: ai-found-defect
+    title: synth arm backend silently skips functions on a wasm-tools-valid module (false value-stack underflow on Select/LocalSet)
+    status: open
+    description: >
+      Found 2026-06-13 (iter#11) by class-breaking the synth skip warnings:
+      synth's component validator reports a wasm value-stack underflow and
+      silently drops 2 functions of the falcon flight core, on a module that
+      wasm-tools validate accepts as fully valid - so it is synth's internal
+      abstract-stack model under-counting, not a malformed input. func_39 at op
+      2 (Select) 'would pop 3 from depth 2'; func_30 at op 21 (LocalSet(2))
+      'would pop 1 from depth 0' - both early in the function, pointing at stack
+      initialization / block-result accounting rather than deep nesting.
+      Pre-existing and version-independent: reproduces on synth v0.11.39 AND
+      v0.11.40, and on meld v0.29 AND v0.30 fused cores (it was part of the
+      previously-aggregated skip count, separated out now). Distinct from the
+      regalloc exhaustion class (AFD-016) and the call_indirect dispatch gap
+      (AFD-008); same on-target completeness consequence - functions absent from
+      the ELF, blocking a complete self-contained firmware, non-blocking for the
+      wasm/kiln path. Committed byte-exact repro at
+      repro/synth-underflow/falcon-v1.56.fused.wasm (sha256 bd946fb5...29713).
+      Filed https://github.com/pulseengine/synth/issues/329 - supervising.
+      Suggested fix: seed the abstract value stack from the function signature +
+      block/loop result types before the instruction walk, and verify the Select
+      lowering accounts for all three pops.
+    tags: [release-watch, synth, selector, validator, on-target]
+    fields:
+      detected-by: jess loop iter#11 (2026-06-13) - class-breakdown of synth skip warnings on the falcon-v1.56 fused core
       severity: major
       triage-status: open
     links:
