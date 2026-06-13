@@ -1,6 +1,6 @@
 # jess hermetic build — falcon firmware chain, tracked via rules_wasm_component.
 # Run (deferred while gale uses the rig):  bazel build //:falcon-validate //:falcon-optimized
-load("@rules_wasm_component//wasm:defs.bzl", "wasm_validate")
+load("@rules_wasm_component//wasm:defs.bzl", "wasm_optimize", "wasm_validate")
 load("//bazel:adopt.bzl", "adopt_wasm_component")
 
 # falcon's verified flight component (fetched + sha256-pinned in MODULE.bazel),
@@ -18,13 +18,16 @@ wasm_validate(
     component = ":falcon-flight",
 )
 
-# wasm_optimize runs LOOM, but its LoomOptimize action can't see a fetched/
-# symlinked input under wasmtime's `--dir=.` preopen (rules_wasm_component#490).
-# Disabled until fixed upstream; loom is inert on falcon anyway (AFD-002).
-# wasm_optimize(
-#     name = "falcon-optimized",
-#     component = ":falcon-flight",
-# )
+# wasm_optimize runs LOOM over the fetched falcon component. Enabled now that
+# rwc#490 is fixed (PR #497, on the pinned main SHA): the loom_wrapper resolves
+# the symlinked input and locates wasmtime as an action input. Verified
+# end-to-end — 4/4 core modules optimized and the SIL gate is exact raw-vs-opt
+# (jess runbook §3a). NOTE: the stable-2026-03 bundle's loom is v0.3.0 (predates
+# loom#172/#196); behaviorally faithful on falcon today, gated by the SIL diff.
+wasm_optimize(
+    name = "falcon-optimized",
+    component = ":falcon-flight",
+)
 
 # --- BLOCKED upstream (AFD-005): fuse -> compile -> emulate ------------------
 # Enable once rules_wasm_component exports synth_compile and bundles meld/synth
