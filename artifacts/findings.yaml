@@ -414,10 +414,14 @@ artifacts:
       class: 14 i64 spill-slot-pool, 7 i64 R8-pair, 2 callee-saved-param, 2
       value-stack-underflow (the last split out as AFD-017). Pair-exhaustion
       class gone, matching the maintainer prediction. Posted on synth#242
-      (issuecomment-4697908929). iter#14 (2026-06-13): v0.11.41 (VCR-RA-002/R10)
-      flat at 25 - same 4 classes; R10 freed a register globally but cleared
-      none of the survivors (8-slot spill-pool bound + R8-pair). Series
-      34->27->27->25->25; posted issuecomment-4699436844.
+      (issuecomment-4697908929). iter#14 (2026-06-13): v0.11.41
+      flat at 25 - same 4 classes. CORRECTION (iter#15, maintainer): VCR-RA-002
+      (free R10) has NOT landed (still proposed; ALLOCATABLE_REGS = R0..R8, R10
+      reserved) - my iter#14 'R10 freed' attribution was a release-note
+      mis-read, not a decode; flat-25 is purely the no-regression signal.
+      Highest-yield next lever per maintainer: deepening the fixed
+      I64_SPILL_SLOTS=8 bound (attacks 14 of 25). Series 34->27->27->25->25;
+      acked on synth#242 (issuecomment-4700004320).
     tags: [release-watch, synth, regalloc, on-target]
     fields:
       detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
