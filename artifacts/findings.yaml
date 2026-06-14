@@ -593,3 +593,29 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-PIX-002
+
+  - id: AFD-022
+    type: ai-found-defect
+    title: relay-sec description overclaims wohl usage - wohl has no relay-sec dependency (doc accuracy)
+    status: open
+    description: >
+      Found 2026-06-14 (iter#19) verifying the DD-009 relay-sec reuse premise
+      against wohl. relay-sec's Cargo.toml/docs say it is 'shared by falcon and
+      wohl' and 'runs on the wohl STM32G0 (M0+)', but the wohl repo depends on
+      relay-ccsds/cs/ds/hk/hs/lc/sc/sch/tbl/to (cFS app services + CCSDS codec)
+      with NO relay-sec dependency (direct or transitive) and no code reference.
+      So wohl reuses relay's CCSDS comms + cFS services + stream-transformer
+      model, NOT relay-sec. relay-sec itself is genuinely reusable (no_std,
+      no_alloc, Kani-proven, M0+/M7-portable) - this is only a wording issue
+      implying a wohl integration that does not exist, which misled jess's comms
+      evaluation. Consequence: jess would be the FIRST downstream to wire
+      relay-sec as inter-component E2E (DD-009), not following a wohl precedent.
+      Filed https://github.com/pulseengine/relay/issues/175 - supervising.
+    tags: [phase-2, relay, relay-sec, doc-accuracy, comms]
+    fields:
+      detected-by: jess iter#19 - wohl Cargo.toml + code-search vs relay-sec description
+      severity: minor
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-PIX-008

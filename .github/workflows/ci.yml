@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Pinned PulseEngine tool releases — bumped explicitly via PR. jess holds
+  # rivet at 0.15.0 until a release carries the `accepted` status fix
+  # (rivet#525, merged to main, not yet released — see AFD-012).
+  RIVET_VERSION: v0.15.0
+  SPAR_VERSION: v0.17.0
+
+jobs:
+  # The rivet artifact spine is jess's substance — this is the core gate.
+  rivet-validate:
+    name: rivet validate (artifact spine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned rivet release
+        run: |
+          set -euo pipefail
+          gh release download "$RIVET_VERSION" --repo pulseengine/rivet \
+            --pattern 'rivet-*-x86_64-unknown-linux-gnu.tar.gz' \
+            --pattern 'SHA256SUMS.txt' --dir /tmp/rivet
+          cd /tmp/rivet
+          exp=$(grep 'x86_64-unknown-linux-gnu.tar.gz' SHA256SUMS.txt | awk '{print $1}')
+          act=$(sha256sum ./*x86_64-unknown-linux-gnu.tar.gz | awk '{print $1}')
+          test -n "$exp" && test "$exp" = "$act" || { echo "checksum mismatch"; exit 1; }
+          tar xzf ./*x86_64-unknown-linux-gnu.tar.gz
+          install -m755 "$(find . -name rivet -type f | head -1)" /usr/local/bin/rivet
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: rivet validate
+        run: |
+          rivet --version
+          rivet validate
+
+  # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
+  spar-model:
+    name: spar model (Pixhawk 6X-RT)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned spar release
+        run: |
+          set -euo pipefail
+          gh release download "$SPAR_VERSION" --repo pulseengine/spar \
+            --pattern 'spar-*-x86_64-unknown-linux-gnu.tar.gz' \
+            --pattern 'SHA256SUMS.txt' --dir /tmp/spar
+          cd /tmp/spar
+          exp=$(grep 'x86_64-unknown-linux-gnu.tar.gz' SHA256SUMS.txt | awk '{print $1}')
+          act=$(sha256sum ./*x86_64-unknown-linux-gnu.tar.gz | awk '{print $1}')
+          test -n "$exp" && test "$exp" = "$act" || { echo "checksum mismatch"; exit 1; }
+          tar xzf ./*x86_64-unknown-linux-gnu.tar.gz
+          install -m755 "$(find . -name spar -type f | head -1)" /usr/local/bin/spar
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: spar parse + instance
+        run: |
+          spar parse hardware/pixhawk6x-rt.aadl
+          spar instance --root Pixhawk6XRT::Pixhawk6XRT.v2a hardware/pixhawk6x-rt.aadl
+
+  # NOTE: a third job building the hermetic falcon firmware chain
+  # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused
+  # //:falcon-firmware against the pinned rules_wasm_component v1.1.0) is the
+  # next CI addition — deferred until validated in the runner environment
+  # (it fetches the rwc git_override + the wasm toolchain bundle + the relay
+  # http_file asset). Tracked alongside REQ-PIX-001.
