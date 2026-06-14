@@ -214,22 +214,32 @@ artifacts:
         with meld fusion.
       alternatives: >-
         REUSE RELAY'S EXISTING IPC - strong candidate, UNDER EVALUATION
-        (REQ-PIX-008): the RELAY SOFTWARE already implements component comms with
-        MAVLink (off-board telemetry/command) and a cFS/cFE-class Software Bus
-        (pub/sub) for its cFS-DNA mission layer - this IPC lives in relay's own
-        components (NOT in meld; meld just fuses those components). Reusing a
-        proven relay IPC instead of building a new
-        transport may dominate the wRPC-idea path. KEY ADVANTAGE: relay's
-        MAVLink + cFS SB already carry END-TO-END PROTECTION (message integrity
-        / sequence / CRC) - so jess inherits safety-grade comms (needed for the
-        ASIL-D / DAL-A / SIL-4 bar of DD-005) rather than building and verifying
-        E2E protection from scratch. Likely shape: on Zephyr, layer relay's
-        E2E-protected cFS-SB pub/sub over the ZEPHYR IPC MODEL (ipc_service /
-        ICMsg over shared memory + MU mailbox - the same transport gale's
-        primitives underpin), with MAVLink at the off-board/CAN edge. Open
-        questions: whether a WIT-typed contract layer sits cleanly on top, and
-        whether spar can model cFS-SB/MAVLink comms (user ask). DD-009 is
-        therefore PROVISIONAL pending that evaluation. Other alternatives: port the wRPC crates to no_std -
+        (REQ-PIX-008, deep-dived 2026-06-14 - GROUNDED in relay source): relay
+        has THREE distinct comms mechanisms, do not conflate. (a) Software Bus
+        WIT seam (wit/interfaces/relay-software-bus/bus.wit): transport-neutral
+        typed streams, intended mapping stream<T> -> Gale ring_buf - NO E2E. (b)
+        Software Bus host router (host/relay-sb/src/core.rs): cFE-mapped
+        pub/sub, but std-only (Vec/VecDeque), NO E2E, and the bare-metal falcon
+        path bypasses it (calls FlightCore::step directly). (c) **relay-sec**
+        (crates/relay-sec/) - the real prize: no_std/no_alloc, already runs on
+        Cortex-M7 + M0+, Kani-proven, a genuine safety E2E profile (monotonic
+        counter + RFC-6479 sliding-window replay/loss/reorder + Ascon-AEAD MAC +
+        SPI/channel binding + session rekey) - STRONGER than AUTOSAR-E2E
+        (cryptographic). CORRECTION to an earlier claim: relay's MAVLink (X.25
+        CRC only, seq is a passthrough - detection-only) and the Software Bus
+        (no integrity) do NOT carry safety E2E; relay-sec does, and it is the C2
+        link layer NOT wired to the bus. So the grounded plan: REUSE relay-sec
+        as the E2E wrapper on each inter-core hop (jess then inherits proven
+        safety-grade protection for the DD-005 bar); use the WIT stream<T> seam
+        as the contract; the TRANSPORT (Zephyr ipc_service/ICMsg or Gale
+        ring_buf over shared memory + MU mailbox) is NET-NEW - relay has no
+        shared-memory/ipc_service backend. Reuse relay-mavlink for the off-board
+        GCS link only (not inter-core). The std-only SB router and the empty
+        relay-es/evs/time host stubs are NOT reusable. spar should model the
+        stream connections + relay-sec-protected channels (user ask; needs the
+        spar#282 connection-aware codegen). DD-009 stays PROVISIONAL: the
+        recommended path is relay-sec(E2E) + WIT-stream-contract + net-new
+        Zephyr-ipc transport, pending a small spike. Other alternatives: port the wRPC crates to no_std -
         rejected (tokio+wasmtime non-starter); DroneCAN for inter-core -
         rejected (inter-NODE bus, wrong layer for M7<->M4 on one die);
         hand-rolled ad-hoc messaging with no contract - rejected (loses the

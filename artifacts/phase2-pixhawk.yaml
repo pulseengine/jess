@@ -146,7 +146,7 @@ artifacts:
 
   - id: REQ-PIX-008
     type: requirement
-    title: Evaluate reusing relay's E2E-protected MAVLink + cFS Software Bus IPC (implemented in relay software) over the Zephyr IPC model; ensure spar can model it
+    title: Reuse relay-sec (no_std, Kani-proven E2E) as the inter-core E2E wrapper + WIT stream<T> contract over a net-new Zephyr ipc_service transport; relay-mavlink for off-board; spar to model it
     status: draft
     fields:
       category: functional
