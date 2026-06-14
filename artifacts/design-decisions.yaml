@@ -225,7 +225,12 @@ artifacts:
         Cortex-M7 + M0+, Kani-proven, a genuine safety E2E profile (monotonic
         counter + RFC-6479 sliding-window replay/loss/reorder + Ascon-AEAD MAC +
         SPI/channel binding + session rekey) - STRONGER than AUTOSAR-E2E
-        (cryptographic). CORRECTION to an earlier claim: relay's MAVLink (X.25
+        (cryptographic). NB (iter#19, grounded in wohl source): relay-sec is
+        reusable but NOT yet integrated in any downstream - wohl reuses relay's
+        CCSDS codec + cFS app services + stream model but has NO relay-sec dep,
+        despite relay-sec's description claiming 'shared by falcon and wohl'
+        (relay#175). So jess would be the FIRST to wire relay-sec as
+        inter-component E2E - reusable code, but new integration ground. CORRECTION to an earlier claim: relay's MAVLink (X.25
         CRC only, seq is a passthrough - detection-only) and the Software Bus
         (no integrity) do NOT carry safety E2E; relay-sec does, and it is the C2
         link layer NOT wired to the bus. So the grounded plan: REUSE relay-sec
