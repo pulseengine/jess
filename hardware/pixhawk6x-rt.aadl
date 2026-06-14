@@ -1,0 +1,158 @@
+--  Pixhawk 6X-RT (Holybro, Standard v2A) — jess Phase-2 hardware platform.
+--
+--  Multi-processor flight-controller model. The FMU is an NXP i.MX RT1176
+--  crossover MCU (Cortex-M7 @ up to 1 GHz + Cortex-M4 @ 400 MHz); a separate
+--  STM32F100 (Cortex-M3) is the I/O coprocessor. jess binds the verified
+--  falcon flight stack (wasm -> meld -> synth -> gale) to the M7, and the
+--  PWM/failsafe path to the I/O MCU. Sensors hang off SPI/I2C; peripherals and
+--  later smart actuators hang off CAN-FD (DroneCAN).
+--
+--  Sourced from PX4 fmu-v6xrt + Holybro 6X-RT + NXP RT1176 docs (see
+--  artifacts/design-decisions.yaml DD-007 for citations and the porting plan).
+
+package Pixhawk6XRT
+public
+
+  --------------------------------------------------------------------------
+  -- Processors (3 cores across 2 packages)
+  --------------------------------------------------------------------------
+  --  i.MX RT1176 primary core. Target: cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard
+  --  (double-precision FPU). gale verified primitives + falcon run here.
+  processor FMU_M7
+  end FMU_M7;
+  processor implementation FMU_M7.imxrt1176
+  end FMU_M7.imxrt1176;
+
+  --  i.MX RT1176 secondary core (Cortex-M4, fpv4-sp). Idle under PX4 today;
+  --  jess may offload here later (asymmetric multiprocessing). Modeled so the
+  --  binding story is explicit from the start.
+  processor FMU_M4
+  end FMU_M4;
+  processor implementation FMU_M4.imxrt1176
+  end FMU_M4.imxrt1176;
+
+  --  STM32F100 (Cortex-M3, 24 MHz) I/O coprocessor: PWM out + RC/SBUS failsafe,
+  --  independent of the FMU.
+  processor IO_MCU
+  end IO_MCU;
+  processor implementation IO_MCU.stm32f100
+  end IO_MCU.stm32f100;
+
+  --------------------------------------------------------------------------
+  -- Memory (i.MX RT1176 FlexRAM partition as PX4 maps it)
+  --------------------------------------------------------------------------
+  memory ITCM   end ITCM;     -- 256 KB @ 0x00000000 (M7 instruction TCM)
+  memory DTCM   end DTCM;     -- 256 KB @ 0x20000000 (M7 data TCM)
+  memory OCRAM  end OCRAM;    -- ~1.5 MB @ 0x20240000 (shared on-chip RAM)
+  memory OSPI_FLASH end OSPI_FLASH; -- 64 MB octal SPI XIP (code)
+
+  --------------------------------------------------------------------------
+  -- Buses
+  --------------------------------------------------------------------------
+  bus SPI_BUS  end SPI_BUS;    -- internal sensor SPI (IMUs, baro)
+  bus I2C_BUS  end I2C_BUS;    -- mag + digital power monitor
+  bus CANFD    end CANFD;      -- DroneCAN / UAVCAN peripherals + smart actuators
+
+  --------------------------------------------------------------------------
+  -- Sensor + power devices
+  --------------------------------------------------------------------------
+  --  IMU2 — TDK ICM-42688-P. jess already has a no_std driver (falcon-imu-icm42688).
+  device ICM42688P
+  features
+    spi : requires bus access SPI_BUS;
+  end ICM42688P;
+
+  --  IMU1 — ICM-20649 or BMI088 (populated as one).
+  device IMU_20649_BMI088
+  features
+    spi : requires bus access SPI_BUS;
+  end IMU_20649_BMI088;
+
+  --  IMU3 — TDK ICM-42670-P.
+  device ICM42670P
+  features
+    spi : requires bus access SPI_BUS;
+  end ICM42670P;
+
+  --  Barometer — 2x Bosch BMP388 (one device instance per chip).
+  device BMP388
+  features
+    spi : requires bus access SPI_BUS;
+  end BMP388;
+
+  --  Magnetometer — Bosch BMM150.
+  device BMM150
+  features
+    i2c : requires bus access I2C_BUS;
+  end BMM150;
+
+  --  PM02D digital power module (TI INA228 over I2C).
+  device PM02D
+  features
+    i2c : requires bus access I2C_BUS;
+  end PM02D;
+
+  --------------------------------------------------------------------------
+  -- Software: the verified falcon flight stack + the I/O failsafe path
+  --------------------------------------------------------------------------
+  --  falcon: IEKF -> geometric attitude -> ADRC -> mixer cascade. Compiled
+  --  wasm -> meld -> synth to the M7. (jess //:falcon-firmware)
+  process Falcon_Flight
+  end Falcon_Flight;
+  process implementation Falcon_Flight.cascade
+  end Falcon_Flight.cascade;
+
+  --  I/O failsafe + PWM mixing on the STM32F100.
+  process IO_Failsafe
+  end IO_Failsafe;
+  process implementation IO_Failsafe.pwm
+  end IO_Failsafe.pwm;
+
+  --------------------------------------------------------------------------
+  -- The board, assembled
+  --------------------------------------------------------------------------
+  system Pixhawk6XRT
+  end Pixhawk6XRT;
+
+  system implementation Pixhawk6XRT.v2a
+  subcomponents
+    m7   : processor FMU_M7.imxrt1176;
+    m4   : processor FMU_M4.imxrt1176;
+    io   : processor IO_MCU.stm32f100;
+
+    itcm  : memory ITCM;
+    dtcm  : memory DTCM;
+    ocram : memory OCRAM;
+    flash : memory OSPI_FLASH;
+
+    spi  : bus SPI_BUS;
+    i2c  : bus I2C_BUS;
+    can  : bus CANFD;
+
+    imu1 : device IMU_20649_BMI088;
+    imu2 : device ICM42688P;
+    imu3 : device ICM42670P;
+    baro_a : device BMP388;
+    baro_b : device BMP388;
+    mag  : device BMM150;
+    power : device PM02D;
+
+    falcon : process Falcon_Flight.cascade;
+    failsafe : process IO_Failsafe.pwm;
+
+  connections
+    imu1_spi : bus access spi <-> imu1.spi;
+    imu2_spi : bus access spi <-> imu2.spi;
+    imu3_spi : bus access spi <-> imu3.spi;
+    baroa_spi : bus access spi <-> baro_a.spi;
+    barob_spi : bus access spi <-> baro_b.spi;
+    mag_i2c : bus access i2c <-> mag.i2c;
+    power_i2c : bus access i2c <-> power.i2c;
+
+  properties
+    --  Software-to-core bindings: falcon on the M7, failsafe on the I/O MCU.
+    Actual_Processor_Binding => (reference (m7)) applies to falcon;
+    Actual_Processor_Binding => (reference (io)) applies to failsafe;
+  end Pixhawk6XRT.v2a;
+
+end Pixhawk6XRT;

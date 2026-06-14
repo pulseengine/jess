@@ -479,3 +479,32 @@ artifacts:
         target: EXTERNALANCHOR-002
       - type: traces-to
         target: REQ-001
+
+  - id: AFD-018
+    type: ai-found-defect
+    title: Renode does not model the i.MX RT1170/RT1176 - HIL emulation gap for the Pixhawk 6X-RT
+    status: open
+    description: >
+      Found 2026-06-14 (iter#18) during Pixhawk 6X-RT porting research: Renode
+      has no platform for the NXP i.MX RT1170/RT1176. renode/platforms/cpus ships
+      only imxrt1064.repl and imxrt500.repl (plus RT700 EVK); the RT11xx family
+      is absent from the supported-boards list. This is the single capability gap
+      versus jess's current STM32F4/Renode HIL flow (DD-003/REQ-001): the
+      hermetic renode_test step (deferred in BUILD.bazel) cannot target the
+      6X-RT SoC out of the box. Renode DOES model the Cortex-M7 core, so a custom
+      platform is feasible. Options: (a) author a 6X-RT .repl/.resc (adapt the
+      imxrt1064 patterns + RT1176 memory map - ITCM/DTCM/OCRAM, FlexSPI XIP,
+      the peripheral set jess exercises), or (b) bring up on the real
+      mimxrt1170_evk / 6X-RT hardware via the Zephyr (gale) path and keep
+      STM32F4/Renode as the emulation fallback. Tracked by REQ-PIX-005. Not yet
+      filed upstream (Renode is third-party, not a pulseengine repo); decide
+      build-a-repl vs hardware-first before filing anything. Source:
+      renode.readthedocs.io supported-boards + renode/platforms/cpus tree.
+    tags: [phase-2, hardware, renode, imxrt1176, emulation-gap]
+    fields:
+      detected-by: jess Pixhawk 6X-RT porting research (Renode supported-boards + platforms/cpus tree)
+      severity: major
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-PIX-005
