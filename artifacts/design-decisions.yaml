@@ -230,7 +230,7 @@ artifacts:
         CCSDS codec + cFS app services + stream model but has NO relay-sec dep,
         despite relay-sec's description claiming 'shared by falcon and wohl'
         (relay#175). So jess would be the FIRST to wire relay-sec as
-        inter-component E2E - reusable code, but new integration ground. CORRECTION to an earlier claim: relay's MAVLink (X.25
+        inter-component E2E - reusable code, but new integration ground. Reuse asks filed on relay: relay#176 (expose relay-sec as a transport-agnostic E2E channel, decoupled from CCSDS) and relay#177 (a no_std shared-memory/ipc_service Software Bus transport backend behind the stream<T> seam) - supervising. CORRECTION to an earlier claim: relay's MAVLink (X.25
         CRC only, seq is a passthrough - detection-only) and the Software Bus
         (no integrity) do NOT carry safety E2E; relay-sec does, and it is the C2
         link layer NOT wired to the bus. So the grounded plan: REUSE relay-sec
