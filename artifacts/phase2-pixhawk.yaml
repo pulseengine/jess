@@ -155,3 +155,15 @@ artifacts:
     links:
       - type: traces-to
         target: FEATURE-002
+
+  - id: REQ-PIX-009
+    type: requirement
+    title: Maximal-wasm gale-nano on the STM32F100 I/O MCU - minimal verified gale subset + kiln async scheduler, synth-compiled, thin native register shim
+    status: draft
+    fields:
+      category: functional
+      priority: could
+      release: v0.9.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
