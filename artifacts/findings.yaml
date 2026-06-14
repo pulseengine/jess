@@ -623,7 +623,7 @@ artifacts:
   - id: AFD-023
     type: ai-found-defect
     title: loom dead-stores pass miscompiles the meld-fused falcon core (eliminates a live float store)
-    status: open
+    status: resolved
     description: >
       Found 2026-06-14 (iter#20) by the behavioral SIL gate while moving jess to
       the meld -> loom -> synth order (loom now optimizes the FUSED core, not the
@@ -641,7 +641,7 @@ artifacts:
       (sha256 fca83e85...). Filed https://github.com/pulseengine/loom/issues/220
       - supervising. INTERIM FIX: jess BUILD.bazel runs wasm_optimize with all
       passes except dead-stores (SIL-verified correct); drop the override when
-      loom#220 lands. The meld->loom->synth order (DD-006) is preserved.
+      loom#220 lands. The meld->loom->synth order (DD-006) is preserved. RESOLVED 2026-06-15 (iter#21): fixed in loom PR #221 (merged main 5fd7443, 'skip functions with unverifiable float memory') - jess built loom main and re-verified on the committed repro: dead-stores AND full-default loom now both return the correct 0.023399856 (was 0.32916). Confirmed on loom#220. NOT yet in a loom release; jess keeps the passes-without-dead-stores override + SIL gate until a release carries #221 and the rwc bundle bumps loom off v0.3.0.
     tags: [release-watch, loom, miscompilation, dead-stores, critical, sil-gate]
     fields:
       detected-by: jess loop iter#20 (2026-06-14) - behavioral SIL pass-bisect (kiln) on the meld-fused falcon-v1.59 core
