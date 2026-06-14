@@ -619,3 +619,36 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-PIX-008
+
+  - id: AFD-023
+    type: ai-found-defect
+    title: loom dead-stores pass miscompiles the meld-fused falcon core (eliminates a live float store)
+    status: open
+    description: >
+      Found 2026-06-14 (iter#20) by the behavioral SIL gate while moving jess to
+      the meld -> loom -> synth order (loom now optimizes the FUSED core, not the
+      per-component module). loom v1.1.13's output passes wasm-tools validate but
+      is behaviorally WRONG on the meld-fused falcon-v1.59 core: kiln
+      run-stabilization 0.023399856 -> 0.32916 (F32 1019195662 -> 1051232186),
+      fails the <0.1 rad gate. Pass-bisected (kiln-checked each of the 16 loom
+      passes): every pass EXCEPT dead-stores is correct; dead-stores alone (and
+      the default set) produce the wrong value, deterministically. Likely cause:
+      dead-stores treats a float store as dead when it is actually live (loom
+      logs 'vacuum: verification skipped: unverifiable float load/store' on this
+      module) - unsound store-elimination under unverifiable aliasing. Same class
+      as AFD-014/loom#196, different trigger (loom-on-fused-core via dead-stores).
+      Committed byte-exact repro repro/loom-dead-stores/falcon-v1.59.fused.wasm
+      (sha256 fca83e85...). Filed https://github.com/pulseengine/loom/issues/220
+      - supervising. INTERIM FIX: jess BUILD.bazel runs wasm_optimize with all
+      passes except dead-stores (SIL-verified correct); drop the override when
+      loom#220 lands. The meld->loom->synth order (DD-006) is preserved.
+    tags: [release-watch, loom, miscompilation, dead-stores, critical, sil-gate]
+    fields:
+      detected-by: jess loop iter#20 (2026-06-14) - behavioral SIL pass-bisect (kiln) on the meld-fused falcon-v1.59 core
+      severity: critical
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-006
+      - type: traces-to
+        target: REQ-002

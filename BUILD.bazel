@@ -32,11 +32,32 @@ meld_fuse(
     validate = True,
 )
 
-# 2. loom — optimize the FUSED module (rwc#490 loom_wrapper fix lets it read the
-# fetched input; behavioral SIL differential gates adoption, runbook §3a).
+# 2. loom — optimize the FUSED module. The behavioral SIL gate (runbook §3a)
+# caught loom's `dead-stores` pass MISCOMPILING the fused falcon core
+# (eliminates a live float store: run-stabilization 0.0234 → 0.329, valid but
+# wrong) — pass-bisected, filed loom#220 / AFD-023. Interim: run every pass
+# EXCEPT dead-stores (SIL-verified correct, still optimizes). Drop this `passes`
+# override once loom#220 lands.
 wasm_optimize(
     name = "falcon-optimized",
     component = ":falcon-fused",
+    passes = [
+        "directize",
+        "inline",
+        "precompute",
+        "constant-folding",
+        "canonicalize",
+        "peephole-synth",
+        "cse",
+        "advanced",
+        "branches",
+        "dce",
+        "merge-blocks",
+        "vacuum",
+        "simplify-locals",
+        "dead-locals",
+        "vacuum-final",
+    ],
 )
 
 # 3. synth — compile the optimized fused module to an ARM Cortex-M ELF.
