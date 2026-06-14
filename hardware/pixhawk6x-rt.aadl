@@ -53,6 +53,19 @@ public
   bus I2C_BUS  end I2C_BUS;    -- mag + digital power monitor
   bus CANFD    end CANFD;      -- DroneCAN / UAVCAN peripherals + smart actuators
 
+  --  Inter-core / inter-MCU comms fabrics. These carry the WIT-typed RPC
+  --  contracts (the salvageable wRPC idea: CM value encoding over a transport
+  --  we build, NOT the host/cloud wRPC crates). Same-core comms is meld fusion
+  --  (direct calls); cross-core comms is RPC over one of these buses.
+  bus SHMEM    end SHMEM;      -- M7<->M4 shared-memory ring + MU mailbox IRQ (RPMsg/ICMsg-class)
+  bus IO_LINK  end IO_LINK;    -- FMU<->IO MCU: LPUART6 @ 1.5 Mbaud (px4io-class register protocol)
+
+  --------------------------------------------------------------------------
+  -- Data carried across cores (sized so spar emits WIT type aliases)
+  --------------------------------------------------------------------------
+  data VehicleState end VehicleState;   -- estimator -> controller (pose/rates)
+  data ActuatorCmd  end ActuatorCmd;    -- controller -> failsafe/mixer (PWM setpoints)
+
   --------------------------------------------------------------------------
   -- Sensor + power devices
   --------------------------------------------------------------------------
@@ -95,15 +108,32 @@ public
   --------------------------------------------------------------------------
   -- Software: the verified falcon flight stack + the I/O failsafe path
   --------------------------------------------------------------------------
-  --  falcon: IEKF -> geometric attitude -> ADRC -> mixer cascade. Compiled
-  --  wasm -> meld -> synth to the M7. (jess //:falcon-firmware)
+  --  falcon: geometric attitude -> ADRC -> mixer cascade. A fused component
+  --  (meld) compiled wasm -> synth to the M7. (jess //:falcon-firmware)
+  --  Consumes state from the M4 estimator over SHMEM; emits actuator commands
+  --  to the I/O MCU over IO_LINK. Same WIT contract whether fused or RPC'd.
   process Falcon_Flight
+  features
+    state_in : in data port VehicleState;     -- <- estimator (cross-core RPC)
+    cmd_out  : out data port ActuatorCmd;     -- -> failsafe (cross-MCU RPC)
   end Falcon_Flight;
   process implementation Falcon_Flight.cascade
   end Falcon_Flight.cascade;
 
-  --  I/O failsafe + PWM mixing on the STM32F100.
+  --  "another fused system": the IEKF state estimator, offloaded to the idle
+  --  M4 core as its own fused component. Emits VehicleState to the M7.
+  process Estimator
+  features
+    state_out : out data port VehicleState;
+  end Estimator;
+  process implementation Estimator.iekf
+  end Estimator.iekf;
+
+  --  I/O failsafe + PWM mixing on the STM32F100. Receives actuator commands
+  --  from the FMU over the LPUART link.
   process IO_Failsafe
+  features
+    cmd_in : in data port ActuatorCmd;
   end IO_Failsafe;
   process implementation IO_Failsafe.pwm
   end IO_Failsafe.pwm;
@@ -128,6 +158,8 @@ public
     spi  : bus SPI_BUS;
     i2c  : bus I2C_BUS;
     can  : bus CANFD;
+    shmem : bus SHMEM;
+    io_link : bus IO_LINK;
 
     imu1 : device IMU_20649_BMI088;
     imu2 : device ICM42688P;
@@ -138,6 +170,7 @@ public
     power : device PM02D;
 
     falcon : process Falcon_Flight.cascade;
+    estimator : process Estimator.iekf;
     failsafe : process IO_Failsafe.pwm;
 
   connections
@@ -149,10 +182,21 @@ public
     mag_i2c : bus access i2c <-> mag.i2c;
     power_i2c : bus access i2c <-> power.i2c;
 
+    --  Cross-core / cross-MCU WIT-typed contracts (the wRPC topology).
+    est_to_falcon : port estimator.state_out -> falcon.state_in;   -- M4 -> M7
+    falcon_to_io  : port falcon.cmd_out -> failsafe.cmd_in;         -- M7 -> IO
+
   properties
-    --  Software-to-core bindings: falcon on the M7, failsafe on the I/O MCU.
+    --  Software-to-core bindings: estimator on M4, falcon on M7, failsafe on IO.
     Actual_Processor_Binding => (reference (m7)) applies to falcon;
+    Actual_Processor_Binding => (reference (m4)) applies to estimator;
     Actual_Processor_Binding => (reference (io)) applies to failsafe;
+
+    --  Connection bindings: the cross-processor contracts ride a transport bus.
+    --  (spar's wrpc-binding analysis checks exactly this — a cross-core
+    --  connection must be bound to a bus, i.e. an explicit RPC transport.)
+    Actual_Connection_Binding => (reference (shmem)) applies to est_to_falcon;
+    Actual_Connection_Binding => (reference (io_link)) applies to falcon_to_io;
   end Pixhawk6XRT.v2a;
 
 end Pixhawk6XRT;

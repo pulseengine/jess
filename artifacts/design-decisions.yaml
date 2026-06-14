@@ -133,3 +133,110 @@ artifacts:
         target: REQ-002
       - type: traces-to
         target: DD-003
+
+  - id: DD-008
+    type: design-decision
+    title: Phase-2 bring-up methodology - Renode reuse + PX4/NuttX reference + C# peripheral reimpl, staged, SIL-differential gated
+    status: accepted
+    description: >
+      The proven jess bring-up method, applied to the Pixhawk 6X-RT (i.MX
+      RT1176): (1) gather schematics/HW description (DD-007); (2) seed a Renode
+      platform from the NXP RT1176 Zephyr devicetree via dts2repl and re-base the
+      existing imxrt1064 peripheral C# models (~70-80% reusable by class:
+      CortexM/NVIC+SysTick, NXP_LPUART, IMXRT_LPSPI, LPI2C, IMX_GPTimer,
+      NXP_eDMA, IMXRT_FlexSPI, IMXRT_GPIO) to the fmu-v6xrt address map; (3) boot
+      PX4/NuttX as the reference firmware, run the boot->unhandled-access-log->
+      implement/stub/Tag loop to discover what the peripherals need; (4)
+      reimplement the missing peripherals (Renode models them in C#) - notably
+      the ICM-42688-P / ICM-42686-P / BMI088 SPI sensors (fed via RESD) and the
+      classic NXP MU for M7<->M4; (5) gate every stage with the SIL behavioral
+      differential (runbook 3a). Staged: M7-only boot to nsh (high confidence) ->
+      PX4 boot + serial/sensorless (medium) -> sensor-in-the-loop, the eDMA-SPI
+      hard part (low-medium) -> multi-core M7+M4 + STM32F100 IO MCU as a second
+      Renode machine over a 1.5 Mbaud UART hub. No PX4-in-Renode exists today, so
+      this is original work; fmu-v6xrt's spi.cpp/defconfig give the exact sensor
+      wiring + memory map to drive both the .repl and jess's own drivers.
+    tags: [phase-2, methodology, renode, px4, bring-up]
+    fields:
+      rationale: >-
+        It's the team's proven path and it de-risks the AFD-018 Renode gap
+        incrementally - reuse the 70-80% that exists, learn the peripheral needs
+        from a known-good firmware (PX4), and only hand-write the delta. Staging
+        means M7-boot value lands early without waiting on the hard sensor/DMA
+        and multi-core work.
+      alternatives: >-
+        Skip Renode, go straight to EVK/real silicon via Zephyr - viable
+        fallback (kept open) but loses the hermetic CI emulation jess relies on.
+        Wait for upstream Renode RT1176 support - rejected: none is planned.
+      release: v0.6.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-005
+      - type: traces-to
+        target: DD-003
+
+  - id: DD-009
+    type: design-decision
+    title: Inter-core comms - fuse same-core (meld), WIT-typed RPC cross-core over a shared-memory transport; NOT the wRPC crates
+    status: accepted
+    description: >
+      Architecture for "per-thread fused async component, multiple fused systems
+      across cores" (the gale-maximal-wasm direction on the RT1176's M7+M4+IO).
+      Same WIT contract, two deployments: SAME CORE = meld fusion (direct calls,
+      nanoseconds); CROSS CORE = RPC over a transport. Decision on the RPC layer
+      (from sourced research): the wRPC reference crates are host/cloud-only
+      (hard tokio + wasmtime, no no_std) and NOT embeddable - but the wRPC IDEA
+      is the north star and its maintainers bless reuse: WIT-typed contracts +
+      the Component-Model value-definition encoding over a transport we build.
+      So jess's three layers: (1) CONTRACT = WIT authored in spar/AADL (one
+      interface per cross-core connection); (2) CODEC = CM value encoding (stays
+      meld-fusion byte-compatible) or postcard (no_std/no_alloc) pragmatically;
+      (3) TRANSPORT = a shared-memory ring + MU mailbox IRQ on gale (Zephyr
+      ipc_service/ICMsg-class or hand-rolled SPSC), with explicit RT1176
+      cache-coherency handling, and the LPUART6 px4io-class link for the IO MCU,
+      CAN-FD/DroneCAN for off-board nodes. spar is the architecture source: each
+      core's fused stack = an AADL process bound to a processor, cross-core
+      connections bound to a transport bus (modeled in hardware/pixhawk6x-rt.aadl).
+      spar gaps to make this real are filed: connection-aware WIT codegen
+      (spar#282, AFD-020) and the wrpc-binding false-positive (spar#281,
+      AFD-019). gale gaps (no executor/spawn/host/AMP) filed as the gale#63 epic.
+      No bare-metal multi-core wasm-component-RPC precedent exists - this is
+      green-field; ADDITIONAL HELP needed on the verified no_std executor, the
+      cache-coherent cross-core transport, and spar's connection-aware codegen.
+    tags: [phase-2, architecture, wrpc, wit, multi-core, gale-maximal-wasm]
+    fields:
+      rationale: >-
+        Keeps one WIT contract for both fused and distributed deployment (the
+        Component-Model fuse-vs-distribute duality), so the same verified cascade
+        runs same-core (fast) or split across M7/M4 without rewriting interfaces.
+        Reusing the wRPC encoding idea (not the crates) avoids a std/tokio/wasmtime
+        dependency that can't exist on an MCU while keeping CABI byte-compatibility
+        with meld fusion.
+      alternatives: >-
+        REUSE RELAY'S EXISTING IPC - strong candidate, UNDER EVALUATION
+        (REQ-PIX-008): the RELAY SOFTWARE already implements component comms with
+        MAVLink (off-board telemetry/command) and a cFS/cFE-class Software Bus
+        (pub/sub) for its cFS-DNA mission layer - this IPC lives in relay's own
+        components (NOT in meld; meld just fuses those components). Reusing a
+        proven relay IPC instead of building a new
+        transport may dominate the wRPC-idea path. KEY ADVANTAGE: relay's
+        MAVLink + cFS SB already carry END-TO-END PROTECTION (message integrity
+        / sequence / CRC) - so jess inherits safety-grade comms (needed for the
+        ASIL-D / DAL-A / SIL-4 bar of DD-005) rather than building and verifying
+        E2E protection from scratch. Likely shape: on Zephyr, layer relay's
+        E2E-protected cFS-SB pub/sub over the ZEPHYR IPC MODEL (ipc_service /
+        ICMsg over shared memory + MU mailbox - the same transport gale's
+        primitives underpin), with MAVLink at the off-board/CAN edge. Open
+        questions: whether a WIT-typed contract layer sits cleanly on top, and
+        whether spar can model cFS-SB/MAVLink comms (user ask). DD-009 is
+        therefore PROVISIONAL pending that evaluation. Other alternatives: port the wRPC crates to no_std -
+        rejected (tokio+wasmtime non-starter); DroneCAN for inter-core -
+        rejected (inter-NODE bus, wrong layer for M7<->M4 on one die);
+        hand-rolled ad-hoc messaging with no contract - rejected (loses the
+        typed/fuse-or-distribute property).
+      release: v0.7.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-007
+      - type: traces-to
+        target: DD-006
