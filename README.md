@@ -7,13 +7,75 @@
 The hardware-integration + release-watch hub that takes **falcon** (the
 [relay](https://github.com/pulseengine/relay) flight stack) onto real hardware
 through the [PulseEngine](https://github.com/pulseengine) wasm→embedded pipeline:
-**loom** optimize → **meld** fuse → **synth** wasm→ARM → on **gale** verified
+**meld** fuse → **loom** optimize → **synth** wasm→ARM → on **gale** verified
 RTOS primitives, emulated/run via **rules_wasm_component** + Renode.
 
 jess is not a code library — it is an **evidence-as-code** project: the
 substance lives in [rivet](https://github.com/pulseengine/rivet) artifacts
 (`artifacts/`) and a [spar](https://github.com/pulseengine/spar)/AADL hardware
 model (`hardware/`), exercised by a hermetic Bazel firmware chain.
+
+## Architecture (high level)
+
+### How jess uses the PulseEngine repositories
+
+```mermaid
+flowchart LR
+  relay["relay<br/>falcon flight component<br/>(CCSDS + relay-sec comms)"]
+
+  subgraph pipe["wasm → embedded pipeline"]
+    direction LR
+    meld["meld<br/>fuse"] --> loom["loom<br/>optimize fused whole"] --> synth["synth<br/>wasm → ARM Cortex-M"]
+  end
+
+  fw["falcon firmware<br/>(Cortex-M ELF)"]
+  gale["gale<br/>verified RTOS primitives"]
+  kiln["kiln<br/>QM validation runtime"]
+  renode["Renode<br/>HIL emulation"]
+  rwc["rules_wasm_component<br/>hermetic Bazel chain"]
+
+  subgraph gov["evidence & architecture"]
+    rivet["rivet<br/>traceability"]
+    spar["spar<br/>AADL model"]
+    sigil["sigil<br/>supply-chain"]
+  end
+
+  relay --> meld
+  gale -.->|"also fused as wasm"| meld
+  kiln -.->|"also fused as wasm"| meld
+  synth --> fw
+  gale -.->|underpins| fw
+  fw --> kiln
+  fw --> renode
+  rwc -.->|drives| pipe
+  jess(["jess<br/>hub + release-watch loop"]) -.->|orchestrates| rwc
+  jess -.->|"records / models"| gov
+```
+
+### How it runs on the drone — Pixhawk 6X-RT (Phase 2, distributed)
+
+```mermaid
+flowchart TB
+  subgraph fmu["NXP i.MX RT1176 — FMU"]
+    m7["Cortex-M7<br/>falcon cascade<br/>(fused wasm component)"]
+    m4["Cortex-M4<br/>IEKF estimator<br/>(fused wasm component)"]
+    m4 -->|"VehicleState<br/>SHMEM · CCSDS + relay-sec"| m7
+  end
+
+  sensors["IMUs (ICM-42688-P …)<br/>BMP388 · BMM150"] -->|"SPI / I2C"| m7
+  m7 -->|"ActuatorCmd<br/>LPUART · CCSDS + relay-sec"| io["STM32F100 I/O MCU<br/>failsafe + PWM mixing"]
+  io --> act["motors / servos"]
+  m7 <-->|"DroneCAN · CAN-FD"| can["ESCs · GPS · smart actuators"]
+  m7 <-->|"MAVLink"| gcs["ground station"]
+
+  gale["gale verified primitives + Zephyr"] -.->|underpin| m7
+  gale -.->|underpin| m4
+```
+
+Same WIT contract either way: components on one core are **meld-fused** (direct
+calls); across cores/MCUs they speak **CCSDS Space Packets wrapped by relay-sec**
+(counter + anti-replay + AEAD) over a shared-memory / LPUART transport — see
+`DD-009`.
 
 ## Three phases
 
@@ -23,12 +85,17 @@ model (`hardware/`), exercised by a hermetic Bazel firmware chain.
 
 ## The hermetic chain (Bazel)
 
+Order is **meld → loom → synth**: fuse first, then loom optimizes the fused
+whole (more than per-component), then synth emits ARM. In the maximal-wasm
+direction (`DD-006`), gale + kiln are themselves compiled to wasm and fused in
+here too, so loom optimizes the entire fused system.
+
 ```
 @falcon_flight_wasm (sha256-pinned relay release asset)
   → adopt_wasm_component  (//:falcon-flight)
   → wasm_validate         (//:falcon-validate)
-  → wasm_optimize  [loom] (//:falcon-optimized)
-  → meld_fuse             (//:falcon-fused)
+  → meld_fuse             (//:falcon-fused)        # fuse component(s) → one core module
+  → wasm_optimize  [loom] (//:falcon-optimized)    # loom optimizes the fused whole
   → synth_compile [→ARM]  (//:falcon-firmware, cortex-m4f/m7)
 ```
 

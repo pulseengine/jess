@@ -31,8 +31,11 @@ public
   processor implementation FMU_M4.imxrt1176
   end FMU_M4.imxrt1176;
 
-  --  STM32F100 (Cortex-M3, 24 MHz) I/O coprocessor: PWM out + RC/SBUS failsafe,
-  --  independent of the FMU.
+  --  STM32F100 (Cortex-M3, 24 MHz, 8 KB SRAM) I/O coprocessor: PWM out +
+  --  RC/SBUS failsafe, independent of the FMU. Runtime here is bare-metal
+  --  minimal (px4io-class) — 8 KB SRAM is too small for the full Zephyr RTOS,
+  --  and the failsafe is deliberately tiny/independent. gale/Zephyr runs on the
+  --  M7 (and Phase-1 STM32F4), NOT on this I/O MCU.
   processor IO_MCU
   end IO_MCU;
   processor implementation IO_MCU.stm32f100
