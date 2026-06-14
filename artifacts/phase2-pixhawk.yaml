@@ -131,3 +131,27 @@ artifacts:
     links:
       - type: traces-to
         target: FEATURE-002
+
+  - id: REQ-PIX-007
+    type: requirement
+    title: Inter-core/inter-component comms - WIT-typed contracts, fused same-core / RPC cross-core over a shared-memory transport
+    status: draft
+    fields:
+      category: functional
+      priority: should
+      release: v0.7.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-008
+    type: requirement
+    title: Evaluate reusing relay's E2E-protected MAVLink + cFS Software Bus IPC (implemented in relay software) over the Zephyr IPC model; ensure spar can model it
+    status: draft
+    fields:
+      category: functional
+      priority: must
+      release: v0.7.0
+    links:
+      - type: traces-to
+        target: FEATURE-002

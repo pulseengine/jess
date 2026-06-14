@@ -508,3 +508,88 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-PIX-005
+
+  - id: AFD-019
+    type: ai-found-defect
+    title: spar wrpc-binding false-positives - correctly bus-bound cross-processor connection still warns
+    status: open
+    description: >
+      Found 2026-06-14 (iter#18) while architecting the jess multi-core wRPC
+      topology in spar (hardware/pixhawk6x-rt.aadl). A cross-processor port
+      connection that IS bound to a bus via
+      'Actual_Connection_Binding => (reference (bus)) applies to <conn>' still
+      triggers spar's wrpc-binding warning ('crosses processor boundary ... but
+      has no Actual_Connection_Binding to a bus'). Tried both plain and
+      Deployment_Properties:: qualified forms; both warn. Root cause in
+      crates/spar-analysis/src/wrpc_binding.rs: the check reads the OWNING
+      component's flat property map (owner_props.get("Deployment_Properties"/"",
+      "Actual_Connection_Binding")) and never resolves the per-connection
+      'applies to <conn>' binding, so it is always false for the standard idiom -
+      the analysis cannot be satisfied by a correct deployment. Impact: this is
+      the analysis jess wants to gate the wRPC topology (cross-core connections
+      must name a transport); right now it is a guaranteed false-positive. Filed
+      https://github.com/pulseengine/spar/issues/281 - supervising.
+    tags: [phase-2, spar, wrpc, analysis, false-positive]
+    fields:
+      detected-by: jess Phase-2 wRPC modeling - spar analyze on hardware/pixhawk6x-rt.aadl (v0.17.0)
+      severity: major
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-PIX-007
+
+  - id: AFD-020
+    type: ai-found-defect
+    title: spar codegen does not turn AADL connections into aligned cross-component WIT contracts
+    status: open
+    description: >
+      Found 2026-06-14 (iter#18) evaluating spar as the architecture source for
+      inter-core wasm-component RPC. spar's wit_gen emits a WIT world PER PROCESS
+      from that process's own ports and never walks ConnectionInstances, so an
+      inter-process connection does NOT become a shared interface that the
+      producer exports and the consumer imports - the 'A.export == B.import'
+      alignment needed for cross-core RPC contracts is absent in codegen (the
+      type-level transform/wit.rs + wac.rs machinery exists but isn't wired to
+      the instance connection graph). This is the single highest-value change to
+      make spar architect a meld-fuse-or-RPC component system. Requested
+      https://github.com/pulseengine/spar/issues/282 - supervising.
+    tags: [phase-2, spar, wit, codegen, wrpc]
+    fields:
+      detected-by: jess Phase-2 wRPC modeling - review of spar wit_gen.rs (v0.17.0)
+      severity: major
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-PIX-007
+
+  - id: AFD-021
+    type: ai-found-defect
+    title: gale is models-only - no executor/spawn/wasm-host/AMP to host per-thread fused async components
+    status: open
+    description: >
+      Found 2026-06-14 (iter#18) surveying gale for the per-thread-fused-async-
+      component architecture (REQ-PIX-002/007, DD-009). gale provides verified
+      MODELS (sched/thread/timer/timeout/msgq/pipe/mbox + symmetric SMP
+      smp_state/cpu_mask/ipi) but NO executable substrate: no scheduler runtime,
+      no thread spawn/dispatch (ThreadTracker::create only counts), no async
+      executor/futures, no wasm host, and no hardware-capability WIT. The
+      'gale hosts a wasm component' story is gale's research-stage Kiln path
+      (docs/research/kiln-direct-rust-linking.md, all draft; no wit/ or
+      gale-kiln crate yet). The M7/M4 split is AMP, which gale's symmetric SMP
+      models do not address. ALSO recorded here (verdict): the wRPC reference
+      crates are NOT embeddable (hard tokio+wasmtime, no no_std) - only the
+      WIT-typed-contract + CM-value-encoding IDEA is reusable. Filed the gale
+      capability epic https://github.com/pulseengine/gale/issues/63 (Kiln host
+      path, spawn/dispatch, verified no_std executor, host/bus capability WIT,
+      AMP core-pinning). ADDITIONAL HELP needed on the verified executor + the
+      cache-coherent cross-core transport. Note the relay-IPC-reuse alternative
+      (cFS SB + MAVLink, E2E-protected, over Zephyr ipc_service) may reduce the
+      from-scratch substrate - under evaluation (REQ-PIX-008).
+    tags: [phase-2, gale, runtime, executor, amp, wrpc]
+    fields:
+      detected-by: jess Phase-2 architecture survey of gale (github.com/pulseengine/gale main)
+      severity: major
+      triage-status: open
+    links:
+      - type: traces-to
+        target: REQ-PIX-002
