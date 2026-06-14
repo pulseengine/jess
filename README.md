@@ -42,12 +42,12 @@ flowchart LR
 
   relay --> loom
   synth --> fw
-  gale -. underpins .-> fw
+  gale -.->|underpins| fw
   fw --> kiln
   fw --> renode
-  rwc -. drives .-> pipe
-  jess(["jess<br/>hub + release-watch loop"]) -. orchestrates .-> rwc
-  jess -. records / models .-> gov
+  rwc -.->|drives| pipe
+  jess(["jess<br/>hub + release-watch loop"]) -.->|orchestrates| rwc
+  jess -.->|"records / models"| gov
 ```
 
 ### How it runs on the drone — Pixhawk 6X-RT (Phase 2, distributed)
@@ -57,17 +57,17 @@ flowchart TB
   subgraph fmu["NXP i.MX RT1176 — FMU"]
     m7["Cortex-M7<br/>falcon cascade<br/>(fused wasm component)"]
     m4["Cortex-M4<br/>IEKF estimator<br/>(fused wasm component)"]
-    m4 -- "VehicleState<br/>SHMEM · CCSDS + relay-sec" --> m7
+    m4 -->|"VehicleState<br/>SHMEM · CCSDS + relay-sec"| m7
   end
 
-  sensors["IMUs (ICM-42688-P …)<br/>BMP388 · BMM150"] -- "SPI / I2C" --> m7
-  m7 -- "ActuatorCmd<br/>LPUART · CCSDS + relay-sec" --> io["STM32F100 I/O MCU<br/>failsafe + PWM mixing"]
+  sensors["IMUs (ICM-42688-P …)<br/>BMP388 · BMM150"] -->|"SPI / I2C"| m7
+  m7 -->|"ActuatorCmd<br/>LPUART · CCSDS + relay-sec"| io["STM32F100 I/O MCU<br/>failsafe + PWM mixing"]
   io --> act["motors / servos"]
-  m7 <-- "DroneCAN · CAN-FD" --> can["ESCs · GPS · smart actuators"]
-  m7 <-- "MAVLink" --> gcs["ground station"]
+  m7 <-->|"DroneCAN · CAN-FD"| can["ESCs · GPS · smart actuators"]
+  m7 <-->|"MAVLink"| gcs["ground station"]
 
-  gale["gale verified primitives + Zephyr"] -. underpin .-> m7
-  gale -. underpin .-> m4
+  gale["gale verified primitives + Zephyr"] -.->|underpin| m7
+  gale -.->|underpin| m4
 ```
 
 Same WIT contract either way: components on one core are **meld-fused** (direct
