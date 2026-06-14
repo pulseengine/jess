@@ -1,0 +1,133 @@
+artifacts:
+  # ----------------------------------------------------------------------
+  # Phase-2 target platform: Holybro Pixhawk 6X-RT (NXP i.MX RT1176)
+  # ----------------------------------------------------------------------
+  - id: DD-007
+    type: design-decision
+    title: Phase-2 hardware target is the Holybro Pixhawk 6X-RT (NXP i.MX RT1176)
+    status: accepted
+    description: >
+      jess Phase-2 (falcon on real drone hardware) targets the Holybro Pixhawk
+      6X-RT, Standard v2A Set (FMU + carrier + PM02D), PX4 board px4_fmu-v6xrt,
+      Pixhawk standard DS-020. Hardware facts that drive the work (sourced from
+      docs.px4.io/flight_controller/pixhawk6x-rt, holybro.com, and NXP RT1176
+      docs):
+        - FMU SoC: NXP i.MX RT1176 (MIMXRT1176DVMAA) crossover MCU - Cortex-M7
+          up to 1 GHz (FPv5, DOUBLE precision) + Cortex-M4 @ 400 MHz (FPv4-SP).
+          2 MB on-chip FlexRAM (PX4 split: ITCM 256K, DTCM 256K, OCRAM ~1.5M),
+          64 MB octal-SPI XIP flash. PX4 runs on the M7 only; the M4 is idle
+          (a free core jess may use later).
+        - I/O coprocessor: STM32F100 (Cortex-M3) drives PWM + RC/SBUS failsafe,
+          independent of the FMU.
+        - IMUs (triple, vibration-isolated, heated): ICM-20649/BMI088, **ICM-42688-P**,
+          ICM-42670-P. Baro 2x BMP388. Mag BMM150. ICM-42688-P presence means
+          jess's existing falcon-imu-icm42688 no_std driver applies directly.
+        - Buses: 3x CAN-FD (2 broken out; DroneCAN/UAVCAN), I2C, SPI, 8 UART;
+          PM02D power monitor = TI INA228 over I2C. Connector std DS-009 (JST-GH),
+          bus std DS-010.
+      Toolchain implications: the M7 target is `-mcpu=cortex-m7 -mfpu=fpv5-d16
+      -mfloat-abi=hard` (Rust thumbv7em-none-eabihf) - synth already supports
+      cortex-m7. gale's verified Zephyr-kernel-primitive path is viable: Zephyr
+      supports the SoC (mimxrt1176, board mimxrt1170_evk, cm7+cm4), though no
+      Pixhawk-specific Zephyr board exists yet. The model of the platform is the
+      spar/AADL multi-processor model hardware/pixhawk6x-rt.aadl (parses,
+      instantiates, analyzes; spar's EMV2 fault tree yields 19 single-point
+      failures + an STPA bridge for the safety case).
+      THE ONE GAP vs the current STM32F4/Renode flow: Renode does NOT model the
+      i.MX RT1170/RT1176 (only imxrt1064/imxrt500) - tracked as AFD-018.
+    tags: [phase-2, hardware, pixhawk, imxrt1176, gale-maximal-wasm]
+    fields:
+      rationale: >-
+        The 6X-RT is the bought hardware and a mainstream PX4 board, so the
+        ecosystem (sensors, power, connectors, PX4 reference) is well-documented.
+        It maps cleanly onto the existing stack: synth already targets cortex-m7,
+        gale rides Zephyr's mimxrt1176 support, and the onboard ICM-42688-P
+        matches jess's existing driver. Its multi-core/multi-MCU nature also
+        makes the multi-processor binding (DD lineage) concrete and forces the
+        gale-maximal-wasm boundary (DD-006) onto real silicon.
+      alternatives: >-
+        Standard Pixhawk 6X (STM32H7) - rejected: it is not the hardware bought,
+        and the STM32 path doesn't exercise the crossover-MCU / Zephyr story.
+        Stay STM32F4/Renode only - rejected: that is emulation, not Phase-2 real
+        hardware (though it remains the emulation fallback while AFD-018 stands).
+      release: v0.6.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-001
+      - type: traces-to
+        target: DD-006
+
+  # ----------------------------------------------------------------------
+  # Port requirements (all under Phase-2 / FEATURE-002)
+  # ----------------------------------------------------------------------
+  - id: REQ-PIX-001
+    type: requirement
+    title: falcon firmware compiles and links for Cortex-M7 (i.MX RT1176, fpv5-d16 hard-float)
+    status: draft
+    fields:
+      category: functional
+      priority: must
+      release: v0.6.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-002
+    type: requirement
+    title: gale verified kernel primitives run on the i.MX RT1176 M7 via Zephyr (mimxrt1176)
+    status: draft
+    fields:
+      category: functional
+      priority: must
+      release: v0.6.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-003
+    type: requirement
+    title: ICM-42688-P driver validated on 6X-RT silicon (close the on-silicon bus/calibration gap)
+    status: draft
+    fields:
+      category: functional
+      priority: must
+      release: v0.7.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-004
+    type: requirement
+    title: Multi-processor binding realized - falcon on M7, failsafe on the STM32F100 I/O MCU; M4 reserved
+    status: draft
+    fields:
+      category: functional
+      priority: should
+      release: v0.7.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-005
+    type: requirement
+    title: HIL emulation for the i.MX RT1176 (Renode .repl authored, or EVK/real-silicon bring-up)
+    status: draft
+    fields:
+      category: non-functional
+      priority: should
+      release: v0.6.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-006
+    type: requirement
+    title: DroneCAN/CAN-FD peripheral + smart-actuator path on the 6X-RT CAN buses
+    status: draft
+    fields:
+      category: functional
+      priority: could
+      release: v0.8.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
