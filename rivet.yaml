@@ -12,9 +12,11 @@ project:
     - supply-chain
 
 externals:
-  gale:  { path: ../gale,  prefix: gale }
-  loom:  { path: ../loom,  prefix: loom }
-  rivet: { path: ../rivet, prefix: rivet }
+  # Only gale is referenced by jess artifacts (gale:L-1, gale:H-2 hazard
+  # traceability in stpa.yaml). loom/rivet externals were from the original
+  # AFD-001 cross-repo experiment and are unused — dropped so `rivet validate`
+  # needs only the gale sibling (CI checks it out at the rivet.lock SHA).
+  gale: { path: ../gale, prefix: gale }
 
 sources:
   - path: artifacts

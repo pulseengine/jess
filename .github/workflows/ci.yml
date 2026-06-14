@@ -18,6 +18,10 @@ env:
   # (rivet#525, merged to main, not yet released — see AFD-012).
   RIVET_VERSION: v0.15.0
   SPAR_VERSION: v0.17.0
+  # Pinned gale external (rivet.lock) — jess's stpa hazards trace to gale's
+  # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.
+  # fetch-depth: 0 because gale is force-pushed by the architect.
+  GALE_REF: 9c872cc68f3ef40bd1e02b38632877d74cafc1d1
 
 jobs:
   # The rivet artifact spine is jess's substance — this is the core gate.
@@ -26,6 +30,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: jess
+      - name: Check out the pinned gale external (sibling for ../gale)
+        uses: actions/checkout@v4
+        with:
+          repository: pulseengine/gale
+          ref: ${{ env.GALE_REF }}
+          path: gale
+          fetch-depth: 0
       - name: Fetch pinned rivet release
         run: |
           set -euo pipefail
@@ -40,9 +53,11 @@ jobs:
           install -m755 "$(find . -name rivet -type f | head -1)" /usr/local/bin/rivet
         env:
           GH_TOKEN: ${{ github.token }}
-      - name: rivet validate
+      - name: rivet sync + validate
+        working-directory: jess
         run: |
           rivet --version
+          rivet sync
           rivet validate
 
   # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
