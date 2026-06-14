@@ -12,27 +12,19 @@ adopt_wasm_component(
     visibility = ["//visibility:public"],
 )
 
-# --- HERMETIC TODAY: validate + optimize via rules_wasm_component toolchains ---
+# Pipeline order is meld → loom → synth: FUSE first, then let LOOM optimize the
+# fused whole (more cross-component optimization than per-component), then synth
+# to ARM. (Phase-2/maximal-wasm: gale + kiln compiled to wasm get fused in here
+# too, so loom optimizes the entire fused system — see DD-006/DD-009.)
+
 wasm_validate(
     name = "falcon-validate",
     component = ":falcon-flight",
 )
 
-# wasm_optimize runs LOOM over the fetched falcon component. Enabled now that
-# rwc#490 is fixed (PR #497, on the pinned main SHA): the loom_wrapper resolves
-# the symlinked input and locates wasmtime as an action input. Verified
-# end-to-end — 4/4 core modules optimized and the SIL gate is exact raw-vs-opt
-# (jess runbook §3a). NOTE: the stable-2026-03 bundle's loom is v0.3.0 (predates
-# loom#172/#196); behaviorally faithful on falcon today, gated by the SIL diff.
-wasm_optimize(
-    name = "falcon-optimized",
-    component = ":falcon-flight",
-)
-
-# --- HERMETIC (AFD-005 unblocked): fuse -> compile ---------------------------
+# 1. meld — fuse the component(s) into one core module.
 # rwc v1.1.0 (#468) ships meld_fuse + synth_compile as hermetic toolchains, so
-# the firmware chain is now expressible without dragging the verus/rocq/lean
-# proof toolchains in. Verifying this stage builds against the v1.1.0 pin.
+# the chain needs no verus/rocq/lean proof toolchains.
 meld_fuse(
     name = "falcon-fused",
     components = [":falcon-flight"],
@@ -40,9 +32,17 @@ meld_fuse(
     validate = True,
 )
 
+# 2. loom — optimize the FUSED module (rwc#490 loom_wrapper fix lets it read the
+# fetched input; behavioral SIL differential gates adoption, runbook §3a).
+wasm_optimize(
+    name = "falcon-optimized",
+    component = ":falcon-fused",
+)
+
+# 3. synth — compile the optimized fused module to an ARM Cortex-M ELF.
 synth_compile(
     name = "falcon-firmware",
-    wasm_module = ":falcon-fused",
+    wasm_module = ":falcon-optimized",
     target = "cortex-m4f",               # gale's STM32F4 target
     all_exports = True,                  # NOTE: exports-only until synth#275 dispatch lands
 )

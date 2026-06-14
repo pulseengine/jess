@@ -7,7 +7,7 @@
 The hardware-integration + release-watch hub that takes **falcon** (the
 [relay](https://github.com/pulseengine/relay) flight stack) onto real hardware
 through the [PulseEngine](https://github.com/pulseengine) wasm→embedded pipeline:
-**loom** optimize → **meld** fuse → **synth** wasm→ARM → on **gale** verified
+**meld** fuse → **loom** optimize → **synth** wasm→ARM → on **gale** verified
 RTOS primitives, emulated/run via **rules_wasm_component** + Renode.
 
 jess is not a code library — it is an **evidence-as-code** project: the
@@ -25,7 +25,7 @@ flowchart LR
 
   subgraph pipe["wasm → embedded pipeline"]
     direction LR
-    loom["loom<br/>optimize"] --> meld["meld<br/>fuse"] --> synth["synth<br/>wasm → ARM Cortex-M"]
+    meld["meld<br/>fuse"] --> loom["loom<br/>optimize fused whole"] --> synth["synth<br/>wasm → ARM Cortex-M"]
   end
 
   fw["falcon firmware<br/>(Cortex-M ELF)"]
@@ -40,7 +40,9 @@ flowchart LR
     sigil["sigil<br/>supply-chain"]
   end
 
-  relay --> loom
+  relay --> meld
+  gale -.->|"also fused as wasm"| meld
+  kiln -.->|"also fused as wasm"| meld
   synth --> fw
   gale -.->|underpins| fw
   fw --> kiln
@@ -83,12 +85,17 @@ calls); across cores/MCUs they speak **CCSDS Space Packets wrapped by relay-sec*
 
 ## The hermetic chain (Bazel)
 
+Order is **meld → loom → synth**: fuse first, then loom optimizes the fused
+whole (more than per-component), then synth emits ARM. In the maximal-wasm
+direction (`DD-006`), gale + kiln are themselves compiled to wasm and fused in
+here too, so loom optimizes the entire fused system.
+
 ```
 @falcon_flight_wasm (sha256-pinned relay release asset)
   → adopt_wasm_component  (//:falcon-flight)
   → wasm_validate         (//:falcon-validate)
-  → wasm_optimize  [loom] (//:falcon-optimized)
-  → meld_fuse             (//:falcon-fused)
+  → meld_fuse             (//:falcon-fused)        # fuse component(s) → one core module
+  → wasm_optimize  [loom] (//:falcon-optimized)    # loom optimizes the fused whole
   → synth_compile [→ARM]  (//:falcon-firmware, cortex-m4f/m7)
 ```
 
