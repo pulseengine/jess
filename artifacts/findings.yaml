@@ -369,7 +369,10 @@ artifacts:
       plus the full behavioral gate; loom#198 closed. Residual (non-blocking):
       releases still ship no platform binaries - maintainer noted committing
       Cargo.lock as the durable fix for the class (loom#142); revisit if a tag
-      breaks again.
+      breaks again. FULLY RESOLVED 2026-06-15 (iter#22): loom v1.1.14 now ships
+      prebuilt platform binaries (aarch64/x86_64 darwin+linux, windows) +
+      cosign/SLSA/SBOM - jess installed the checksum-verified darwin binary
+      directly (no source build). The no-binaries residual is closed.
     tags: [release-watch, loom, build, release-pipeline, tool-friction]
     fields:
       detected-by: jess loop iter#7 (2026-06-11) - cargo build of the v1.1.12 tag during loom#196 fix adoption
@@ -641,7 +644,7 @@ artifacts:
       (sha256 fca83e85...). Filed https://github.com/pulseengine/loom/issues/220
       - supervising. INTERIM FIX: jess BUILD.bazel runs wasm_optimize with all
       passes except dead-stores (SIL-verified correct); drop the override when
-      loom#220 lands. The meld->loom->synth order (DD-006) is preserved. RESOLVED 2026-06-15 (iter#21): fixed in loom PR #221 (merged main 5fd7443, 'skip functions with unverifiable float memory') - jess built loom main and re-verified on the committed repro: dead-stores AND full-default loom now both return the correct 0.023399856 (was 0.32916). Confirmed on loom#220. NOT yet in a loom release; jess keeps the passes-without-dead-stores override + SIL gate until a release carries #221 and the rwc bundle bumps loom off v0.3.0.
+      loom#220 lands. The meld->loom->synth order (DD-006) is preserved. RESOLVED 2026-06-15 (iter#21): fixed in loom PR #221 (merged main 5fd7443, 'skip functions with unverifiable float memory') - jess built loom main and re-verified on the committed repro: dead-stores AND full-default loom now both return the correct 0.023399856 (was 0.32916). Confirmed on loom#220. NOT yet in a loom release; jess keeps the passes-without-dead-stores override + SIL gate until a release carries #221 and the rwc bundle bumps loom off v0.3.0. UPDATE 2026-06-15 (iter#22): loom RELEASED the fix in v1.1.14. jess installed the v1.1.14 release binary and re-verified: dead-stores AND the full meld->loom(all passes)->kiln chain on falcon v1.62 are behaviorally EXACT (0.023399856 both sides). The standalone CLI path is now clean with full passes. The bazel path still uses the rwc BUNDLE loom v0.3.0, so the BUILD passes-override stays until rwc bumps the bundle loom to v1.1.14 - filed rwc#512.
     tags: [release-watch, loom, miscompilation, dead-stores, critical, sil-gate]
     fields:
       detected-by: jess loop iter#20 (2026-06-14) - behavioral SIL pass-bisect (kiln) on the meld-fused falcon-v1.59 core
