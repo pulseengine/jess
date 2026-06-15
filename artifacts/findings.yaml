@@ -427,7 +427,12 @@ artifacts:
       acked on synth#242 (issuecomment-4700004320). iter#16 (2026-06-14):
       v0.11.42 (#313 if/else-with-result reconciliation) flat at 25 - identical
       skip set (no falcon function newly compiles or skips), no regression.
-      Series 34->27->27->25->25->25.
+      Series 34->27->27->25->25->25. iter#23 (2026-06-15): with the meld->loom->
+      synth order now correct + loom v1.1.14 fixed, the synth input is the
+      loom-OPTIMIZED fused core (new fixture) - burndown 26 on falcon-v1.64
+      post-loom (not comparable to the prior pre-loom 25 series; this becomes the
+      new baseline). Full meld v0.32 -> loom v1.1.14 (all passes) -> kiln chain
+      is behaviorally exact (0.023399856).
     tags: [release-watch, synth, regalloc, on-target]
     fields:
       detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
