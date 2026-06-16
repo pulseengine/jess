@@ -1,0 +1,8 @@
+# Interactive smoke: boot the bring-up firmware on the jess RT1176 platform.
+#   renode hardware/renode/rt1176-smoke.resc
+using sysbus
+mach create "pixhawk6xrt"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+sysbus LoadELF @hardware/renode/smoke/rt1176-smoke.elf
+showAnalyzer sysbus.lpuart1
+start

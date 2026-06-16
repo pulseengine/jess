@@ -95,6 +95,24 @@ jobs:
       - name: mav_bench oracle over the committed sample
         run: python3 tools/bench/test_mav_bench.py
 
+  # REQ-PIX-005 oracle — the hand-authored i.MX RT1176 Renode platform boots a
+  # bring-up firmware to a banner on LPUART1 (CPU + ITCM/DTCM + UART end-to-end).
+  renode-smoke:
+    name: Renode RT1176 smoke (REQ-PIX-005)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Renode (pinned portable)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o renode.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
+          mkdir -p renode && tar xzf renode.tgz -C renode --strip-components=1
+      - name: renode-test deps
+        run: pip install -r /tmp/renode/tests/requirements.txt
+      - name: RT1176 smoke (Robot)
+        run: /tmp/renode/renode-test hardware/renode/rt1176-smoke.robot
+
   # NOTE: a third job building the hermetic falcon firmware chain
   # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused
   # //:falcon-firmware against the pinned rules_wasm_component v1.1.0) is the
