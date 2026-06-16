@@ -176,7 +176,7 @@ artifacts:
   - id: REQ-PIX-010
     type: requirement
     title: Real-hardware bench harness - MAVLink-over-USB to the connected 6X-RT (read telemetry/state, differential vs falcon SIL)
-    status: implemented
+    status: verified
     fields:
       category: functional
       priority: must
@@ -200,7 +200,7 @@ artifacts:
   - id: TEST-PIX-010
     type: test-spec
     title: mav_bench decodes a real 6X-RT MAVLink sample (CRC-valid), identifies PX4, extracts attitude
-    status: implemented
+    status: verified
     description: >
       Host oracle (tools/bench/test_mav_bench.py) over the committed real sample
       repro/pixhawk-bench/mavlink-sample.bin (8424 B captured from the connected
