@@ -1,0 +1,38 @@
+// jess Renode platform for the Holybro Pixhawk 6X-RT FMU (NXP i.MX RT1176, M7).
+// Hand-authored (Renode does not ship an RT117x platform — AFD-018), re-based
+// from platforms/cpus/imxrt1064.repl to the fmu-v6xrt memory map (PX4
+// boards/px4/fmu-v6xrt script.ld) and the RT117x register map (NuttX
+// imxrt117x_memorymap.h). Cortex-M7 core; LPUART1 @ 0x4007C000. (REQ-PIX-005)
+//
+// Cross-validation against the real board is REQ-PIX-011. The M4 core, the
+// STM32F100 I/O MCU, and the full sensor/CAN peripheral set are later increments
+// (DD-008 staged bring-up); this is the M7 boot-to-console foundation.
+
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    systickFrequency: 1000000000
+    priorityMask: 0xF0
+    IRQ -> cpu@0
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m7"
+    nvic: nvic
+
+// FlexRAM partition as PX4 maps it (script.ld): ITCM 256K, DTCM 256K,
+// OCRAM (sram) 2M-256K @ 0x20240000.
+itcm: Memory.MappedMemory @ sysbus 0x00000000
+    size: 0x40000
+
+dtcm: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x40000
+
+ocram: Memory.MappedMemory @ sysbus 0x20240000
+    size: 0x1C0000
+
+// FlexSPI2 external XIP NOR window (PX4 links code at 0x30020000); modeled as
+// plain memory for bring-up (controller-register semantics not needed yet).
+flexspi2: Memory.MappedMemory @ sysbus 0x30000000
+    size: 0x4000000
+
+// Debug console (PX4 fmu-v6xrt LPUART1).
+lpuart1: UART.NXP_LPUART @ sysbus 0x4007C000
+    IRQ -> nvic@20

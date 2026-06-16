@@ -116,7 +116,7 @@ artifacts:
   - id: REQ-PIX-005
     type: requirement
     title: HIL emulation for the i.MX RT1176 (Renode .repl authored, or EVK/real-silicon bring-up)
-    status: draft
+    status: implemented
     fields:
       category: non-functional
       priority: should
@@ -214,3 +214,23 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-010
+
+  - id: TEST-PIX-005
+    type: test-spec
+    title: Renode i.MX RT1176 platform boots a bring-up firmware to a LPUART1 banner
+    status: draft
+    description: >
+      Renode Robot oracle (hardware/renode/rt1176-smoke.robot) on the
+      hand-authored RT1176 platform (hardware/renode/pixhawk6xrt.repl): load the
+      platform + the committed bring-up ELF (hardware/renode/smoke/rt1176-smoke.elf,
+      cortex-m7 vector-table firmware that writes to LPUART1 @ 0x4007C000), start
+      emulation, and assert the banner 'JESS-RT1176 boot OK' appears on LPUART1.
+      A green run proves the .repl is well-formed and that CPU + ITCM/DTCM + the
+      vector-table reset path + the LPUART model all work together (the DD-008
+      boot-to-console first rung). Runs in CI via pinned Renode v1.16.1; no
+      hardware. Full HIL (falcon firmware + cross-validation vs the real board) is
+      REQ-PIX-011.
+    tags: [phase-2, renode, hil, smoke]
+    links:
+      - type: verifies
+        target: REQ-PIX-005
