@@ -35,6 +35,11 @@ artifacts:
       failures + an STPA bridge for the safety case).
       THE ONE GAP vs the current STM32F4/Renode flow: Renode does NOT model the
       i.MX RT1170/RT1176 (only imxrt1064/imxrt500) - tracked as AFD-018.
+      MILESTONE 2026-06-16: the physical 6X-RT is now connected via USB
+      (/dev/cu.usbmodem01) and streaming MAVLink (v1 0xFE heartbeat + v2 0xFD;
+      sysid 1 autopilot) running stock PX4 - jess's first real-hardware bench
+      link. Validates the relay-mavlink off-board path (DD-009). Read-only so
+      far; no commands sent.
     tags: [phase-2, hardware, pixhawk, imxrt1176, gale-maximal-wasm]
     fields:
       rationale: >-
