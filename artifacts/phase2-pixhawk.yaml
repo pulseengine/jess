@@ -84,7 +84,7 @@ artifacts:
     fields:
       category: functional
       priority: must
-      release: v0.6.0
+      release: v0.7.0  # deferred from v0.6.0: gated on gale#63 (gale-on-RT1176), not startable now
     links:
       - type: traces-to
         target: FEATURE-002
@@ -169,6 +169,30 @@ artifacts:
       category: functional
       priority: could
       release: v0.9.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-010
+    type: requirement
+    title: Real-hardware bench harness - MAVLink-over-USB to the connected 6X-RT (read telemetry/state, differential vs falcon SIL)
+    status: draft
+    fields:
+      category: functional
+      priority: must
+      release: v0.6.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
+  - id: REQ-PIX-011
+    type: requirement
+    title: Cross-validate the Renode i.MX RT1176 platform against the real 6X-RT board (emulation == silicon ground truth)
+    status: draft
+    fields:
+      category: non-functional
+      priority: should
+      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
