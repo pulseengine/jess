@@ -85,6 +85,16 @@ jobs:
           spar parse hardware/pixhawk6x-rt.aadl
           spar instance --root Pixhawk6XRT::Pixhawk6XRT.v2a hardware/pixhawk6x-rt.aadl
 
+  # REQ-PIX-010 oracle — the MAVLink bench decoder against a real committed
+  # 6X-RT sample (CRC-gated, board-free, deterministic).
+  mav-bench:
+    name: mav_bench oracle (REQ-PIX-010)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: mav_bench oracle over the committed sample
+        run: python3 tools/bench/test_mav_bench.py
+
   # NOTE: a third job building the hermetic falcon firmware chain
   # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused
   # //:falcon-firmware against the pinned rules_wasm_component v1.1.0) is the
