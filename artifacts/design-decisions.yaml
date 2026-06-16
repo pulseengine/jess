@@ -255,3 +255,52 @@ artifacts:
         target: REQ-PIX-007
       - type: traces-to
         target: DD-006
+
+  - id: DD-010
+    type: design-decision
+    title: Phase-2 verification ladder - SIL -> behavioral differential -> Renode hermetic HIL -> real-HW MAVLink bench, with Renode cross-validated against the real board
+    status: accepted
+    description: >
+      How jess ensures things work on the way to flight, now that the physical
+      6X-RT is connected (DD-007 milestone). Four rungs, each a gate:
+      (1) SIL gate - wasmtime run-stabilization<0.1 / run-position-hold<0.6 on
+      the falcon component (release-watch, runbook 3a).
+      (2) Behavioral differential - meld->loom->kiln vs wasmtime, exact-match;
+      mandatory before adopting any transform-tool release (caught loom#196/#220).
+      (3) Renode hermetic HIL - the i.MX RT1176 .repl (DD-008 methodology;
+      REQ-PIX-005) running the synth-compiled ELF in CI - no hardware contention,
+      reproducible. Gap: Renode doesn't model RT1176 yet (AFD-018), so this rung
+      is authored, not free.
+      (4) Real-HW MAVLink bench - the connected 6X-RT over USB (REQ-PIX-010):
+      ground truth. Read-only first (decode telemetry/state, identify PX4
+      version/airframe), then falcon-as-MAVLink-peer, then (tethered, guarded)
+      actuator-level. relay-mavlink is the reuse vehicle (DD-009).
+      The KEYSTONE that ties it together (REQ-PIX-011): cross-validate the Renode
+      RT1176 model against the real board - the emulation is trustworthy only
+      when its behavior matches silicon on the same inputs. So Renode gives
+      reproducible CI HIL; the real board is the oracle that keeps Renode honest.
+      Order of attack now: the real-HW bench (rung 4, read-only) and the Renode
+      seed (rung 3 via dts2repl) are BOTH startable today and neither needs
+      synth#275 or gale#63 - so they lead; falcon-on-target (the gated work)
+      follows as those upstreams land.
+    tags: [phase-2, verification, hil, renode, mavlink, hardware]
+    fields:
+      rationale: >-
+        A single verification method is a blind spot; the ladder is
+        defense-in-depth (the PulseEngine stance). Critically, having BOTH a
+        hermetic emulator (Renode, for CI/repro) and the real board (for ground
+        truth) lets each check the other - Renode catches regressions cheaply,
+        the board catches Renode's modelling errors. The real board also unblocks
+        near-term Phase-2 work that doesn't depend on synth#275/gale#63.
+      alternatives: >-
+        Real hardware only - rejected: no hermetic CI, contends for the one
+        board, slow. Renode only - rejected: an unvalidated emulator can be
+        confidently wrong (the RT1176 model is hand-authored); the board keeps it
+        honest. SIL/differential only - rejected: never exercises the real
+        peripherals/timing.
+      release: v0.6.0
+    links:
+      - type: satisfies
+        target: REQ-002
+      - type: traces-to
+        target: DD-008
