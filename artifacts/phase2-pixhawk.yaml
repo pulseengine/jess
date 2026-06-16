@@ -176,7 +176,7 @@ artifacts:
   - id: REQ-PIX-010
     type: requirement
     title: Real-hardware bench harness - MAVLink-over-USB to the connected 6X-RT (read telemetry/state, differential vs falcon SIL)
-    status: draft
+    status: implemented
     fields:
       category: functional
       priority: must
@@ -196,3 +196,21 @@ artifacts:
     links:
       - type: traces-to
         target: FEATURE-002
+
+  - id: TEST-PIX-010
+    type: test-spec
+    title: mav_bench decodes a real 6X-RT MAVLink sample (CRC-valid), identifies PX4, extracts attitude
+    status: implemented
+    description: >
+      Host oracle (tools/bench/test_mav_bench.py) over the committed real sample
+      repro/pixhawk-bench/mavlink-sample.bin (8424 B captured from the connected
+      6X-RT over USB). Asserts: >0 X.25-CRC-valid frames (the independent
+      framing/CRC check), >=1 CRC-valid HEARTBEAT (msgid 0) from sysid 1 with
+      mavlink_version in {2,3}, and ATTITUDE (msgid 30) decoding to finite
+      radians (the falcon-SIL differential input). Board-free + deterministic, so
+      it runs in CI. Observed: 201 frames, 166 CRC-valid, autopilot=PX4
+      type=QUADROTOR.
+    tags: [phase-2, mavlink, bench, oracle]
+    links:
+      - type: verifies
+        target: REQ-PIX-010
