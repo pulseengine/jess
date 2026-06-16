@@ -109,7 +109,7 @@ jobs:
           curl -fsSL -o renode.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
           mkdir -p renode && tar xzf renode.tgz -C renode --strip-components=1
       - name: renode-test deps
-        run: pip install robotframework==7.* || pip install robotframework
+        run: pip install -r /tmp/renode/tests/requirements.txt
       - name: RT1176 smoke (Robot)
         run: /tmp/renode/renode-test hardware/renode/rt1176-smoke.robot
 
