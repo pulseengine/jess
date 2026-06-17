@@ -663,30 +663,43 @@ artifacts:
 
   - id: AFD-024
     type: ai-found-defect
-    title: synth arm backend uses soft-float for all f32/f64 - hardware Cortex-M FPU never used (m4f/m7/m7dp identical)
+    title: synth arm backend SILENTLY MISCOMPILES every scalar f32/f64 op to wrong value (decoder drops them) - correctness hazard, not soft-float
     status: open
     description: >
       Found 2026-06-17 (REQ-PIX-001) taking the falcon firmware to cortex-m7.
-      synth's arm backend compiles EVERY floating-point op to inline integer
-      soft-float and never emits VFP/FPU instructions, so cortex-m4f / cortex-m7
-      / cortex-m7dp produce byte-identical output (58682 B) - the target's FPU is
-      not consulted. Verified by disasm: the falcon loom-fused core ELF is 14810
-      instructions with ZERO VFP float insns (no vadd/vmul/vldr.f32/f64) and ZERO
-      __aeabi_d* soft-float library calls (synth's own inline integer emulation);
-      op mix is ldr.w/str.w/movw/add.w/cmp/ite. Reproduces on the committed
-      repro/synth-underflow/falcon-v1.56.fused.wasm (14954 insns, 0 VFP). Impact:
-      falcon's cascade is 2044 f32 + 480 f64 ops, hard-real-time; the RT1176 M7
-      has an fpv5-d16 DP FPU and the STM32F4 fpv4-sp - running all FP in
-      soft-float is a major on-target performance risk and makes REQ-PIX-001's
-      'fpv5-d16 hard-float' unachievable as specified. No --fpu flag exists and
-      the ELF carries no ARM FP build attributes (mode not verifiable). Filed
-      https://github.com/pulseengine/synth/issues/369 - supervising. Suggested:
-      lower f32/f64 to hardware VFP on FPU targets + emit Tag_FP_arch.
-    tags: [release-watch, synth, fpu, soft-float, on-target, performance]
+      ORIGINAL framing (superseded): synth emits no VFP and m4f/m7/m7dp are
+      byte-identical, read as inline-integer soft-float / a performance risk.
+      RECLASSIFIED 2026-06-17 after the synth maintainer (synth#369) diagnosed it
+      against the v0.11.45 tree AND a jess value-level numeric oracle confirmed
+      it: this is a SILENT WRONG-VALUE MISCOMPILE, not soft-float. Every scalar
+      f32/f64 arithmetic op is DROPPED, so the function returns a stale operand.
+      Root cause (maintainer): map_operator in crates/synth-core/src/wasm_decoder.rs
+      decodes only the SIMD F32x4* family and has no arm for any scalar f32.*/f64.*
+      op, so they fall through `_ => None` (wasm_decoder.rs:782) and are dropped
+      before the selector ever runs - the SAME `_ => None` line that silently drops
+      memory.copy (the tracked bulk-memory gap; #180/#185 contract: an unlowerable
+      op must Err, never None/continue). The reason there are 0 VFP and 0 __aeabi_*
+      float-lib insns is that there is NO float arithmetic at all - it is gone.
+      jess INDEPENDENT REPRO (the value-level check the maintainer requested):
+      synth compile of (func (param f32 f32)(result i32) local.get 0 local.get 1
+      f32.add i32.reinterpret_f32) --target cortex-m7dp emits `mov r0,r1; bx lr`
+      (returns operand b, NOT a+b); f32.mul emits the same `mov r0,r1`; and a
+      constant 1.5+2.25 fold emits a bare `bx lr` (computation vanished). wasmtime
+      gives 3.75 (i32 1081081856); synth gives the wrong operand. Impact: falcon's
+      cascade is 2044 f32 + 480 f64 ops - on synth-compiled ARM it would SILENTLY
+      compute wrong control outputs (a flight-control correctness hazard), not just
+      miss deadlines. This is a HARD on-target blocker independent of synth#275
+      (dispatch). Filed https://github.com/pulseengine/synth/issues/369 -
+      supervising; maintainer split the fix into GI-FPU-001 (decoder honesty:
+      unsupported FP ops must Err/link-fail loudly, frozen-safe - no frozen fixture
+      uses floats) and GI-FPU-002 (real VFP lowering in select_with_stack, falcon
+      numeric-oracle gated). REQ-PIX-001's 'fpv5-d16 hard-float' is unachievable
+      until GI-FPU-002 lands; correctness is unsafe until at least GI-FPU-001.
+    tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
-      detected-by: jess REQ-PIX-001 - objdump of synth cortex-m7dp ELF (0 VFP insns across 14810)
-      severity: major
-      triage-status: open
+      detected-by: jess REQ-PIX-001 value-level oracle - synth f32.add/f32.mul --target cortex-m7dp emit `mov r0,r1` (returns wrong operand), const fold emits bare `bx lr`
+      severity: critical
+      triage-status: confirmed-upstream
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
@@ -700,10 +713,12 @@ artifacts:
     description: >
       synth compile <falcon fused core> --target cortex-m7dp --cortex-m succeeds
       (142 functions, ARM ELF). Confirms the firmware targets the RT1176 M7. NOTE:
-      the 'fpv5-d16 hard-float' part of REQ-PIX-001 is NOT met - synth emits
-      soft-float (AFD-024/synth#369), so this test verifies the cortex-m7
-      COMPILE only; hard-float verification is gated on synth#369, and the
-      complete-firmware LINK (kiln bridge) is gated alongside synth#275.
+      the COMPILE succeeding does NOT mean the FP math is correct - synth SILENTLY
+      DROPS every scalar f32/f64 op (AFD-024/synth#369: a wrong-value miscompile,
+      not soft-float), so this test verifies the cortex-m7 COMPILE only. Numeric
+      correctness AND 'fpv5-d16 hard-float' are gated on synth#369 (GI-FPU-001
+      decoder honesty, then GI-FPU-002 VFP lowering); the complete-firmware LINK
+      (kiln bridge) is gated alongside synth#275.
     tags: [phase-2, synth, cortex-m7, on-target]
     links:
       - type: verifies
