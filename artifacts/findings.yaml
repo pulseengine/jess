@@ -660,3 +660,51 @@ artifacts:
         target: EXTERNALANCHOR-006
       - type: traces-to
         target: REQ-002
+
+  - id: AFD-024
+    type: ai-found-defect
+    title: synth arm backend uses soft-float for all f32/f64 - hardware Cortex-M FPU never used (m4f/m7/m7dp identical)
+    status: open
+    description: >
+      Found 2026-06-17 (REQ-PIX-001) taking the falcon firmware to cortex-m7.
+      synth's arm backend compiles EVERY floating-point op to inline integer
+      soft-float and never emits VFP/FPU instructions, so cortex-m4f / cortex-m7
+      / cortex-m7dp produce byte-identical output (58682 B) - the target's FPU is
+      not consulted. Verified by disasm: the falcon loom-fused core ELF is 14810
+      instructions with ZERO VFP float insns (no vadd/vmul/vldr.f32/f64) and ZERO
+      __aeabi_d* soft-float library calls (synth's own inline integer emulation);
+      op mix is ldr.w/str.w/movw/add.w/cmp/ite. Reproduces on the committed
+      repro/synth-underflow/falcon-v1.56.fused.wasm (14954 insns, 0 VFP). Impact:
+      falcon's cascade is 2044 f32 + 480 f64 ops, hard-real-time; the RT1176 M7
+      has an fpv5-d16 DP FPU and the STM32F4 fpv4-sp - running all FP in
+      soft-float is a major on-target performance risk and makes REQ-PIX-001's
+      'fpv5-d16 hard-float' unachievable as specified. No --fpu flag exists and
+      the ELF carries no ARM FP build attributes (mode not verifiable). Filed
+      https://github.com/pulseengine/synth/issues/369 - supervising. Suggested:
+      lower f32/f64 to hardware VFP on FPU targets + emit Tag_FP_arch.
+    tags: [release-watch, synth, fpu, soft-float, on-target, performance]
+    fields:
+      detected-by: jess REQ-PIX-001 - objdump of synth cortex-m7dp ELF (0 VFP insns across 14810)
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
+
+  - id: TEST-PIX-001
+    type: test-spec
+    title: synth compiles the falcon fused core for cortex-m7dp (RT1176 M7) without error
+    status: draft
+    description: >
+      synth compile <falcon fused core> --target cortex-m7dp --cortex-m succeeds
+      (142 functions, ARM ELF). Confirms the firmware targets the RT1176 M7. NOTE:
+      the 'fpv5-d16 hard-float' part of REQ-PIX-001 is NOT met - synth emits
+      soft-float (AFD-024/synth#369), so this test verifies the cortex-m7
+      COMPILE only; hard-float verification is gated on synth#369, and the
+      complete-firmware LINK (kiln bridge) is gated alongside synth#275.
+    tags: [phase-2, synth, cortex-m7, on-target]
+    links:
+      - type: verifies
+        target: REQ-PIX-001

@@ -68,7 +68,7 @@ artifacts:
   - id: REQ-PIX-001
     type: requirement
     title: falcon firmware compiles and links for Cortex-M7 (i.MX RT1176, fpv5-d16 hard-float)
-    status: draft
+    status: implemented
     fields:
       category: functional
       priority: must
