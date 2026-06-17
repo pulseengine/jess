@@ -695,11 +695,60 @@ artifacts:
       uses floats) and GI-FPU-002 (real VFP lowering in select_with_stack, falcon
       numeric-oracle gated). REQ-PIX-001's 'fpv5-d16 hard-float' is unachievable
       until GI-FPU-002 lands; correctness is unsafe until at least GI-FPU-001.
+      UPDATE 2026-06-17 (iter#31): the SILENT-MISCOMPILE half is RESOLVED in synth
+      v0.11.46 (PR #371, GI-FPU-001) and jess verified it with the value-level
+      oracle: `synth compile fp-add-mul.wat --target cortex-m7dp` now exits 1 with
+      `warning: skipping function 'addf': contains an unsupported operator (F32Add)
+      ... rather than a silent miscompile (#369)` for each FP function and emits NO
+      ELF ("Error: no functions compiled successfully") - the `mov r0,r1`
+      wrong-value stub is gone. On the full falcon v1.76 fused core, v0.11.46
+      loud-skips 72 of ~176 functions (104 compiled+emitted) with a clean op
+      inventory: 8 F32Load, 5 I32ReinterpretF32, 3 F64PromoteF32, 1 F32Eq, 1
+      F32Const, 1 F64Const (the FP set GI-FPU-002 must lower) + 22 I64Load / 17
+      I64Store (NEW gap, AFD-025/synth#372) + 9 MemoryFill / 5 MemoryCopy
+      (bulk-mem, #180/#185). Net: no more silent wrong values (severity drops from
+      critical to major); the OPEN remainder is GI-FPU-002 (real VFP hard-float)
+      for REQ-PIX-001 to actually work rather than loudly-refuse. Confirmation
+      posted on synth#369.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
-      detected-by: jess REQ-PIX-001 value-level oracle - synth f32.add/f32.mul --target cortex-m7dp emit `mov r0,r1` (returns wrong operand), const fold emits bare `bx lr`
-      severity: critical
+      detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
+      severity: major
       triage-status: confirmed-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
+
+  - id: AFD-025
+    type: ai-found-defect
+    title: synth arm backend cannot lower i64.load/i64.store (unsupported decoder op) - 39 sites block falcon on-target
+    status: open
+    description: >
+      Found 2026-06-17 (iter#31) when synth v0.11.46's GI-FPU-001 loud-skip
+      (AFD-024) surfaced the full inventory of ops synth's arm backend cannot
+      lower on the falcon fused core. Beyond the floats (AFD-024/synth#369) and
+      bulk-memory (memory.copy/fill, #180/#185), the core has 22 i64.load + 17
+      i64.store = 39 sites that fall through the same `_ => None` decoder path and
+      are now loud-skipped. jess MINIMAL REPRO on synth v0.11.46: a module with
+      ld64 (i64.load), st64 (i64.store), ld32 (i32.load, control), add64 (i64.add,
+      control) - `synth compile --target cortex-m7dp` skips ld64/st64
+      ("unsupported operator I64Load/I64Store") but COMPILES ld32 and add64. So the
+      gap is i64 MEMORY load/store specifically; i64 arithmetic and i32 load both
+      work. Impact: a third independent on-target gap alongside synth#275
+      (call_indirect dispatch) and synth#369 (hard-float) - on v0.11.46 the falcon
+      fused core loud-skips 72 of ~176 funcs, 39 of them these i64 load/stores, so
+      the firmware ELF stays structurally incomplete even once dispatch + hard-float
+      land. Filed https://github.com/pulseengine/synth/issues/372 - supervising.
+      Suggested: decode I64Load/I64Store to a lo/hi pair of i32 ldr/str into
+      consecutive registers (memarg offset + {0,4}), reusing the existing i64
+      register-pair regalloc (#171).
+    tags: [release-watch, synth, i64, on-target, blocker]
+    fields:
+      detected-by: jess iter#31 minimal repro - synth v0.11.46 skips i64.load/i64.store, compiles i32.load + i64.add
+      severity: major
+      triage-status: open
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
