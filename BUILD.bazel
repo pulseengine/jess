@@ -45,7 +45,7 @@ wasm_optimize(
 synth_compile(
     name = "falcon-firmware",
     wasm_module = ":falcon-optimized",
-    target = "cortex-m4f",               # gale's STM32F4 target
+    target = "cortex-m7dp",              # RT1176 M7, fpv5-d16 DP FPU (DD-007). NOTE: synth emits soft-float today (AFD-024/synth#369) — FPU unused until fixed.
     all_exports = True,                  # NOTE: exports-only until synth#275 dispatch lands
 )
 
