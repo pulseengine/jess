@@ -743,12 +743,28 @@ artifacts:
       land. Filed https://github.com/pulseengine/synth/issues/372 - supervising.
       Suggested: decode I64Load/I64Store to a lo/hi pair of i32 ldr/str into
       consecutive registers (memarg offset + {0,4}), reusing the existing i64
-      register-pair regalloc (#171).
+      register-pair regalloc (#171). UPDATE 2026-06-18 (iter#32): maintainer
+      confirmed + deepened to a THREE-LAYER gap (deeper than the wiring fix jess
+      suggested): (1) decoder gap - convert_operator decodes narrow I64Load8..32/
+      I64Store8..32 + I32Load/Store but has no arm for FULL-WIDTH I64Load/I64Store
+      (the `_ => None` jess found); (2) optimized-path stub - adding the decoder arm
+      ALONE is net-negative: the default optimized path then drops it (ld64->`bx lr`,
+      st64->`mov r0,r1`), reverting the honest loud-skip to a silent stub; needs an
+      optimizer decline -> direct-selector fallback (#120/#188 pattern); (3) THE REAL
+      BUG - the encoder (arm_encoder.rs:5303 I64Ldr/I64Str) uses addr.base+addr.offset
+      but IGNORES addr.index, emitting [R11+offset]{,+4} and dropping the address
+      operand. Proven numerically by maintainer: ld64(addr=16) returns mem[0]
+      (0xaaaa..), NOT mem[16] - same class as #206. So i64 pair regalloc (#171) is
+      fine; the memory ADDRESSING was never correct, it just never ran (decoder
+      dropped the op first). Fix scoped as its own release (decoder arm + optimizer
+      decline + encoder index materialization `ip=addr_reg+offset; ldr/str [R11,ip]`),
+      gated on a committed numeric differential (scripts/repro/i64_load_store_372.*);
+      maintainer will ping jess to re-flash falcon when it ships.
     tags: [release-watch, synth, i64, on-target, blocker]
     fields:
-      detected-by: jess iter#31 minimal repro - synth v0.11.46 skips i64.load/i64.store, compiles i32.load + i64.add
+      detected-by: jess iter#31 minimal repro - synth v0.11.46 skips i64.load/i64.store, compiles i32.load + i64.add; maintainer deepened to 3-layer (encoder drops addr.index, #206 class)
       severity: major
-      triage-status: open
+      triage-status: confirmed-upstream
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
