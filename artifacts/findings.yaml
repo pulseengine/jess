@@ -759,17 +759,92 @@ artifacts:
       dropped the op first). Fix scoped as its own release (decoder arm + optimizer
       decline + encoder index materialization `ip=addr_reg+offset; ldr/str [R11,ip]`),
       gated on a committed numeric differential (scripts/repro/i64_load_store_372.*);
-      maintainer will ping jess to re-flash falcon when it ships.
-    tags: [release-watch, synth, i64, on-target, blocker]
+      maintainer will ping jess to re-flash falcon when it ships. RESOLVED 2026-06-18
+      (iter#33): all three layers fixed + shipped in synth v0.11.47 (#373); #372
+      CLOSED. jess independently verified on v0.11.47: the i64 repro now exits 0 with
+      0 loud-skips (was 2), all funcs compile, and disasm confirms the encoder
+      MATERIALIZES the address - ld64 emits `add.w ip, fp, r0` (frame+index reg) then
+      `ldr.w r1,[ip]; ldr.w r2,[ip,#4]`; st64 the same with str.w - the addr.index r0
+      is used, not dropped. Maintainer's unicorn value-level proof: ld64(16) now
+      returns mem[16] not mem[0]. On the falcon v1.80 core the i64 loud-skips dropped
+      39->0 (total 72->41); remaining gaps are FP (#369/AFD-024) and bulk-mem
+      (#374/AFD-026).
+    tags: [release-watch, synth, i64, on-target, resolved]
+    status-note: resolved-verified
     fields:
-      detected-by: jess iter#31 minimal repro - synth v0.11.46 skips i64.load/i64.store, compiles i32.load + i64.add; maintainer deepened to 3-layer (encoder drops addr.index, #206 class)
+      detected-by: jess iter#31 minimal repro; RESOLVED synth v0.11.47 (#373) - jess verified 0 skips + address materialized (add.w ip,fp,idx; ldr [ip],[ip,#4])
       severity: major
-      triage-status: confirmed-upstream
+      triage-status: resolved
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
       - type: traces-to
         target: REQ-PIX-001
+
+  - id: AFD-026
+    type: ai-found-defect
+    title: synth arm backend cannot lower memory.copy/memory.fill - 19 sites, falcon's largest remaining on-target gap
+    status: open
+    description: >
+      Found 2026-06-18 (iter#33) after synth#372 (i64 load/store) landed in v0.11.47:
+      with i64 fixed, the largest remaining unlowered op-set in the falcon fused core
+      is BULK-MEMORY - 11 memory.fill + 8 memory.copy = 19 sites - which the arm
+      backend cannot lower (same `_ => None` decoder path; loud-skipped since GI-FPU-001).
+      jess MINIMAL REPRO on synth v0.11.47: a module with cpy (memory.copy), fil
+      (memory.fill), ld32 (i32.load, control) - `synth compile --target cortex-m7dp`
+      skips cpy/fil ("unsupported operator MemoryCopy/MemoryFill") but compiles ld32.
+      NOTE the maintainer's "#180/#185 tracked bulk-mem" refs are CLOSED and about
+      other bugs (MemLoad ADD-register path; encoder PC-operand panic) - the
+      memory.copy/fill LOWERING is untracked, so jess filed it. Impact: on falcon
+      v1.80, of 41 remaining loud-skips, 19 are bulk-mem and ~19 are FP (#369); so
+      once hard-float lands, bulk-mem is the last op gap before the firmware ELF is
+      structurally complete (alongside dispatch #275). gale-nano substrate does NOT
+      use bulk-mem (gale-side profile), so this is falcon-specific. Filed
+      https://github.com/pulseengine/synth/issues/374 - supervising. Suggested: lower
+      to a bounded inline loop or a linked __aeabi_memcpy/memset, with wasm OOB-trap
+      semantics (bounds-checked vs the linear-memory limit, matching wasmtime).
+    tags: [release-watch, synth, bulk-memory, on-target, blocker]
+    fields:
+      detected-by: jess iter#33 minimal repro - synth v0.11.47 skips memory.copy/memory.fill, compiles i32.load; 19 sites on falcon v1.80
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
+
+  - id: AFD-027
+    type: ai-found-defect
+    title: kiln-error forces a global allocator transitively (recovery.rs alloc), breaking kiln-async no_alloc on the 8KB-SRAM STM32F100
+    status: open
+    description: >
+      Found 2026-06-18 (iter#33) during the gale-nano deep-dive (gale#65). kiln-async
+      is documented + built as no_std + NO-alloc, but linking it to wasm32/bare-metal
+      transitively REQUIRES a global allocator: kiln-error/src/recovery.rs does
+      `extern crate alloc` and puts String / Vec<String> / BTreeMap<String,String> in
+      ErrorContext/recovery types, which kiln-async pulls in via the unified error
+      type. Surfaced by the architect (avrabe) in a gale-side gale-nano profile and
+      reproduced (the cdylib won't link without a #[global_allocator]). Impact for
+      jess: the gale-nano target is the Pixhawk 6X-RT STM32F100 I/O MCU (Cortex-M3,
+      8KB SRAM); a mandatory heap there is a hard blocker independent of any synth
+      backend gap. With synth#372 (i64) now fixed in v0.11.47, this alloc dependency
+      is the SOLE remaining blocker for the gale-nano scheduler substrate compiling to
+      thumbv7m-none-eabi (REQ-PIX-009 precondition b). Filed
+      https://github.com/pulseengine/kiln/issues/338 - supervising. Suggested: a
+      no_alloc/embedded Cargo feature on kiln-error gating out the recovery module
+      (and String/Vec/BTreeMap payloads) so ErrorContext degrades to a fixed/&'static
+      form; kiln-async then deps kiln-error with default-features=false.
+    tags: [release-watch, kiln, no-alloc, gale-nano, on-target, blocker]
+    fields:
+      detected-by: gale-side gale-nano profile (avrabe, gale#65) - kiln-async cdylib won't link at wasm32 without a global allocator (kiln-error recovery.rs alloc); confirmed jess-relevant for STM32F100 8KB SRAM
+      severity: major
+      triage-status: open
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-004
+      - type: traces-to
+        target: REQ-PIX-009
 
   - id: TEST-PIX-001
     type: test-spec

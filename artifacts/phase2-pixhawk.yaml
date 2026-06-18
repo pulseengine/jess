@@ -165,6 +165,30 @@ artifacts:
     type: requirement
     title: Maximal-wasm gale-nano on the STM32F100 I/O MCU - minimal verified gale subset + kiln async scheduler, synth-compiled, thin native register shim
     status: draft
+    description: >
+      gale-nano = {gale sem/mutex/msgq/timeout/event control primitives} +
+      kiln-async scheduler + a ~4-item native shim (vector table+reset, one SysTick
+      ISR for tick/fuel, the failsafe MMIO PWM/RC-SBUS/IPC-UART, and one net-new
+      "wake-from-ISR" primitive = Embassy __pender), all fused (meld) + loom +
+      synth-compiled to thumbv7m-none-eabi. No Zephyr, no preemptive kernel.
+      GROUNDED in a measured op-set profile (iter#32-33 deep-dive, jess + gale-side,
+      gale#65): kiln-async IS the scheduler (no_std, no_alloc, fuel-bounded, Verus +
+      Lean/Aeneas-verified, scheduler-core shipped kiln v0.3.2; fuel = the same exec
+      unit spar RTA/RMBound/EDF proofs use). The substrate's SUBSTRATE prerequisites
+      are now both pinned and evidence-backed:
+        (a) synth#372 (full i64.load/i64.store lowering) - the ONLY synth backend gap
+            the substrate exercises (10 scheduler + 2 msgq sites; #275/#369/#180 are
+            0 by profile). MET: shipped synth v0.11.47, jess + gale verified (AFD-025
+            resolved).
+        (b) kiln-error exposes a no_alloc/embedded build excluding recovery.rs, so the
+            substrate links without a heap on 8KB SRAM. OPEN: kiln#338 / AFD-027.
+      Kill-criterion: re-profiling the substrate wasm shows 0 unlowerable ops AND the
+      cdylib links with no #[global_allocator]. NOT YET PROFILED: the failsafe APP
+      op-set (RC/SBUS parse, mixer/PWM, IPC) - re-profile when a minimal failsafe
+      exists; mixer scaling may pull #369 if not fixed-point, frame copies may pull
+      #374 (bulk-mem). Caveat: F100 = Cortex-M3 = thumbv7m (no DSP/FPU, not the
+      thumbv7em the kiln-async plan targets) - confirm synth M3 path + recalibrate
+      the fuel->cycles constant (kiln R4).
     fields:
       category: functional
       priority: could
