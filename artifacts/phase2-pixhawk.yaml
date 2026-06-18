@@ -183,12 +183,18 @@ artifacts:
         (b) kiln-error exposes a no_alloc/embedded build excluding recovery.rs, so the
             substrate links without a heap on 8KB SRAM. OPEN: kiln#338 / AFD-027.
       Kill-criterion: re-profiling the substrate wasm shows 0 unlowerable ops AND the
-      cdylib links with no #[global_allocator]. NOT YET PROFILED: the failsafe APP
-      op-set (RC/SBUS parse, mixer/PWM, IPC) - re-profile when a minimal failsafe
-      exists; mixer scaling may pull #369 if not fixed-point, frame copies may pull
-      #374 (bulk-mem). Caveat: F100 = Cortex-M3 = thumbv7m (no DSP/FPU, not the
-      thumbv7em the kiln-async plan targets) - confirm synth M3 path + recalibrate
-      the fuel->cycles constant (kiln R4).
+      cdylib links with no #[global_allocator]. FAILSAFE APP op-set: PROFILED 2026-06-18
+      (iter#37, gale#65) - SBUS/IPC/tick all clean; clears all four synth gaps IFF the
+      mixer is FIXED-POINT (a float mixer pulls 104 #369 ops, the only gap-pulling
+      component) -> DD-011 fixes the mixer fixed-point. So with DD-011 + kiln#338, the
+      whole gale-nano stack is synth-gap-free on v0.11.47. REALIZED: the gust mini-OS
+      (gale feat/gust-mini-os, benches/gust + DOC-GUST-ARCH) BOOTS on Cortex-M3 (qemu
+      lm3s6965evb): 5000 stable poll rounds, ~7.5KB free on 8KB SRAM, TCB = 5-import/
+      2-export WIT world. Remaining to production: (b) kiln#338, the meld->loom->synth
+      DISSOLUTION (gust is native thumbv7m today, not yet maximal-wasm), SysTick timer
+      wiring, and a Renode stm32vldiscovery (real F100) WCET calibration run (robot
+      ready - jess Renode/DD-008 wheelhouse). Caveat: F100 = Cortex-M3 = thumbv7m (no
+      DSP/FPU) - confirm synth M3 path + recalibrate fuel->cycles (kiln R4).
     fields:
       category: functional
       priority: could
