@@ -304,3 +304,49 @@ artifacts:
         target: REQ-002
       - type: traces-to
         target: DD-008
+
+  - id: DD-011
+    type: design-decision
+    title: gale-nano (gust) failsafe mixer is FIXED-POINT (Q8) - keeps the STM32F100 path synth-gap-free
+    status: accepted
+    description: >
+      The gale-nano failsafe app's mixer SHALL be fixed-point (Q8), not float.
+      Grounded in a measured op-set profile (iter#37, gale-side on gale#65,
+      answering jess's flagged failsafe-app profiling step): a px4io-class no_std
+      failsafe (SBUS parse, mixer/PWM, IPC framing, failsafe tick) compiled to
+      wasm32 and scanned vs the four synth on-target gaps clears ALL FOUR iff the
+      mixer is fixed-point - a FLOAT mixer pulls 104 #369 ops (f32.mul/add/convert/
+      compare for gain*ch + clamp) and is the ONLY component that pulls any gap;
+      SBUS (shift/mask), IPC framing (small copies LLVM-inlined, no memory.copy),
+      and the tick (integer branches) are all clean. So with a fixed-point mixer
+      the entire gale-nano stack (kiln-async substrate + failsafe app) is
+      synth-gap-free on synth v0.11.47 (#372 i64 already cleared), gated only on
+      kiln#338 (no_alloc). This is realized: the gust mini-OS (gale repo,
+      feat/gust-mini-os, benches/gust/ + DOC-GUST-ARCH) boots on Cortex-M3 (qemu
+      lm3s6965evb) with a fixed-point-mixer failsafe task - 5000 stable poll
+      rounds, mix(1024)=1500 mid-stick, ~5.1KB flash + 376B working-set + 20B
+      static = ~7.5KB free on the F100's 8KB SRAM. TCB boundary (gust v0): a
+      5-import/2-export WIT world (pwm-write/sbus-poll/ipc-tx/ipc-rx/fatal +
+      boot/poll), wake-from-ISR done natively (BASEPRI-bounded pending word, no new
+      wasm primitive, preserves kiln-async's no-atomics cooperative invariant).
+    tags: [phase-2, gale-nano, gust, fixed-point, on-target, stm32f100]
+    fields:
+      rationale: >-
+        The single design decision the failsafe app op-set collapses to. Choosing
+        fixed-point removes the only app-side synth dependency (#369 hard-float)
+        on the tiniest, least-capable node (Cortex-M3, no FPU, 8KB SRAM) - keeping
+        gale-nano shippable on the CURRENT synth backend rather than waiting on
+        GI-FPU-002. Consistent with engine_control's integer algos; a Cortex-M3
+        has no FPU anyway, so float would be soft-float even once #369 lands.
+      alternatives: >-
+        Float (px4-faithful) mixer - rejected for the F100: pulls 104 #369 ops,
+        making gale-nano gated on hard-float (GI-FPU-002) for no benefit on an
+        FPU-less M3 (it would be soft-float regardless). Reserve float mixing for
+        the M7 (where falcon already runs and an FPU exists). Caveat carried: the
+        profile's IPC copies were small (<=22B, LLVM-inlined); a larger real
+        IPC/telemetry frame could cross LLVM's memcpy threshold and pull #374 -
+        re-profile against real frame sizes when the failsafe core firms up.
+      release: v0.9.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-009
