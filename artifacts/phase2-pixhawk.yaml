@@ -250,6 +250,10 @@ artifacts:
       (DroneCAN/CAN-FD). Gated on relay freezing the relay-hal trait shapes
       (DD-012 resolves the 3 open questions: single-core M7 first / carrier-
       transparent seams; FlexIO+eDMA frame-based DShot; async P3-stream traits).
+      SCOPE = TWO silicon targets (iter#38 sync): the RT1176 M7 (falcon) AND the
+      STM32F100 IO-MCU (the gust failsafe, REQ-PIX-009/DD-011) - the F100 binds a
+      subset (PwmOut duty case, SerialBus RC/SBUS, the relay#177 FMU<->IO carrier),
+      with gust's 5-import TCB a minimal-sync narrowing of the same relay-hal seams.
     fields:
       category: functional
       priority: should

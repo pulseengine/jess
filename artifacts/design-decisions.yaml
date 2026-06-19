@@ -329,7 +329,15 @@ artifacts:
       5-import/2-export WIT world (pwm-write/sbus-poll/ipc-tx/ipc-rx/fatal +
       boot/poll), wake-from-ISR done natively (BASEPRI-bounded pending word, no new
       wasm primitive, preserves kiln-async's no-atomics cooperative invariant).
-    tags: [phase-2, gale-nano, gust, fixed-point, on-target, stm32f100]
+      HAL ALIGNMENT (iter#38): gust's 5-import TCB is the STM32F100 (Cortex-M3)
+      instantiation of the relay<->jess HAL contract (DD-012) - pwm-write=PwmOut
+      (duty case), sbus-poll=SerialBus, ipc-tx/rx=the inter-core carrier
+      (relay#177/relay-bus), fatal=fault seam; RegBus/AdcIn/CanBus don't apply to
+      the failsafe IO-MCU. So jess binds the SAME seams on two nodes (RT1176 M7 +
+      F100 M3, both under REQ-PIX-012); the gust TCB is a minimal-sync NARROWING of
+      the async relay-hal traits (one source of truth, not a parallel invention).
+      Synced on gale#65 + jess#62.
+    tags: [phase-2, gale-nano, gust, fixed-point, on-target, stm32f100, hal]
     fields:
       rationale: >-
         The single design decision the failsafe app op-set collapses to. Choosing
@@ -383,7 +391,16 @@ artifacts:
         Q3 trait shape -> ASYNC (P3 stream) from the start; sync-blocking as a
           degenerate bring-up impl. Matches relay's P3-async stack + the embedded
           DMA/completion-IRQ reality + the kiln-async cooperative model (gust).
-    tags: [phase-2, hal, relay, on-target, stm32, imxrt1176, hardware-binding]
+      TWO BINDING TARGETS (iter#38 sync): the contract covers BOTH the RT1176 M7
+      (falcon) AND the STM32F100 IO-MCU (the gust failsafe, DD-011/REQ-PIX-009).
+      The F100 failsafe exercises a subset - PwmOut (the duty degenerate case, not
+      FlexIO DShot), SerialBus (RC/SBUS), and the FMU<->IO carrier (relay#177) - and
+      gust's 5-import TCB is a minimal-sync NARROWING of these async traits for the
+      8KB M3. Requirement on the seam shapes: the async P3-stream traits must be
+      narrowable to a sync O(1)-non-blocking projection so the F100 binds the same
+      seams (and relay's SBUS/duty-PWM protocol bodies stay reusable across both
+      nodes), not a parallel invention. Synced on gale#65 + jess#62.
+    tags: [phase-2, hal, relay, gust, on-target, stm32, imxrt1176, stm32f100, hardware-binding]
     fields:
       rationale: >-
         A clean abstraction/binding seam lets the verified flight stack stay
@@ -405,3 +422,5 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-012
+      - type: traces-to
+        target: REQ-PIX-009
