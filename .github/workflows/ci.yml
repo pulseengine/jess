@@ -112,6 +112,8 @@ jobs:
         run: pip install -r /tmp/renode/tests/requirements.txt
       - name: RT1176 smoke (Robot)
         run: /tmp/renode/renode-test hardware/renode/rt1176-smoke.robot
+      - name: RT1176 bulk-memory OOB-trap oracle (synth#374 / AFD-026)
+        run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
 
   # NOTE: a third job building the hermetic falcon firmware chain
   # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused

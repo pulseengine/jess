@@ -282,6 +282,28 @@ artifacts:
       - type: verifies
         target: REQ-PIX-010
 
+  - id: TEST-PIX-013
+    type: test-spec
+    title: Renode RT1176 confirms synth bulk-memory OOB access routes UDF -> Trap_Handler (synth#374 silicon gate)
+    status: draft
+    description: >
+      Hermetic oracle for the one path synth's unicorn differential can't see
+      (AFD-026 / synth#374): a wasm bulk-memory OOB access lowers to an inline UDF
+      which (USGFAULTENA unset) escalates to HardFault, and the self-contained synth
+      ELF's vector table must route both slot 3 (HardFault) and slot 6 (UsageFault)
+      to Trap_Handler. hardware/renode/rt1176-bulkmem.robot loads two ELFs (synth
+      main @39010ce = v0.11.49 content, --safety-bounds software) on the RT1176 .repl:
+      oob.elf (memory.copy(0,0,200000), len > the 64KiB page) must park PC in
+      Trap_Handler; ok.elf (memory.fill(0,0xAB,16), in-bounds) must park at the
+      Reset_Handler post-call spin, NOT Trap_Handler. Static precondition already
+      confirmed (vector slots 3 + 6 = Trap_Handler). This is jess's gate for the
+      v0.11.49 tag (no physical flash; real-RT1176 run is a greenlit follow-up).
+      Runs in the renode CI job.
+    tags: [phase-2, renode, synth, bulk-memory, on-target, oracle]
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+
   - id: TEST-PIX-005
     type: test-spec
     title: Renode i.MX RT1176 platform boots a bring-up firmware to a LPUART1 banner
