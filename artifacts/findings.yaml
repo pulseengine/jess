@@ -784,7 +784,7 @@ artifacts:
   - id: AFD-026
     type: ai-found-defect
     title: synth arm backend cannot lower memory.copy/memory.fill - 19 sites, falcon's largest remaining on-target gap
-    status: open
+    status: resolved
     description: >
       Found 2026-06-18 (iter#33) after synth#372 (i64 load/store) landed in v0.11.47:
       with i64 fixed, the largest remaining unlowered op-set in the falcon fused core
@@ -816,12 +816,18 @@ artifacts:
       path = the UDF->HardFault->Trap_Handler routing under --safety-bounds software
       -> jess can verify this HERMETICALLY on its Renode RT1176 platform (REQ-PIX-005
       pattern) without the physical board. Real-silicon flash = a greenlit follow-up.
-      triage -> fix-in-progress (released+verified pending v0.11.49).
+      RESOLVED 2026-06-19 (iter#40): synth v0.11.49 RELEASED (= commit 39010ce, #374
+      CLOSED); jess's Renode OOB-trap oracle (TEST-PIX-013) was the gate that closed
+      it. jess adopted v0.11.49 (SHA-verified darwin release) and verified on the
+      release: falcon v1.80 fused-core bulk-mem loud-skips dropped 19->0 (i64 also 0);
+      total on-target loud-skips 41->29, the remaining 29 ALL hard-float (#369). So
+      falcon's on-target gap list collapses to JUST #369 (hard-float) + #275
+      (dispatch). Committed oracle ELFs are the v0.11.49 content (no rebuild needed).
     tags: [release-watch, synth, bulk-memory, on-target, blocker]
     fields:
-      detected-by: jess iter#33 minimal repro; FIX IMPLEMENTED synth #376 (v0.11.49); 16/16 local differential + jess Renode RT1176 OOB-trap oracle GREEN (TEST-PIX-013, iter#39 - oob->Trap_Handler 0x9E, ok->reset spin 0x94); clear to tag v0.11.49
+      detected-by: jess iter#33 minimal repro; RESOLVED synth v0.11.49 (#376, released 2026-06-19, #374 closed) - jess verified falcon v1.80 bulk-mem loud-skips 19->0 on the release + Renode OOB-trap oracle GREEN in CI (TEST-PIX-013); 16/16 maintainer differential
       severity: major
-      triage-status: fix-verified-pending-release
+      triage-status: resolved
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
