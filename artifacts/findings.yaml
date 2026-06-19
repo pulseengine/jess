@@ -871,6 +871,48 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-009
 
+  - id: AFD-028
+    type: ai-found-defect
+    title: synth --safety-bounds is a NO-OP on the optimized path (main i32/i64 memory access) - flight bounds-safety hole
+    status: open
+    description: >
+      Surfaced 2026-06-19 (iter#38) by the synth maintainer (synth#377) while
+      answering jess's question about pinning --safety-bounds for the falcon flight
+      build. Per-path behavior verified: on the OPTIMIZED path (the bulk of a flight
+      loop - i32/i64 loads/stores) --safety-bounds {none,mpu,software} emit
+      BYTE-IDENTICAL code (movw/movt/add/str) with NO inline bounds check and NO MPU
+      programming - `software` is a no-op there; `mpu` programs zero MPU regions (it
+      only writes a .safety-manifest.json the codegen never enforces). Inline checks
+      are emitted ONLY via the direct selector (the declined ops: bulk-mem #374,
+      i64 #372, floats). So #374's bulk-mem traps correctly (inline UDF), but the
+      main memory path is unprotected. Impact for jess: pinning --safety-bounds
+      software on the falcon M7 firmware would give a FALSE sense of memory-safety -
+      it protects only decline-path ops, not the primary load/store path; `mpu` is
+      worse (looks enforced, isn't). jess's posture (DD-006 maximal-wasm + the gust
+      TCB boundary): hardware-MPU enforcement of the wasm linear-memory region
+      belongs in the NATIVE TRUSTED BASE (a register/MMIO concern owned by gale's
+      verified primitives), with synth's inline bounds as defense-in-depth - so for
+      jess `software` was intended as belt-and-suspenders, NOT the sole mechanism.
+      But #377 means jess must (a) NOT treat synth bounds as load-bearing on the main
+      path, and (b) confirm/own MPU programming of the linear-memory region in the
+      native base (NOT yet verified that gale does this - deep-dive owed before
+      asserting). Tracking https://github.com/pulseengine/synth/issues/377;
+      scoping with the maintainer. Suggested: synth should either emit real inline
+      checks on the optimized path under `software`, or program real MPU regions
+      under `mpu`, or clearly document that bounds enforcement is the embedder's
+      (native base's) responsibility so `software`/`mpu` aren't mistaken for
+      enforcement.
+    tags: [release-watch, synth, safety-bounds, memory-safety, on-target, flight-safety]
+    fields:
+      detected-by: synth#377 (maintainer, answering jess's --safety-bounds question) - {none,mpu,software} byte-identical on the optimized path, no check / no MPU; jess confirmed flight-relevant
+      severity: major
+      triage-status: scoping
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: TEST-PIX-001
     type: test-spec
     title: synth compiles the falcon fused core for cortex-m7dp (RT1176 M7) without error
