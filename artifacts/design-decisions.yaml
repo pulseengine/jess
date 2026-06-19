@@ -391,15 +391,22 @@ artifacts:
         Q3 trait shape -> ASYNC (P3 stream) from the start; sync-blocking as a
           degenerate bring-up impl. Matches relay's P3-async stack + the embedded
           DMA/completion-IRQ reality + the kiln-async cooperative model (gust).
-      TWO BINDING TARGETS (iter#38 sync): the contract covers BOTH the RT1176 M7
-      (falcon) AND the STM32F100 IO-MCU (the gust failsafe, DD-011/REQ-PIX-009).
-      The F100 failsafe exercises a subset - PwmOut (the duty degenerate case, not
-      FlexIO DShot), SerialBus (RC/SBUS), and the FMU<->IO carrier (relay#177) - and
-      gust's 5-import TCB is a minimal-sync NARROWING of these async traits for the
-      8KB M3. Requirement on the seam shapes: the async P3-stream traits must be
-      narrowable to a sync O(1)-non-blocking projection so the F100 binds the same
-      seams (and relay's SBUS/duty-PWM protocol bodies stay reusable across both
-      nodes), not a parallel invention. Synced on gale#65 + jess#62.
+      THREE BINDING TARGETS (iter#38, corrected by architect on jess#62 - the
+      RT1176 is DUAL-CORE so it is two targets, plus the STM32F100):
+        T1. RT1176 Cortex-M7 - falcon flight stack (the primary on-FMU target).
+        T2. RT1176 Cortex-M4 - the second on-die core (sensor-I/O offload / co-
+            processing; the M4-side of the relay#177 inter-core split). Same RT1176
+            peripherals, bound from the M4 side; FPv4-SP not DP.
+        T3. STM32F100 Cortex-M3 IO-MCU - the gust failsafe (DD-011/REQ-PIX-009),
+            exercising a SUBSET (PwmOut duty case, SerialBus RC/SBUS, the FMU<->IO
+            carrier relay#177); gust's 5-import TCB is a minimal-sync NARROWING of
+            the async traits for the 8KB M3.
+      So jess binds one seam contract across three cores; the M7<->M4 (on-die) and
+      FMU<->IO(F100) links are both relay#177/relay-bus carriers. Requirement on the
+      seam shapes: the async P3-stream traits must be narrowable to a sync
+      O(1)-non-blocking projection (T3) and carrier-transparent across cores (T1/T2),
+      so all three bind the same seams (relay's protocol bodies reusable across all),
+      not parallel inventions. Synced on gale#65 + jess#62.
     tags: [phase-2, hal, relay, gust, on-target, stm32, imxrt1176, stm32f100, hardware-binding]
     fields:
       rationale: >-
