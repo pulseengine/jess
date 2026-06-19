@@ -311,6 +311,26 @@ artifacts:
       - type: verifies
         target: REQ-PIX-010
 
+  - id: TEST-PIX-014
+    type: test-spec
+    title: Real PX4 fmu-v6xrt boots on the RT1176 Renode model far enough to drive the LPUART console
+    status: implemented
+    description: >
+      Stage-2 console milestone oracle for REQ-PIX-014 (DD-008). hardware/renode/px4/
+      run-px4-boot.sh boots the real PX4 fmu-v6xrt firmware (extracted from the .px4)
+      on pixhawk6xrt.repl + pixhawk6xrt-px4-extras.repl (clock/AON/GPT/config peripherals
+      discovered via the boot->unhandled-access loop), and asserts LPUART1 emits >=1
+      console byte within a bounded run - i.e. PX4 cleared clock+peripheral init and
+      reached the low-level putc path. VERIFIED LOCALLY 2026-06-19 (iter#40): emits 'B'
+      deterministically across 3 runs. LOCAL oracle (Renode is a local dev dep; the run
+      is heavy + needs the PX4 fetch, so not a per-PR CI gate yet). NOT YET a full nsh
+      boot - the next blocker (PC 0x20242E72 reads 0x21001C then branches to 0xFFFFFFFE)
+      needs PX4 symbols; a line-based robot oracle joins CI once nsh is reached.
+    tags: [phase-2, renode, px4, boot, oracle]
+    links:
+      - type: verifies
+        target: REQ-PIX-014
+
   - id: TEST-PIX-013
     type: test-spec
     title: Renode RT1176 confirms synth bulk-memory OOB access routes UDF -> Trap_Handler (synth#374 silicon gate)

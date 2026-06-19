@@ -171,6 +171,15 @@ artifacts:
       console -> the nsh banner. Stubs are interim; real CCM/ANADIG/timer C# models
       (or re-based imxrt1064) replace them as semantics matter. Scope extended (user,
       iter#39) to the FULL ARC incl. a Gazebo HITL bridge (REQ-PIX-014, stage 5).
+      ITER#40 UPDATE: AON/GPT/config switched flip-flop->plain memory (broad all-ones
+      corrupts DATA reads - PX4 used 0xFFFFFFFF as a pointer, branched to 0xFFFFFFFE,
+      abort; flip-flop now ONLY on the clock block's real lock polls). With that, PX4
+      reaches the LPUART1 CONSOLE - emits its first byte ('B') deterministically (the
+      low-level putc path works). TEST-PIX-014 (run-px4-boot.sh) is the oracle. nsh
+      NOT yet reached: after 'B', PC 0x20242E72 reads 0x21001C (unmapped) then branches
+      to 0xFFFFFFFE - a specific code path needing PX4 SYMBOLS to diagnose (raw .px4
+      has none). Next iter: build PX4 from source (or boot the bootloader image) for
+      symbols -> crack the branch -> nsh banner -> line-based robot oracle into CI.
     tags: [phase-2, methodology, renode, px4, bring-up]
     fields:
       rationale: >-
