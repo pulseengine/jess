@@ -264,6 +264,35 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+  - id: REQ-PIX-014
+    type: requirement
+    title: PX4-on-Renode HITL — boot the real fmu-v6xrt firmware on the RT1176 model, then co-simulate with Gazebo physics in lockstep
+    status: draft
+    description: >
+      Take the Renode RT1176 platform from boot-a-stub-firmware (REQ-PIX-005) to
+      running the REAL PX4 fmu-v6xrt firmware, then to a hardware-in-the-loop
+      co-simulation against a Gazebo physics model - per DD-008's staged method and
+      the full-arc scope (user, iter#39). Stages: (2) boot PX4 to the nsh console -
+      the boot->unhandled-access->stub/model loop over clock (ANADIG/CCM/LPCG, done),
+      timers, console LPUART, and the rest; (3) sensor-in-the-loop - ICM-42688-P over
+      LPSPI+eDMA (Renode RESD), baro/mag over LPI2C, so PX4's EKF sees live sensors;
+      (4) multi-core - the M4 + MU and the STM32F100 IO-MCU as a second machine (the
+      DD-012 three targets); (5) Gazebo HITL - bridge sensor-in / actuator-PWM-out
+      between Renode (real firmware on the M7) and a Gazebo physics model in lockstep
+      via a custom C# proxy peripheral or the SystemC renode_bridge over a socket
+      (no off-the-shelf Renode<->Gazebo exists - original integration). Each stage
+      SIL-differential gated (runbook 3a). Harness lives in hardware/renode/px4/.
+      Status iter#39: stage 2 in progress - PX4 boots, clock bring-up cleared,
+      frontier at timer/AON peripheral init. Renode installed locally for the
+      interactive loop; CI stays the hermetic regression gate.
+    fields:
+      category: functional
+      priority: should
+      release: v0.8.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
   - id: TEST-PIX-010
     type: test-spec
     title: mav_bench decodes a real 6X-RT MAVLink sample (CRC-valid), identifies PX4, extracts attitude
