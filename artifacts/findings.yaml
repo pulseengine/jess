@@ -819,9 +819,9 @@ artifacts:
       triage -> fix-in-progress (released+verified pending v0.11.49).
     tags: [release-watch, synth, bulk-memory, on-target, blocker]
     fields:
-      detected-by: jess iter#33 minimal repro; FIX IMPLEMENTED synth #376 (v0.11.49 held) - 16/16 local differential; UDF->Trap_Handler routing is jess's Renode-hermetic verification target
+      detected-by: jess iter#33 minimal repro; FIX IMPLEMENTED synth #376 (v0.11.49); 16/16 local differential + jess Renode RT1176 OOB-trap oracle GREEN (TEST-PIX-013, iter#39 - oob->Trap_Handler 0x9E, ok->reset spin 0x94); clear to tag v0.11.49
       severity: major
-      triage-status: fix-in-progress
+      triage-status: fix-verified-pending-release
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
