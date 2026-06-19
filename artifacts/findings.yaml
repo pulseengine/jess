@@ -803,11 +803,25 @@ artifacts:
       https://github.com/pulseengine/synth/issues/374 - supervising. Suggested: lower
       to a bounded inline loop or a linked __aeabi_memcpy/memset, with wasm OOB-trap
       semantics (bounds-checked vs the linear-memory limit, matching wasmtime).
+      UPDATE 2026-06-19 (iter#38, cron): LOWERING IMPLEMENTED in synth #376
+      (v0.11.49 prepped, tag held pending silicon confirm): fill -> STRB byte loop;
+      copy -> memmove byte loop (dst>src copies BACKWARD for overlap correctness);
+      --safety-bounds software -> END-EXCLUSIVE OOB trap (off+len>size or u32
+      overflow trap; off+len==size in-bounds) matching wasmtime, via inline UDF ->
+      UsageFault/HardFault -> Trap_Handler. memory 0 only (non-zero idx + RISC-V
+      still loud-skip per GI-FPU-001 honesty). LOCAL value-level gate already green:
+      maintainer's bulk_memory_374_differential.py = 16/16 vs wasmtime (forward,
+      both overlap directions, self-copy, len==0, size boundaries no-trap, OOB
+      trap, high-bit fill); frozen fixtures byte-identical. The ONE unicorn-blind
+      path = the UDF->HardFault->Trap_Handler routing under --safety-bounds software
+      -> jess can verify this HERMETICALLY on its Renode RT1176 platform (REQ-PIX-005
+      pattern) without the physical board. Real-silicon flash = a greenlit follow-up.
+      triage -> fix-in-progress (released+verified pending v0.11.49).
     tags: [release-watch, synth, bulk-memory, on-target, blocker]
     fields:
-      detected-by: jess iter#33 minimal repro - synth v0.11.47 skips memory.copy/memory.fill, compiles i32.load; 19 sites on falcon v1.80
+      detected-by: jess iter#33 minimal repro; FIX IMPLEMENTED synth #376 (v0.11.49 held) - 16/16 local differential; UDF->Trap_Handler routing is jess's Renode-hermetic verification target
       severity: major
-      triage-status: open
+      triage-status: fix-in-progress
     links:
       - type: defect-against
         target: EXTERNALANCHOR-002
@@ -835,11 +849,22 @@ artifacts:
       no_alloc/embedded Cargo feature on kiln-error gating out the recovery module
       (and String/Vec/BTreeMap payloads) so ErrorContext degrades to a fixed/&'static
       form; kiln-async then deps kiln-error with default-features=false.
+      UPDATE 2026-06-19 (iter#38, cron): FIXED in kiln #339 (jess's suggested shape):
+      the heap-backed recovery module + crate-root `extern crate alloc` are now gated
+      behind kiln-error's `alloc` feature (implied by dynamic-allocation/std); core
+      Error uses only &'static-str, alloc-free; kiln-async already deps kiln-error
+      default-features=false so no-alloc holds end-to-end. Maintainer verified
+      locally: thumbv7m-none-eabi missing-allocator error GONE, kiln-error builds
+      no_alloc by default for thumbv7m, 89 kiln-async tests pass, rivet validate 0
+      errors; new DD SM-ASYNC-003 records the dependency-discipline rule (staticlib
+      build = oracle). CI running, will merge + close. This clears the LAST gale-nano
+      scheduler-substrate precondition (REQ-PIX-009 (b); (a)=synth#372 done v0.11.47).
+      triage -> fix-in-progress (merge+release pending).
     tags: [release-watch, kiln, no-alloc, gale-nano, on-target, blocker]
     fields:
-      detected-by: gale-side gale-nano profile (avrabe, gale#65) - kiln-async cdylib won't link at wasm32 without a global allocator (kiln-error recovery.rs alloc); confirmed jess-relevant for STM32F100 8KB SRAM
+      detected-by: gale-side gale-nano profile (avrabe, gale#65); FIXED kiln #339 (jess's suggested shape - gate recovery+alloc behind the alloc feature); clears REQ-PIX-009 precondition (b)
       severity: major
-      triage-status: open
+      triage-status: fix-in-progress
     links:
       - type: defect-against
         target: EXTERNALANCHOR-004
