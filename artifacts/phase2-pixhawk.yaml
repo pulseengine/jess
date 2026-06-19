@@ -227,6 +227,37 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+  - id: REQ-PIX-012
+    type: requirement
+    title: Bind the relay-hal peripheral seams (RegBus/SerialBus/PwmOut/AdcIn/CanBus) to i.MX RT1176 silicon - BSP + embedded-hal impls + on-silicon validation
+    status: draft
+    description: >
+      jess's half of the relay<->jess HAL contract (jess#62 / relay#214, DD-012):
+      relay owns the portable verified peripheral ABSTRACTION (the bus/peripheral
+      seam traits + protocol bodies + WIT wiring); jess owns the BINDING to real
+      silicon. Deliver: (1) the RT1176 BSP (clock tree, pinmux, the 6X-RT bus
+      topology - which sensor on which LPSPI/LPI2C); (2) embedded-hal-grade impls
+      of each relay-hal seam over the RT1176 peripherals - RegBus->LPSPI(IMUs)+
+      LPI2C(baro/mag/FRAM), SerialBus->LPUART(GPS/telem, DMA), PwmOut->FlexIO+eDMA
+      (DShot, frame-based) / eFlexPWM (duty), AdcIn->LPADC(battery/current),
+      CanBus->FlexCAN(CAN-FD); each with DMA + IRQ + bus-error recovery; (3)
+      per-board calibration values (accel/gyro/mag mounting remap, baro NVM trim);
+      (4) on-silicon validation the protocol-only Kani harnesses can't reach
+      (timing, FIFO/data-ready IRQs, bus-error recovery); (5) first HIL bring-up.
+      Phase-1 = on-FMU peripherals (SPI/I2C sensors, LPADC battery, FlexIO DShot);
+      Phase-2 = external via connectors (LPUART GPS/telem, FlexCAN DroneCAN).
+      Feeds REQ-PIX-003 (on-silicon ICM-42688-P sensor validation) and REQ-PIX-006
+      (DroneCAN/CAN-FD). Gated on relay freezing the relay-hal trait shapes
+      (DD-012 resolves the 3 open questions: single-core M7 first / carrier-
+      transparent seams; FlexIO+eDMA frame-based DShot; async P3-stream traits).
+    fields:
+      category: functional
+      priority: should
+      release: v0.7.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
   - id: TEST-PIX-010
     type: test-spec
     title: mav_bench decodes a real 6X-RT MAVLink sample (CRC-valid), identifies PX4, extracts attitude
