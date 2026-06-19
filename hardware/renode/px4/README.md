@@ -35,16 +35,28 @@ Add a stub for it in `pixhawk6xrt-px4-extras.repl` (broad regions use the bundle
 polls pass either polarity), re-run, advance to the next frontier. Replace stubs
 with real C# peripheral models (or re-based imxrt1064 models) as semantics matter.
 
-## Status (iter#39, 2026-06-19)
+## Status (iter#40, 2026-06-19)
 
 ✅ Local Renode validated against jess's RT1176 smoke (== CI).
 ✅ Real PX4 `fmu-v6xrt_default` boots and executes on the platform (IVT-derived
-   entry @0x30022000). Reaches relocated ITCM code.
+   entry @0x30022000). Reaches relocated ITCM/OCRAM code.
 ✅ **Clock bring-up cleared**: the 154×/324×/113× lock-poll spins on ANADIG
-   (0x40C8_4000), 0x40CA_8000, and the CCM/LPCG block (0x40CC_0000) are stubbed.
-🔜 Current frontier: peripheral init — GPT timers (0x4013_4000/8000), the
-   always-on domain (0x40C0_xxxx: SNVS/RTWDOG), config blocks (0x400E_8000).
-   Next: stub those → reach LPUART1 console → the NuttX/`nsh` banner.
+   (0x40C8_4000), 0x40CA_8000, and the CCM/LPCG block (0x40CC_0000) are stubbed
+   (flip-flop). AON/GPT/config blocks are plain memory (return-0/stored) — broad
+   flip-flop there corrupts *data* reads (all-ones used as a pointer → branch to
+   0xFFFFFFFE), so only genuine lock-bit polls get flip-flop.
+✅ **CONSOLE REACHED** — PX4 drives LPUART1: emits its first byte (`B`),
+   deterministically across runs. The low-level putc path (clocks up, peripheral
+   clocked) works. Oracle: `run-px4-boot.sh` (asserts ≥1 console byte).
+🔜 **Next frontier (the nsh blocker):** after `B`, at PC `0x20242E72` the firmware
+   reads `0x21001C` (unmapped→0) then branches to `0xFFFFFFFE` → CPU abort. This is
+   a specific code path, not a missing-peripheral poll — diagnosing it needs **PX4
+   symbols** (the raw `.px4` has none). Next iteration: build PX4 from source (or
+   boot via the bootloader image) for symbols, crack the branch, reach the NuttX/
+   `nsh` banner → then a line-based robot oracle can join CI.
+
+> Honest scope: this is the **console-reached** sub-milestone, NOT a full `nsh`
+> boot. Stage 2 stays in progress.
 
 ## Map (where this is going)
 

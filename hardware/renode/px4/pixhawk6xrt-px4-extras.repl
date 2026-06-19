@@ -1,19 +1,27 @@
-// PX4 fmu-v6xrt boot bring-up — peripheral additions (DD-008 stage 2).
-// Loaded ON TOP of pixhawk6xrt.repl (second LoadPlatformDescription) so the
-// CI-gated minimal platform stays untouched. Discovered via the boot->unhandled-
-// access->stub loop; replace stubs with real C# models as the bring-up deepens.
-// flipflop.py flip-flops reads (0 / 0xFFFFFFFF) so lock/ready/busy polls pass.
+// PX4 fmu-v6xrt boot bring-up — peripheral additions (DD-008 stage 2 / REQ-PIX-014).
+// Loaded ON TOP of pixhawk6xrt.repl so the CI-gated minimal platform stays untouched.
+// Discovered via the boot->unhandled-access->stub loop.
+//
+// LESSON (iter#39): broad flipflop (all-ones) stubs pass lock POLLS but corrupt DATA
+// reads — PX4 read 0xFFFFFFFF as a function pointer and branched to 0xFFFFFFFE (abort).
+// So: flipflop ONLY the clock block (real lock-bit polls); everything else is plain
+// memory (reads return 0 / last-written) so stray "pointers"/lengths are 0, not -1.
+// Replace these with real C# models (CCM/ANADIG, GPT, etc.) as semantics matter.
 
-// Whole ANADIG / clock / PLL / OSC block (0x40C8_0000-0x40CB_FFFF): the reset
-// clock-tree init spins on lock bits at 0x40C84560, 0x40CA8008, ... Broad stub to
-// clear clock bring-up; carve out real CCM/ANADIG C# models later.
+// ANADIG / clock / PLL / OSC / CCM / LPCG (0x40C8_0000-0x40D0_0000): lock-bit polls.
 clock_block: Python.PythonPeripheral @ sysbus 0x40C80000
     size: 0x80000
     initable: true
     filename: "scripts/pydev/flipflop.py"
 
-// IOMUXC/GPR/wdog config block @0x400E4040 (0xFFAA unlock + cfg writes).
-config_400e: Python.PythonPeripheral @ sysbus 0x400E4000
-    size: 0x1000
-    initable: true
-    filename: "scripts/pydev/flipflop.py"
+// Always-on domain (SNVS / RTWDOG / AON ANADIG) — data/config, return-0/stored.
+aon_block: Memory.MappedMemory @ sysbus 0x40C00000
+    size: 0x10000
+
+// GPT timers region — data/config, return-0/stored (real IMX_GPTimer model is a later step).
+gpt_block: Memory.MappedMemory @ sysbus 0x40130000
+    size: 0x10000
+
+// IOMUXC / GPR / wdog config blocks — data/config, return-0/stored.
+config_400e: Memory.MappedMemory @ sysbus 0x400E0000
+    size: 0x10000
