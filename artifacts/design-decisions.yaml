@@ -455,3 +455,56 @@ artifacts:
         target: REQ-PIX-012
       - type: traces-to
         target: REQ-PIX-009
+
+  - id: DD-013
+    type: design-decision
+    title: Board layout is a PARAMETER, not a constant - the HAL binding is {SoC-family driver set} x {board topology/cal}, seams stay board-agnostic
+    status: accepted
+    description: >
+      jess targets the Pixhawk 6X-RT now, but WILL face other boards with different
+      layouts (architect, iter#40). The design must not hard-code one board. The
+      Pixhawk open standards already draw the portable/variant line, and the HAL
+      contract (DD-012) is what absorbs the variance:
+      WHAT IS PORTABLE (reused across boards, never re-done per layout):
+        - relay-hal SEAM traits + the Kani-proven protocol bodies (DD-012, relay).
+        - The Pixhawk Connector Standard + Autopilot Bus Standard + the modular
+          IMU/FMU/Base split (the 100-pin + 50-pin Pixhawk Bus). FMUv6X and
+          FMUv6X-RT share the SAME FMUv6X standard - only the SoC differs
+          (STM32H753 vs i.MX RT1176) - so everything ABOVE the SoC driver layer is
+          common between them.
+      WHAT VARIES PER BOARD (jess's binding, parameterized in two separable layers):
+        (a) SoC-family peripheral drivers + the Renode .repl + the OS port - per SoC
+            (i.MX RT1176 now; STM32H7 for 6X/6C; STM32F7 for 5X). Distinct register
+            maps -> distinct C# Renode models + embedded-hal impls.
+        (b) Board TOPOLOGY/BSP - which IMU/baro/mag on which bus INSTANCE, pinmux,
+            clock tree, and per-board CALIBRATION (mounting remap, NVM trim). Variant
+            DATA, not flight code.
+      So a "different layout" = a new (SoC-driver-set x board-topology) pairing
+      binding the SAME seams and reusing the SAME protocol bodies + Pixhawk-standard
+      connector semantics. Consequence for jess artifacts: pixhawk6xrt.repl is the
+      v6X-RT INSTANCE of a per-board-parameterized model; REQ-PIX-012's BSP + cal are
+      per-variant; the spar model should carry the board as a configurable
+      instance/variant; adding a board = new topology + SoC-driver + .repl + cal,
+      NOT a flight-stack or seam rewrite. gust/F100 (DD-011) is the same pattern at
+      the IO-MCU scale (a third SoC family, Cortex-M3).
+    tags: [phase-2, hal, board-variant, portability, pixhawk-standard, hardware-binding]
+    fields:
+      rationale: >-
+        Pixhawk is an open-standard ecosystem with many FMU variants; hard-coding
+        one layout would forfeit the reuse the seam contract exists to provide and
+        force a re-verification per board. Parameterizing the binding (SoC drivers x
+        topology) keeps the verified flight stack + protocol bodies invariant across
+        boards - only board-specific bytes change - which is the whole point of the
+        relay-abstracts/jess-binds split (DD-012) and of the Pixhawk connector
+        standard. It also means the RT1176 work transfers directly to a future
+        STM32H7 6X (same FMUv6X standard above the SoC line).
+      alternatives: >-
+        Hard-code the fmu-v6xrt layout - rejected: every new board re-touches the
+        flight-stack integration + re-verifies; throws away the standard's
+        portability. A single mega-.repl/BSP with #ifdef-style branches - rejected:
+        couples variants, defeats hermetic per-board CI; prefer one .repl + one BSP
+        + one cal set per board, composed over the shared seams.
+      release: v0.7.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-012
