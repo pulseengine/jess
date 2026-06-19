@@ -156,6 +156,21 @@ artifacts:
       Renode machine over a 1.5 Mbaud UART hub. No PX4-in-Renode exists today, so
       this is original work; fmu-v6xrt's spi.cpp/defconfig give the exact sensor
       wiring + memory map to drive both the .repl and jess's own drivers.
+      EXECUTION UPDATE 2026-06-19 (iter#39): stage 2 underway and converging.
+      Renode v1.16.1 installed locally (macOS arm64, validated == CI on jess's
+      smoke). The REAL PX4 fmu-v6xrt_default firmware BOOTS on the platform: image
+      extracted from the .px4 wrapper, loaded at flash 0x30020000, entry from the
+      i.MX RT IVT (vtable @0x30022000, SP 0x202587fc, Reset 0x300223a9). The
+      boot->unhandled-access->stub loop is live (harness: hardware/renode/px4/
+      {px4-boot.resc, pixhawk6xrt-px4-extras.repl, extract-px4-image.py, README}).
+      Progress: CLOCK bring-up cleared - the 154x/324x/113x lock-poll spins on
+      ANADIG (0x40C8_4000), 0x40CA_8000, and CCM/LPCG (0x40CC_0000) are stubbed
+      (flipflop.py poll-pass); execution reached relocated ITCM code. Current
+      frontier = peripheral init: GPT timers (0x4013_x000), the always-on domain
+      (0x40C0_xxxx SNVS/RTWDOG), config blocks (0x400E_8000) - next stubs -> LPUART1
+      console -> the nsh banner. Stubs are interim; real CCM/ANADIG/timer C# models
+      (or re-based imxrt1064) replace them as semantics matter. Scope extended (user,
+      iter#39) to the FULL ARC incl. a Gazebo HITL bridge (REQ-PIX-014, stage 5).
     tags: [phase-2, methodology, renode, px4, bring-up]
     fields:
       rationale: >-

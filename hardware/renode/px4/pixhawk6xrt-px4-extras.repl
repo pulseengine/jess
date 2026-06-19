@@ -1,0 +1,19 @@
+// PX4 fmu-v6xrt boot bring-up — peripheral additions (DD-008 stage 2).
+// Loaded ON TOP of pixhawk6xrt.repl (second LoadPlatformDescription) so the
+// CI-gated minimal platform stays untouched. Discovered via the boot->unhandled-
+// access->stub loop; replace stubs with real C# models as the bring-up deepens.
+// flipflop.py flip-flops reads (0 / 0xFFFFFFFF) so lock/ready/busy polls pass.
+
+// Whole ANADIG / clock / PLL / OSC block (0x40C8_0000-0x40CB_FFFF): the reset
+// clock-tree init spins on lock bits at 0x40C84560, 0x40CA8008, ... Broad stub to
+// clear clock bring-up; carve out real CCM/ANADIG C# models later.
+clock_block: Python.PythonPeripheral @ sysbus 0x40C80000
+    size: 0x80000
+    initable: true
+    filename: "scripts/pydev/flipflop.py"
+
+// IOMUXC/GPR/wdog config block @0x400E4040 (0xFFAA unlock + cfg writes).
+config_400e: Python.PythonPeripheral @ sysbus 0x400E4000
+    size: 0x1000
+    initable: true
+    filename: "scripts/pydev/flipflop.py"

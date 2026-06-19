@@ -1,0 +1,17 @@
+:name: PX4 fmu-v6xrt boot bring-up on the jess RT1176 Renode platform (DD-008 stage 2)
+:description: Boots the real PX4 fmu-v6xrt firmware on the hand-authored RT1176
+:description: platform + the discovered peripheral stubs. Run the boot->unhandled-
+:description: access->stub loop to march toward the nsh console.
+#
+# Prereqs (not committed — see README.md):
+#   $PX4BIN = the extracted PX4 image (extract-px4-image.py on px4_fmu-v6xrt_default.px4)
+#   loaded at the flash origin 0x30020000. Entry/SP/PC come from the i.MX RT IVT
+#   (entry vector table @ 0x30022000; SP 0x202587fc; Reset 0x300223a9).
+
+mach create "px4-v6xrt"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+machine LoadPlatformDescription @hardware/renode/px4/pixhawk6xrt-px4-extras.repl
+sysbus LoadBinary $PX4BIN 0x30020000
+cpu VectorTableOffset 0x30022000
+cpu PC 0x300223a9
+cpu SP 0x202587fc
