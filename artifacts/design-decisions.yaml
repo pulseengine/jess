@@ -350,3 +350,58 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-009
+
+  - id: DD-012
+    type: design-decision
+    title: relay<->jess HAL contract - relay owns the verified peripheral abstraction (seams + protocol + WIT), jess owns the binding to RT1176 silicon
+    status: accepted
+    description: >
+      The split for getting falcon's verified cascade onto the Pixhawk 6X-RT
+      (jess#62 / relay#214). relay owns the hardware ABSTRACTION: the bus/peripheral
+      seam traits (RegBus SPI/I2C, SerialBus UART, PwmOut, AdcIn, CanBus), the
+      verified protocol bodies on them (sensor reg maps, UBX, DShot frame/CRC,
+      DroneCAN codecs - all Kani-totality), the driver traits, and the WIT wiring -
+      portable, no_std, verification-carrying. jess owns the BINDING to real
+      silicon: concrete embedded-hal impls of those seams over the RT1176
+      peripherals (register/DMA/pinmux/clock/IRQ), the board BSP, per-board
+      calibration, and on-silicon validation. The seam in the middle is the thin
+      agreed interface: relay can't break it without telling jess; jess can swap
+      silicon under it without touching the flight stack (same pattern as
+      relay#177/relay-bus for the inter-core carrier, and as the gust TCB host
+      interface, DD-011). jess tracks the binding work as REQ-PIX-012.
+      THREE trait-shape questions resolved (jess answered on jess#62, grounded):
+        Q1 core split -> SINGLE-CORE M7 FIRST; freeze seams carrier-transparent in
+          shape (handle/async, no same-core memory assumption) but don't require the
+          M4 carrier (relay#177) day one. falcon already targets cortex-m7dp; PX4
+          runs M7-only with M4 idle; M4 offload is a later measured optimization.
+        Q2 DShot -> FlexIO + eDMA, so PwmOut is FRAME-based (sink an encoded DShot
+          frame), not duty-based. Confirmed against PX4's own RT117x driver
+          (platforms/nuttx/src/px4/nxp/imxrt/dshot/dshot.c drives FLEXIO1 SHIFTBUF/
+          TIMIEN, DMA-fed - NOT eFlexPWM). eFlexPWM stays the duty-PWM degenerate
+          case. Keeps falcon-esc-dshot frame encoding upstream; jess binds the
+          FlexIO+DMA transport. (8 of the v6xrt's 12 PWM ports are DShot-capable.)
+        Q3 trait shape -> ASYNC (P3 stream) from the start; sync-blocking as a
+          degenerate bring-up impl. Matches relay's P3-async stack + the embedded
+          DMA/completion-IRQ reality + the kiln-async cooperative model (gust).
+    tags: [phase-2, hal, relay, on-target, stm32, imxrt1176, hardware-binding]
+    fields:
+      rationale: >-
+        A clean abstraction/binding seam lets the verified flight stack stay
+        silicon-agnostic and lets jess iterate on board bytes without risking the
+        proofs - the core PulseEngine separation-of-concerns stance, and the only
+        way the Kani-carried protocol bodies stay reusable across boards. Grounding
+        the three trait-shape answers before relay freezes the traits avoids a
+        later seam break: each answer is tied to evidence (falcon's M7 target;
+        PX4's FlexIO DShot source; relay's P3-async + kiln-async).
+      alternatives: >-
+        jess re-implements drivers from scratch - rejected: throws away relay's
+        Kani-totality protocol proofs + duplicates the register maps already in
+        falcon-imu-icm42688/falcon-baromag. Dual-core M4+M7 from day one -
+        deferred: couples bring-up to relay#177 for no Phase-1 benefit. Duty-based
+        DShot via eFlexPWM - rejected: PX4's own RT117x path is FlexIO, which gives
+        cleaner bit-timing; duty-PWM doesn't fit DShot framing. Sync-only traits -
+        rejected: would break when DMA/IRQ completion is wired (it must be async).
+      release: v0.7.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-012
