@@ -710,6 +710,19 @@ artifacts:
       critical to major); the OPEN remainder is GI-FPU-002 (real VFP hard-float)
       for REQ-PIX-001 to actually work rather than loudly-refuse. Confirmation
       posted on synth#369.
+      UPDATE 2026-06-20 (cron loop, falcon-v1.81.0 = relay-hal v1, synth v0.11.50):
+      per-piece gate GREEN on the sha256-verified released falcon-flight-v1.81.wasm -
+      SIL PASS (run-stabilization 0.0234 rad < 0.1, kiln == wasmtime), meld/loom/synth
+      ELF all produced. Loud-skip inventory on the released component = 3 of 18, ALL
+      #369 hard-float: 2x F32Load (run-position-hold, func_34) + 1x F32Const
+      (run-stabilization). BULK-MEM CLEAN: 0 memory.copy / memory.fill across the
+      released, meld-fused, AND loomed artifacts - confirms AFD-026/#374 holds on
+      v1.81/v0.11.50. i64 clean (AFD-025). So GI-FPU-002 (#369 real VFP hard-float) is
+      now the SOLE remaining unlowered op-class in falcon's flight-control core (the
+      other on-target long pole being #275/AFD-008 dispatch for self-contained linking).
+      Evidence: results/jess-build-falcon-v1.81.0.xml. (A transient from-source build in
+      the first invocation showed a func_180 memory.copy skip; it did NOT reproduce on
+      the sha256-verified release - not a regression, no finding filed.)
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
