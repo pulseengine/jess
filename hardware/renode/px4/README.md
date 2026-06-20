@@ -48,12 +48,56 @@ with real C# peripheral models (or re-based imxrt1064 models) as semantics matte
 ✅ **CONSOLE REACHED** — PX4 drives LPUART1: emits its first byte (`B`),
    deterministically across runs. The low-level putc path (clocks up, peripheral
    clocked) works. Oracle: `run-px4-boot.sh` (asserts ≥1 console byte).
-🔜 **Next frontier (the nsh blocker):** after `B`, at PC `0x20242E72` the firmware
-   reads `0x21001C` (unmapped→0) then branches to `0xFFFFFFFE` → CPU abort. This is
-   a specific code path, not a missing-peripheral poll — diagnosing it needs **PX4
-   symbols** (the raw `.px4` has none). Next iteration: build PX4 from source (or
-   boot via the bootloader image) for symbols, crack the branch, reach the NuttX/
-   `nsh` banner → then a line-based robot oracle can join CI.
+🔎 **Next frontier ROOT-CAUSED (iter#42):** after `B`, at PC `0x20242E72` the
+   firmware reads **`0x0021_001C`** then branches to `0xFFFFFFFE` → CPU abort.
+   `0x0021_001C` is the **i.MX RT1170/1176 ROM-API tree pointer** (the boot-ROM
+   bootloader API root, per the RT1170 RM) — NuttX/PX4 reads it to get the
+   FlexSPI-NOR ROM driver. jess's `.repl` doesn't model the boot ROM, so the read
+   returns 0, NuttX dereferences a null tree (offset lands in ITCM @0x0), gets
+   garbage, and branches to `0xFFFFFFFE`. So the blocker is the **boot ROM / ROM
+   API**, not a missing MMIO poll.
+   **Fix path:** model the boot ROM region (`0x0020_0000`) with a minimal ROM-API
+   tree at `0x0021_001C` → a stub `flexspi_nor_driver_interface_t` whose ops return
+   success (FlexSPI is already plain memory in the model, so the ops are no-ops).
+   To stub only the functions NuttX actually calls (and get the struct offsets
+   right), this needs **PX4 symbols** — building PX4 fmu-v6xrt from source for the
+   symbol'd ELF (the raw `.px4` has none).
+
+## PX4 built from source — boot path fully DECODED (iter#43)
+
+Built PX4 fmu-v6xrt from source (pinned Arm GNU 12.3.Rel1 toolchain + full python
+deps, under /Volumes/Home) → a symbol'd `.elf` (20,314 symbols). With symbols the
+fault resolves exactly: PC `0x20242E72` = **`imxrt_octl_flash_initialize`**, which:
+```
+memcpy(cfg, 0x30256aa8, 512); *cfg = 'FCFB';
+ROM_API_Init();                       // [chipver 0x40C84800]==const ? base 0x200000 : 0x210000
+                                      //   tree = *(base + 0x1C); g_bootloaderTree = tree
+ROM_FLEXSPI_NorFlash_Init(1, cfg);    // ( *(tree+12) )->( +4 )()   = flexSpiNorDriver->init
+ROM_FLEXSPI_NorFlash_ClearCache(1);   // no-op when chipver == 0x001170A0
+```
+**Exact ROM-API ABI (decoded from the wrappers):**
+- chip-version reg **`0x40C84800`** (ANADIG+0x800, DIGPROG) must read **`0x001170A0`**
+  (RT1176) — else base-select + ClearCache go wrong.
+- ROM-API tree pointer at **`base+0x1C`** (`0x0020001C` *and* `0x0021001C` — write both).
+- tree (`bootloader_api_entry_t`): **`flexSpiNorDriver` at +12**.
+- driver (`flexspi_nor_driver_interface_t`): **`version` at +0, `init` at +4**, then
+  page_program/erase_all/erase/read/get_config/erase_sector/erase_block.
+
+A stub built to this ABI (anadig_stub.py = DIGPROG 0x001170A0 + flip-flop; bootrom
+@0x00200000; tree→driver→success stubs) moved the abort from `0xFFFFFFFE` (null tree)
+to **`0x00220000`** — i.e. the firmware now reaches *past* Init and calls a **real
+boot-ROM function** beyond the 128 KB stub. That's the crux: the i.MX RT boot ROM
+does real work; returns-0 stubs only go so far.
+
+### Two clean paths to nsh (next iteration)
+1. **Rebuild PX4 with flash-init skipped for emulation** (preferred — source+toolchain
+   are now set up): no-op `imxrt_octl_flash_initialize` for a Renode board variant.
+   FlexSPI is already plain memory in the model, so real flash init is unneeded →
+   the whole romapi dependency disappears → straight to nsh.
+2. **Full romapi stub**: map the real ROM address space + stub every function the
+   firmware calls (deeper, brittle).
+Then: symbol'd-ELF boot (VTOR 0x30022000, SP 0x20259994, PC 0x300223a9) for exact
+backtraces → nsh banner → line-based robot oracle into CI.
 
 > Honest scope: this is the **console-reached** sub-milestone, NOT a full `nsh`
 > boot. Stage 2 stays in progress.
