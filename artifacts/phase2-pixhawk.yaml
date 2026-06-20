@@ -264,6 +264,33 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+  - id: REQ-PIX-015
+    type: requirement
+    title: Firmware-update + non-volatile persistence architecture for the RT1176 target (must be modeled before finalizing the storage/ROM route)
+    status: draft
+    description: >
+      jess must define how (a) parameters/calibration persist and (b) firmware is
+      updated on the Pixhawk 6X-RT, BEFORE committing to the "own driver, no i.MX
+      ROM API" storage route (DD-016) - because firmware update IS octal-NOR write,
+      exactly what the ROM exists for. Grounded in the PX4 v6xrt source: persistence
+      = FRAM (FM25V02A, MTD_PARAMETERS) over its own FlexSPI driver, NOT the ROM;
+      firmware update = a bootloader that programs the app NOR over USB-DFU using
+      ROM_FLEXSPI_NorFlash_Erase/ProgramPage (the genuinely-hard read-while-write
+      octal-NOR path the ROM solves). The flight app's only ROM touch is a fast-XIP
+      re-init (CONFIG_BOARD_BOOTLOADER_FIXUP) - performance-only, not required.
+      jess must decide: the in-flight TCB carries NO ROM (verified falcon+gale+FRAM
+      driver); the on-ground UPDATE TCB (bootloader) either reuses the ROM NOR
+      driver (update-time-only opaque code) or ships jess's own verified NOR driver;
+      integrity (the safety-critical part) is sigil-signed images + relay-sec
+      authenticated transport + anti-rollback, regardless. See DD-016.
+    fields:
+      category: functional
+      priority: should
+      release: v0.8.0
+    links:
+      - type: traces-to
+        target: FEATURE-002
+
   - id: REQ-PIX-014
     type: requirement
     title: PX4-on-Renode HITL — boot the real fmu-v6xrt firmware on the RT1176 model, then co-simulate with Gazebo physics in lockstep
