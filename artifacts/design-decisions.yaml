@@ -508,3 +508,96 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-012
+
+  - id: DD-014
+    type: design-decision
+    title: Redundancy architecture - isolated triple-IMU domains (SW voting in relay) + triple-source hardware-OR power (SW monitor-only)
+    status: accepted
+    description: >
+      How jess deals with the 6X-RT's sensor + power redundancy (architect, iter#40;
+      grounded in the FMUv6X standard). Two independent redundancy mechanisms, modeled
+      in hardware/pixhawk6x-rt.aadl (spar parse+instance green, 35 components):
+      SENSORS - triple IMU + double baro as ISOLATED DOMAINS: each IMU on its OWN SPI
+      bus + its OWN LDO (independent power control). This is fault CONTAINMENT - a
+      wedged bus or dead LDO kills ONE domain, not all. The redundancy LOGIC (voting /
+      mid-value select / failure detection) is NOT jess's: it lives in relay's
+      estimator (portable, verification-carrying) over the device set; PX4 "seamlessly
+      switches" on failure. jess's binding MUST preserve the isolation (separate bus
+      instances, never multiplexed) and surface per-sensor identity + health so the
+      voter can select.
+      POWER - triple source (POWER1 + POWER2 bricks + USB) diode/priority-ORed in
+      HARDWARE onto the system rail -> failover is automatic with NO software in the
+      path (the safety-critical property). Software (the INA228/PM0xD monitors over
+      I2C) only MEASURES each rail for health/V/I and reports/logs; it NEVER gates the
+      switchover. Per-IMU LDOs give each sensor domain independent power off the rail.
+      EMV2 fault-tree shape (the property the model makes checkable): "loss of attitude"
+      requires loss of ALL THREE IMU domains; "loss of FMU power" requires loss of ALL
+      THREE sources - both single-fault-tolerant. The redundancy DEGREE (count of IMUs /
+      power inputs) is a per-board-variant parameter (DD-013) - a different board
+      enumerates a smaller set; relay's voting is set-size-agnostic.
+    tags: [phase-2, redundancy, safety, sensors, power, fault-containment, emv2]
+    fields:
+      rationale: >-
+        Isolation + voting is the standard avionics redundancy pattern and is what the
+        FMUv6X hardware already implements; modeling it truthfully (separate buses +
+        power rails, not one shared SPI) is what makes the SPOF structure analyzable.
+        Keeping voting in relay (verified) and failover in hardware (no code) puts each
+        mechanism where it is safest - software where it can be proven, hardware where
+        it must be instantaneous.
+      alternatives: >-
+        One shared sensor bus (the old model) - rejected: hides the SPOF structure and
+        defeats fault containment (one bus fault loses all IMUs). Software power
+        failover - rejected: puts code in the safety-critical instantaneous path; the
+        hardware OR is correct. Voting in jess - rejected: it is portable verified
+        algorithm = relay's lane (DD-012), and would duplicate the EKF.
+      release: v0.7.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-012
+      - type: traces-to
+        target: REQ-PIX-003
+
+  - id: DD-015
+    type: design-decision
+    title: jess<->relay WIT seam is at the ISOLATED-TRANSPORT level - host provides per-bus transports, relay's wasm owns drivers + decode + voting
+    status: accepted
+    description: >
+      The seam granularity for the host(jess native)<->guest(relay wasm) WIT contract
+      (architect deliberated, iter#40; chosen option B of three). The seam is as LOW as
+      practical: jess's native host provides the BARE isolated transports - per-bus
+      RegBus/SerialBus transfer (one instance PER isolated bus, never multiplexed),
+      per-rail AdcIn for the power monitors, a time source, and the actuator/PWM sink -
+      plus an enumeration descriptor of WHAT IS PHYSICALLY PRESENT (count + per-device:
+      which bus, part-id, health source). Everything ABOVE that is relay's portable
+      wasm: the register-map DRIVERS (relay's Kani-proven falcon-imu-icm42688 etc.),
+      sample decode, sensor VOTING/redundancy, and power-rail MONITORING logic.
+      WHY (the same maximal-wasm principle, DD-006, three times): (1) push the seam low
+      so the MOST logic is portable verified wasm; (2) keep relay's Kani-proven protocol
+      bodies in relay - option C (host provides typed imu/baro/power resources with
+      read-sample/health) would migrate those verified bodies into jess's native TCB;
+      (3) name the isolated set in the contract so isolation + redundancy-degree are
+      visible and board-variant (DD-013) - option A (one flat multiplexed RegBus, device
+      = a parameter) hides the SPOF structure in the types. So "provide devices via WIT"
+      = the host EXPOSES the enumerated isolated-transport SET, but relay gives it
+      device SEMANTICS. Consistent with DD-011 (the gust TCB is the same tiny
+      host-import shape) and DD-012 (relay abstracts / jess binds). Detailed per-seam
+      spec posted to relay on jess#62.
+    tags: [phase-2, hal, seam, wit, maximal-wasm, host-guest, relay]
+    fields:
+      rationale: >-
+        Maximal-wasm (DD-006): the native host is the bare-minimum register/DMA/ADC
+        shim; drivers, decode, voting, redundancy, monitoring are portable verified
+        wasm in relay. This maximizes reuse across boards (DD-013), keeps the Kani
+        bodies + the EKF voting out of the native TCB, and makes isolation/redundancy
+        first-class in the seam contract.
+      alternatives: >-
+        A - single flat multiplexed RegBus (device = param): rejected, hides isolation
+        & redundancy degree in the types; the SPOF structure and board-variance are
+        not expressed at the seam. C - host provides typed device resources
+        (imu/baro/power with read-sample/health): rejected, pulls relay's Kani-proven
+        protocol bodies + health interpretation into jess's native TCB, shrinking the
+        portable verified surface and coupling jess to sensor semantics.
+      release: v0.7.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-012
