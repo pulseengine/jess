@@ -754,7 +754,7 @@ artifacts:
 
   - id: DD-018
     type: design-decision
-    title: The jess<->relay transport seam IS embedded-hal-async at TRANSACTION granularity, maybe-async-cfg for the sync (T3) projection - supersedes the bespoke RegBus shape of DD-015
+    title: The jess<->relay transport seam IS embedded-hal-async at TRANSACTION granularity, composed ALL-WASM (wac/meld/synth + TCB seam); maybe-async-cfg is relay's source-portability tool, NOT a jess native path - supersedes the bespoke RegBus shape of DD-015
     status: accepted
     description: >
       Concretizes the DD-015 isolated-transport seam onto an EXISTING standard instead
@@ -785,35 +785,38 @@ artifacts:
           the DD-014 health the estimator votes on - so fallibility IS the health source.
         - SpiDevice is per-instance BY CONSTRUCTION (one device = one isolated bus) -
           matches "separate transport per IMU domain, never multiplexed" natively.
-      ONE DRIVER SOURCE, TWO BIND PATHS (reconciles DD-015 WIT seam with this standard):
-        - maximal-wasm path: the WIT import surface IS the embedded-hal-async transaction
-          contract lowered to P3 futures (host does DMA, completes the future on the
-          completion-IRQ); relay ships a thin guest-side impl SpiDevice for WitTransport
-          adapter - the driver never knows it is sandboxed. (Matches how kiln-async
-          exposes its async surface.)
-        - native/Zephyr path: the driver consumes jess's native embedded-hal-async impl
-          DIRECTLY, no WIT, no adapter.
-        Same Icm42688<B> body both ways; verified decode stays portable wasm, DMA/timing
-        stays native.
-      THE THREE TARGETS + CONCURRENCY CONVENTION: embedded-hal-async's blocking sibling
-      is plain embedded-hal, so T3 (the F100 M3, gust's tiny TCB) binds the SYNC
-      projection of the same traits. Relay writes the driver bodies MAYBE-ASYNC (one
-      source: embedded-hal-async on T1/T2, blocking embedded-hal on T3) via the
-      maybe-async-cfg pattern. jess CONFIRMED there is no standardized maybe-async
-      pattern on the gale/gust side to match (kiln-async is a genuine P3-futures async
-      executor, NOT a maybe-async dual-projection; no maybe-async-cfg precedent in the
-      org), so relay owns the convention and maybe-async-cfg is endorsed. Chosen over
-      the alternative (async-only bodies + a block_on shim on T3) precisely to keep the
-      F100 TCB minimal: maybe-async-cfg lets T3 bind PLAIN BLOCKING embedded-hal with NO
-      executor at all on the IO-MCU (gust's whole point); block_on would force an async
-      transport impl + a poll-to-completion loop onto the F100. The macro/dual-source
-      cost lives in relay's build, not the F100 runtime - the right place for it. M4 (T2)
-      is first-class - the seam is core-agnostic, driver bodies do not assume M7.
-      jess DELIVERS: the RT1176 embedded-hal-async impl (Embassy-class native async HAL,
-      SVD -> svd2rust -> PAC, kiln-async executor, DMA + completion-IRQ -> wake) against
-      this surface; the WCET harness lands on the Renode RT1176 model first (REQ-PIX-005)
-      as the hermetic CI gate, then real board.
-    tags: [phase-2, hal, seam, embedded-hal-async, maybe-async, wit, maximal-wasm, relay, m4]
+      jess IS ALL-WASM - ONE PATH, NO NATIVE ALTERNATIVE (the correction to an earlier
+      "two bind paths" framing; DD-006/DD-017 maximal-wasm taken literally): for jess
+      EVERYTHING above the TCB is a wasm component - falcon, relay's drivers, the HAL,
+      the kiln-async scheduler, and gale's primitives UP TO the TCB. The embedded-hal-async
+      transaction seam is a WIT interface BETWEEN wasm components (driver imports it, the
+      HAL component exports it; the HAL is wasm too - only its bottom register/DMA/IRQ/wake
+      ops cross into the TCB). The graph is composed by wac, FUSED by meld (the WIT seams
+      become direct calls - "moved down"), optimized by loom, and synth is the LAST and
+      ONLY compile-to-ARM step, where it seams in the native TCB (the bottom WIT's host
+      side - the bare register/DMA/IRQ/wake/time shim, the only native code; MPU = gale's
+      per DD-017). So the WIT seam is a COMPOSE-TIME contract (how pieces are wired +
+      verified + wit-bindgen'd), meld-fused to ZERO runtime cost - NOT a surviving ABI
+      boundary on the metal. jess does NOT do native compilation of drivers/HAL/scheduler.
+      (The native/direct-embedded-hal-async deployment is RELAY'S OTHER target - relay on
+      Zephyr - not a jess path.)
+      CONCURRENCY - jess CONSUMES THE ASYNC PROJECTION UNIFORMLY: async is component-model
+      (P3) + kiln-async, in wasm, on ALL three cores INCLUDING gust (kiln-async-NANO, the
+      cooperative no_alloc scheduler, DD-011) - the F100 is NOT a native-blocking/no-executor
+      target in jess's end-state; it runs the same async projection synth-compiled to ARM.
+      So relay's blocking/sync projection is NOT a jess path. maybe-async-cfg IS still
+      endorsed, but as RELAY'S SOURCE-PORTABILITY tool so one driver source ALSO serves
+      relay's non-wasm (Zephyr-native) deployments; jess always takes the async arm ->
+      wasm -> wac -> meld -> synth. jess CONFIRMED no maybe-async pattern exists on the
+      gale/gust side to match (kiln-async is a genuine P3-futures executor, NOT a
+      dual-projection; no maybe-async-cfg precedent in the org), so relay owns the
+      convention. M4 (T2) is first-class - the seam is core-agnostic; driver bodies do not
+      assume M7. Same Icm42688<B> body across all cores.
+      jess DELIVERS: the RT1176 embedded-hal-async surface as the HAL WASM COMPONENT
+      (SVD -> svd2rust -> PAC informs the register logic; DMA + completion-IRQ -> wake) +
+      the bottom TCB host iface that synth seams in natively; the WCET harness lands on the
+      Renode RT1176 model first (REQ-PIX-005) as the hermetic CI gate, then real board.
+    tags: [phase-2, hal, seam, embedded-hal-async, maybe-async, wit, wac, component-model, maximal-wasm, relay, m4]
     fields:
       rationale: >-
         Targeting an existing standard (embedded-hal-async / embedded-io-async) instead
@@ -821,18 +824,24 @@ artifacts:
         Zephyr deployment AND the maximal-wasm OS without forking - and the standard's
         fallibility is exactly the DD-014 health source. Transaction-level granularity
         pushes even the register-read convention into portable wasm, minimizing the
-        native TCB (DD-006/DD-015). maybe-async-cfg over a block_on shim keeps the F100
-        (T3) TCB executor-free, preserving gust's minimal-import posture (DD-011).
+        native TCB (DD-006/DD-015). jess is all-wasm (DD-017): driver+HAL+kiln-async+gale
+        are wasm components, the embedded-hal-async seam is a WIT interface meld-FUSED to
+        zero runtime cost, and synth is the only native compile-down (seaming in the TCB) -
+        so jess consumes the async projection uniformly (kiln-async on all cores incl.
+        gust-nano). maybe-async-cfg is relay's source-portability tool for relay's non-wasm
+        deployments, not a jess native-sync path.
       alternatives: >-
         Bespoke RegBus/SerialBus traits (DD-015 original shape) - superseded: reinvents
         embedded-hal-async, not reusable outside relay, infallible so no natural health
         source. Register-level seam (read-reg in the contract) - rejected: leaks register
         semantics (reg|0x80, burst endianness) into the native TCB; transaction-level
-        keeps the seam pure bytes. async-only driver bodies + block_on shim on T3 -
-        rejected: forces an async transport impl + poll loop onto the F100, growing the
-        minimal IO-MCU TCB gust exists to keep small; maybe-async-cfg confines the cost
-        to relay's build. Host provides typed device resources (DD-015 option C) - already
-        rejected there: pulls Kani bodies into the native TCB.
+        keeps the seam pure bytes. "Two bind paths (WIT vs native-direct) for jess" -
+        rejected/corrected: jess is single-path all-wasm (wac/meld/synth); the
+        native-direct embedded-hal-async path is relay's Zephyr deployment, not jess.
+        Native compilation of drivers/HAL/scheduler for jess - rejected: against the
+        maximal-wasm thesis (DD-006/DD-017); only the TCB is native, seamed in by synth.
+        Host provides typed device resources (DD-015 option C) - already rejected there:
+        pulls Kani bodies into the native TCB.
       release: v0.7.0
     links:
       - type: satisfies
