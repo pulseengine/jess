@@ -79,12 +79,22 @@ artifacts:
 
   - id: REQ-PIX-002
     type: requirement
-    title: gale verified kernel primitives run on the i.MX RT1176 M7 via Zephyr (mimxrt1176)
+    title: gale verified kernel primitives are the M7 flight native base — maximal-wasm (standalone gale + kiln + fused falcon), NOT via full Zephyr
     status: draft
+    description: >
+      REVISED iter#43 (DD-017): the M7 flight runtime is gale-MAXIMAL-WASM, not
+      gale-on-full-Zephyr. gale is a verified Zephyr-primitive REPLACEMENT with a
+      standalone track (plain/*.rs, Rocq-proven, no Zephyr) + a wasm distribution;
+      gust proved the standalone path on bare Cortex-M3. So gale's verified primitives
+      (incl. mpu/mem_domain) are the thin native base on the M7, with kiln + falcon +
+      relay-hal drivers fused as wasm (meld->loom->synth->ARM, load-to-RAM, DD-016).
+      Full Zephyr is demoted to gale's own validation track (36 QEMU suites) + an
+      optional EVK/bring-up reference - NOT the flight runtime. (Was "via Zephyr",
+      gated on gale#63; the maximal-wasm path is the chosen flight route.)
     fields:
       category: functional
       priority: must
-      release: v0.7.0  # deferred from v0.6.0: gated on gale#63 (gale-on-RT1176), not startable now
+      release: v0.7.0  # M7 flight runtime = gale-maximal-wasm (DD-017); Zephyr = reference/validation only
     links:
       - type: traces-to
         target: FEATURE-002
