@@ -52,9 +52,27 @@ public
   --------------------------------------------------------------------------
   -- Buses
   --------------------------------------------------------------------------
-  bus SPI_BUS  end SPI_BUS;    -- internal sensor SPI (IMUs, baro)
-  bus I2C_BUS  end I2C_BUS;    -- mag + digital power monitor
+  --  ISOLATED SENSOR DOMAINS (FMUv6X redundancy): each IMU on its OWN SPI bus so
+  --  a wedged bus / dead LDO kills ONE domain, not all three. Fault CONTAINMENT,
+  --  not spare parts. The SPOF structure only appears if the buses are modeled
+  --  separately (the old single-SPI model hid it). Each is also the unit of the
+  --  jess<->relay seam (DD-015): jess's host exposes per-bus RegBus transport;
+  --  relay's wasm drivers + estimator decode + vote over the set.
+  bus SPI1  end SPI1;          -- IMU domain 1 (ICM-20649 / BMI088)
+  bus SPI2  end SPI2;          -- IMU domain 2 (ICM-42688-P)
+  bus SPI3  end SPI3;          -- IMU domain 3 (ICM-42670-P) + baro pair
+  bus I2C_BUS  end I2C_BUS;    -- mag + the per-brick power monitors (INA228)
   bus CANFD    end CANFD;      -- DroneCAN / UAVCAN peripherals + smart actuators
+
+  --  POWER REDUNDANCY (triple source, hardware failover). Three input rails are
+  --  diode/priority-ORed in HARDWARE onto the system rail -> failover is automatic
+  --  with NO software in the path (the safety-critical property). Software only
+  --  MONITORS each brick (INA228 over I2C) and per-IMU LDO; it never gates the
+  --  switchover. Per-sensor LDO rails give each IMU domain independent power.
+  bus VBRICK1  end VBRICK1;    -- POWER1 module input (PM02D/PM03D brick)
+  bus VBRICK2  end VBRICK2;    -- POWER2 module input (second brick)
+  bus VUSB     end VUSB;       -- USB 5V (third source / bench power)
+  bus VSYS     end VSYS;       -- ORed system rail feeding the FMU + LDOs
 
   --  Inter-core / inter-MCU comms fabrics. These carry the WIT-typed RPC
   --  contracts (the salvageable wRPC idea: CM value encoding over a transport
@@ -72,28 +90,34 @@ public
   --------------------------------------------------------------------------
   -- Sensor + power devices
   --------------------------------------------------------------------------
-  --  IMU2 — TDK ICM-42688-P. jess already has a no_std driver (falcon-imu-icm42688).
-  device ICM42688P
-  features
-    spi : requires bus access SPI_BUS;
-  end ICM42688P;
-
-  --  IMU1 — ICM-20649 or BMI088 (populated as one).
+  --  Each IMU is its OWN isolated domain: a dedicated SPI bus + a dedicated LDO
+  --  rail (independent power control). Redundancy management (voting/selection)
+  --  is NOT here — it is relay's estimator (portable, verified) over the set.
+  --  IMU1 — ICM-20649 or BMI088 (populated as one). Domain 1.
   device IMU_20649_BMI088
   features
-    spi : requires bus access SPI_BUS;
+    spi : requires bus access SPI1;
+    pwr : requires bus access VSYS;   -- via its own LDO (ldo1)
   end IMU_20649_BMI088;
 
-  --  IMU3 — TDK ICM-42670-P.
+  --  IMU2 — TDK ICM-42688-P (jess no_std driver falcon-imu-icm42688). Domain 2.
+  device ICM42688P
+  features
+    spi : requires bus access SPI2;
+    pwr : requires bus access VSYS;   -- via ldo2
+  end ICM42688P;
+
+  --  IMU3 — TDK ICM-42670-P. Domain 3.
   device ICM42670P
   features
-    spi : requires bus access SPI_BUS;
+    spi : requires bus access SPI3;
+    pwr : requires bus access VSYS;   -- via ldo3
   end ICM42670P;
 
-  --  Barometer — 2x Bosch BMP388 (one device instance per chip).
+  --  Barometer — 2x Bosch BMP388 (double-redundant, separate buses).
   device BMP388
   features
-    spi : requires bus access SPI_BUS;
+    spi : requires bus access SPI3;
   end BMP388;
 
   --  Magnetometer — Bosch BMM150.
@@ -102,11 +126,45 @@ public
     i2c : requires bus access I2C_BUS;
   end BMM150;
 
-  --  PM02D digital power module (TI INA228 over I2C).
+  --------------------------------------------------------------------------
+  -- Power redundancy: 3 sources -> hardware OR -> system rail; software monitors
+  --------------------------------------------------------------------------
+  --  POWER1/POWER2 digital power modules (TI INA228). The brick supplies VBRICKn
+  --  (power) and is monitored over I2C (voltage/current/health -> software).
   device PM02D
   features
-    i2c : requires bus access I2C_BUS;
+    i2c   : requires bus access I2C_BUS;   -- monitor channel (read-only to SW)
+    vout  : provides bus access VBRICK1;    -- brick 1 power output
   end PM02D;
+  device PM02D_2
+  features
+    i2c   : requires bus access I2C_BUS;
+    vout  : provides bus access VBRICK2;    -- brick 2 power output
+  end PM02D_2;
+
+  --  USB 5V — third source.
+  device USB_PWR
+  features
+    vout : provides bus access VUSB;
+  end USB_PWR;
+
+  --  The power-path OR/selection: diode/priority-OR of the 3 inputs onto VSYS.
+  --  Pure HARDWARE — no software in the failover path. This is the keystone of
+  --  power redundancy: loss of any one (or two) sources does NOT drop VSYS.
+  device PWR_OR
+  features
+    in1 : requires bus access VBRICK1;
+    in2 : requires bus access VBRICK2;
+    in3 : requires bus access VUSB;
+    out : provides bus access VSYS;
+  end PWR_OR;
+
+  --  Per-IMU LDO regulators off VSYS — independent power control per sensor
+  --  domain (a dead LDO takes out one IMU, not the rail).
+  device LDO
+  features
+    vin  : requires bus access VSYS;
+  end LDO;
 
   --------------------------------------------------------------------------
   -- Software: the verified falcon flight stack + the I/O failsafe path
@@ -158,11 +216,18 @@ public
     ocram : memory OCRAM;
     flash : memory OSPI_FLASH;
 
-    spi  : bus SPI_BUS;
+    spi1 : bus SPI1;   -- isolated IMU domains
+    spi2 : bus SPI2;
+    spi3 : bus SPI3;
     i2c  : bus I2C_BUS;
     can  : bus CANFD;
     shmem : bus SHMEM;
     io_link : bus IO_LINK;
+
+    vbrick1 : bus VBRICK1;   -- power redundancy rails
+    vbrick2 : bus VBRICK2;
+    vusb    : bus VUSB;
+    vsys    : bus VSYS;
 
     imu1 : device IMU_20649_BMI088;
     imu2 : device ICM42688P;
@@ -170,20 +235,44 @@ public
     baro_a : device BMP388;
     baro_b : device BMP388;
     mag  : device BMM150;
-    power : device PM02D;
+
+    brick1 : device PM02D;     -- POWER1 module (+monitor)
+    brick2 : device PM02D_2;   -- POWER2 module (+monitor)
+    usbpwr : device USB_PWR;   -- USB 5V
+    pwr_or : device PWR_OR;    -- hardware OR -> vsys
+    ldo1 : device LDO;         -- per-IMU-domain regulators off vsys
+    ldo2 : device LDO;
+    ldo3 : device LDO;
 
     falcon : process Falcon_Flight.cascade;
     estimator : process Estimator.iekf;
     failsafe : process IO_Failsafe.pwm;
 
   connections
-    imu1_spi : bus access spi <-> imu1.spi;
-    imu2_spi : bus access spi <-> imu2.spi;
-    imu3_spi : bus access spi <-> imu3.spi;
-    baroa_spi : bus access spi <-> baro_a.spi;
-    barob_spi : bus access spi <-> baro_b.spi;
+    --  Isolated sensor domains: one IMU per SPI bus (fault containment).
+    imu1_spi : bus access spi1 <-> imu1.spi;
+    imu2_spi : bus access spi2 <-> imu2.spi;
+    imu3_spi : bus access spi3 <-> imu3.spi;
+    baroa_spi : bus access spi3 <-> baro_a.spi;
+    barob_spi : bus access spi3 <-> baro_b.spi;
     mag_i2c : bus access i2c <-> mag.i2c;
-    power_i2c : bus access i2c <-> power.i2c;
+    brick1_i2c : bus access i2c <-> brick1.i2c;
+    brick2_i2c : bus access i2c <-> brick2.i2c;
+
+    --  Power redundancy: 3 sources -> hardware OR -> vsys -> per-IMU LDOs.
+    b1_out : bus access brick1.vout <-> vbrick1;
+    b2_out : bus access brick2.vout <-> vbrick2;
+    usb_out : bus access usbpwr.vout <-> vusb;
+    or_in1 : bus access vbrick1 <-> pwr_or.in1;
+    or_in2 : bus access vbrick2 <-> pwr_or.in2;
+    or_in3 : bus access vusb <-> pwr_or.in3;
+    or_out : bus access pwr_or.out <-> vsys;
+    ldo1_in : bus access vsys <-> ldo1.vin;
+    ldo2_in : bus access vsys <-> ldo2.vin;
+    ldo3_in : bus access vsys <-> ldo3.vin;
+    imu1_pwr : bus access vsys <-> imu1.pwr;
+    imu2_pwr : bus access vsys <-> imu2.pwr;
+    imu3_pwr : bus access vsys <-> imu3.pwr;
 
     --  Cross-core / cross-MCU WIT-typed contracts (the wRPC topology).
     est_to_falcon : port estimator.state_out -> falcon.state_in;   -- M4 -> M7
