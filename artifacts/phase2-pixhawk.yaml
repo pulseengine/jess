@@ -285,6 +285,17 @@ artifacts:
       Status iter#39: stage 2 in progress - PX4 boots, clock bring-up cleared,
       frontier at timer/AON peripheral init. Renode installed locally for the
       interactive loop; CI stays the hermetic regression gate.
+      Status iter#43: PX4 BUILT FROM SOURCE (pinned Arm GNU 12.3.Rel1 + full python
+      deps, /Volumes/Home) -> symbol'd ELF (20314 syms). Boot path fully DECODED: the
+      post-console blocker is imxrt_octl_flash_initialize -> the i.MX RT1176 BOOT-ROM
+      ROM-API (FlexSPI-NOR). Exact ABI captured (chip-ver reg 0x40C84800==0x001170A0;
+      ROM tree @ base+0x1C; tree+12->driver; driver+4->init). A stub to this ABI moved
+      the abort 0xFFFFFFFE (null tree) -> 0x00220000 (firmware calls a REAL boot-ROM fn
+      past the stub) - i.e. the boot ROM is the gate. Two clean paths to nsh (next iter):
+      (1) rebuild PX4 with imxrt_octl_flash_initialize no-op'd for a Renode board variant
+      (FlexSPI is plain memory in the model -> romapi unneeded) - PREFERRED, source+
+      toolchain now set up; (2) full romapi/boot-ROM stub. Decode + recipe in
+      hardware/renode/px4/README.md + anadig_stub.py.
     fields:
       category: functional
       priority: should
