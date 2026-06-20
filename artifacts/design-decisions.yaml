@@ -638,6 +638,18 @@ artifacts:
           big monolithic image runs in place from NOR; jess's maximal-wasm small
           image does not. (A faster boot-copy, if ever wanted, is direct FlexSPI
           register writes, no ROM.)
+          DEPENDENCY (must formalize): this no-ROM/no-XIP/load-to-RAM conclusion holds
+          ONLY if the M7 flight runtime is gale-MAXIMAL-WASM (gale verified primitives
+          as the thin native base + kiln + falcon/drivers fused wasm, DD-006) - which
+          gust just proved viable (gale runs without Zephyr on the M3). If instead the
+          M7 runs gale-ON-FULL-ZEPHYR (a big RTOS image that XIP-executes from NOR and
+          boots through the SoC/ROM init like PX4), then this DD's no-ROM/no-XIP claim
+          is WRONG for the M7 and the romapi/XIP analysis re-enters. The M7 flight
+          runtime (maximal-wasm vs gale-on-Zephyr) is a SEPARATE keystone decision to
+          model (the spar model does not yet represent the gale runtime layer as a
+          component - only app processes). Recommendation: maximal-wasm on the M7 too
+          (unify M7+F100, smallest verified TCB, keeps this DD valid; Zephyr demoted to
+          a bring-up/reference aid). If Zephyr is required on the M7, revise this DD.
         - UPDATE TCB (on-ground, at update time only, NOT in flight): a bootloader
           that programs the app NOR. THIS is the only place the ROM question lives.
           OPEN sub-decision (the one fork): (b1) reuse the i.MX ROM NOR driver in the
