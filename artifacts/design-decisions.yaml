@@ -626,8 +626,18 @@ artifacts:
       Params -> FRAM (FM25V02A, MTD_PARAMETERS), its own FlexSPI driver, NOT the ROM.
       DECISION for jess (two TCBs):
         - FLIGHT TCB (in-flight): falcon + gale + a verified FRAM-over-FlexSPI param
-          driver. NO i.MX ROM. The (A) fast-XIP re-init is dropped or done via direct
-          FlexSPI register writes (no ROM) - it is perf-only.
+          driver. NO i.MX ROM. The (A) fast-XIP re-init is simply DROPPED - jess does
+          not need flash performance because falcon does NOT execute from the NOR:
+          it is a small synth-fused image (.text ~63KB) that fits the M7's zero-wait
+          ITCM/DTCM/OCRAM, so it is LOAD-TO-RAM (copied to TCM at boot, run from
+          there); the octal NOR is purely a boot-time read source + an update-time
+          write target, never on the execution path -> XIP speed is irrelevant. And
+          for hard-real-time WCET it is the BETTER choice: TCM execution is
+          deterministic, with none of the flash-fetch/cache-miss jitter XIP carries
+          (what the spar RTA/WCET story wants). PX4 needs fast-XIP only because its
+          big monolithic image runs in place from NOR; jess's maximal-wasm small
+          image does not. (A faster boot-copy, if ever wanted, is direct FlexSPI
+          register writes, no ROM.)
         - UPDATE TCB (on-ground, at update time only, NOT in flight): a bootloader
           that programs the app NOR. THIS is the only place the ROM question lives.
           OPEN sub-decision (the one fork): (b1) reuse the i.MX ROM NOR driver in the
