@@ -901,8 +901,12 @@ artifacts:
       jess `software` was intended as belt-and-suspenders, NOT the sole mechanism.
       But #377 means jess must (a) NOT treat synth bounds as load-bearing on the main
       path, and (b) confirm/own MPU programming of the linear-memory region in the
-      native base (NOT yet verified that gale does this - deep-dive owed before
-      asserting). Tracking https://github.com/pulseengine/synth/issues/377;
+      native base. RESOLVED-(b) iter#43: gale provides a VERIFIED MPU primitive
+      (gale/src/mpu.rs + mem_domain.rs + mmu.rs, Verus/Rocq-proven) - so the native
+      trusted base (gale-maximal-wasm, DD-017) DOES own MPU enforcement of the
+      linear-memory region; synth's --safety-bounds stays defense-in-depth only, as
+      the DD-006 posture held. So the flight memory-safety guarantee = gale's MPU
+      (verified), not synth bounds. Tracking https://github.com/pulseengine/synth/issues/377;
       scoping with the maintainer. Suggested: synth should either emit real inline
       checks on the optimized path under `software`, or program real MPU regions
       under `mpu`, or clearly document that bounds enforcement is the embedder's

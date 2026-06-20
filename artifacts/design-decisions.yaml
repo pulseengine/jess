@@ -687,3 +687,62 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-015
+
+  - id: DD-017
+    type: design-decision
+    title: M7 flight runtime = gale-MAXIMAL-WASM (standalone gale verified primitives + kiln + fused falcon, NO Zephyr in flight); Zephyr = reference/bring-up only
+    status: accepted
+    description: >
+      The keystone the storage/boot story rests on (the gale-layer question): what runs
+      on the M7 in flight. DECIDED via a gale deep-dive (iter#43, research-first):
+      WHAT GALE IS (grounded in the gale repo): a "formally verified Rust REPLACEMENT
+      for Zephyr kernel primitives" (Verus + Rocq + Lean), explicitly DUAL-TRACK:
+        - STANDALONE: plain/*.rs (verus-stripped embeddable Rust crate, Rocq-proven) -
+          the full kernel-primitive set (sem/mutex/condvar/event/msgq/mbox/pipe/fifo/
+          lifo/futex/poll/heap/mem_slab/mempool/timeout/scheduler/thread_lifecycle +
+          mpu/mmu/mem_domain). NO Zephyr.
+        - ZEPHYR INTEGRATION: zephyr/*.c drop-in C replacement, validated on 36 upstream
+          Zephyr test suites (QEMU M3 + MPS2/AN385 w/ MPU).
+      gale ALSO compiles to WASM (release-wasm.yml, build-wasm-dist.sh, zephyr/wasm/
+      trampolines) - so the DD-006 maximal-wasm path is REAL. And gust proved the
+      standalone path runs on bare Cortex-M3 (no Zephyr).
+      DECISION: the M7 flight runtime is gale-MAXIMAL-WASM - gale's verified primitives
+      (as fused wasm / standalone native base) + the kiln scheduler + falcon + the
+      relay-hal drivers, meld-fused -> loom -> synth -> ARM, LOAD-TO-RAM in TCM (DD-016).
+      NO Zephyr in the flight image. Zephyr is demoted to: (a) gale's OWN validation
+      track (the 36 QEMU suites - how gale proves its primitives), and (b) an optional
+      EVK/bring-up reference (like PX4) - NOT the flight runtime. This:
+        - CONFIRMS DD-016 (no-ROM/no-XIP/load-to-RAM holds - the flight image is small,
+          RAM-resident, doesn't XIP from NOR or boot through the i.MX ROM).
+        - RESOLVES the AFD-028 MPU question: gale provides mpu.rs + mem_domain, so the
+          native trusted base HAS verified MPU enforcement of the linear-memory region
+          (DD-006 posture confirmed - MPU is gale's, NOT synth's --safety-bounds).
+        - UNIFIES the M7 and the gust/F100 on ONE architecture (gale-maximal-wasm at two
+          scales: full primitive set on M7, the gale-nano subset on F100).
+      OPEN sub-decision (per-workload, not blocking): falcon scheduling uses gale's
+      thread scheduler (Zephyr-style periodic threads) vs kiln's async cooperative
+      fuel-bounded scheduler (gust's choice) - both verified; pick by falcon's loop
+      structure. Revises REQ-PIX-002 (was "gale on M7 via Zephyr").
+    tags: [phase-2, gale, maximal-wasm, m7, runtime, tcb, zephyr, on-target]
+    fields:
+      rationale: >-
+        gale is a primitive REPLACEMENT, not a Zephyr fork - its standalone (plain/)
+        track + wasm distribution + gust's bare-M3 proof show it does not need Zephyr.
+        Choosing maximal-wasm on the M7 gives the smallest verified TCB (DD-006), keeps
+        DD-016's no-ROM/load-to-RAM flight model valid, puts MPU enforcement in gale
+        (resolving AFD-028), and unifies M7+F100 on one model. Full Zephyr on the M7
+        would add a large XIP/ROM-dependent image + a big unneeded surface (netstack/
+        FS/shell) the control core does not use - against DD-006 and DD-016.
+      alternatives: >-
+        gale-ON-FULL-ZEPHYR on the M7 - rejected for flight: big XIP image, boots
+        through the i.MX ROM (re-introduces the ROM/XIP analysis + breaks DD-016's
+        no-ROM claim), and carries a large surface the control core does not need.
+        Kept ONLY as gale's validation track + an optional bring-up reference. Bare
+        hand-rolled primitives (no gale) - rejected: throws away gale's Verus/Rocq/Lean
+        verification, the entire point.
+      release: v0.7.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-002
+      - type: traces-to
+        target: REQ-PIX-012

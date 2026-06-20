@@ -17,7 +17,13 @@ public
   -- Processors (3 cores across 2 packages)
   --------------------------------------------------------------------------
   --  i.MX RT1176 primary core. Target: cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard
-  --  (double-precision FPU). gale verified primitives + falcon run here.
+  --  (double-precision FPU).
+  --  FLIGHT RUNTIME = gale-MAXIMAL-WASM (DD-017), NOT full Zephyr: the verified gale
+  --  kernel primitives (standalone plain/ track + wasm dist; incl. mpu/mem_domain =
+  --  the native MPU enforcement, resolving AFD-028) are the thin native base; kiln +
+  --  falcon + the relay-hal drivers are fused wasm (meld->loom->synth->ARM) and
+  --  LOAD-TO-RAM into TCM (DD-016 - small image, no XIP, no i.MX boot ROM in flight).
+  --  Zephyr is reference/validation only (gale's 36 QEMU suites + optional bring-up).
   processor FMU_M7
   end FMU_M7;
   processor implementation FMU_M7.imxrt1176
@@ -32,10 +38,11 @@ public
   end FMU_M4.imxrt1176;
 
   --  STM32F100 (Cortex-M3, 24 MHz, 8 KB SRAM) I/O coprocessor: PWM out +
-  --  RC/SBUS failsafe, independent of the FMU. Runtime here is bare-metal
-  --  minimal (px4io-class) — 8 KB SRAM is too small for the full Zephyr RTOS,
-  --  and the failsafe is deliberately tiny/independent. gale/Zephyr runs on the
-  --  M7 (and Phase-1 STM32F4), NOT on this I/O MCU.
+  --  RC/SBUS failsafe, independent of the FMU. Runtime here is the gust gale-nano
+  --  maximal-wasm subset (gale primitive subset + kiln, ~4-item native shim) - 8 KB
+  --  SRAM is too small for Zephyr. Same gale-maximal-wasm model as the M7 (DD-017),
+  --  just the gale-nano subset (DD-011) - so M7 and F100 are one architecture at two
+  --  scales; neither runs full Zephyr in flight.
   processor IO_MCU
   end IO_MCU;
   processor implementation IO_MCU.stm32f100
