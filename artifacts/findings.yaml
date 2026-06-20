@@ -866,11 +866,21 @@ artifacts:
       build = oracle). CI running, will merge + close. This clears the LAST gale-nano
       scheduler-substrate precondition (REQ-PIX-009 (b); (a)=synth#372 done v0.11.47).
       triage -> fix-in-progress (merge+release pending).
+      UPDATE 2026-06-20 (cron loop): kiln #339 MERGED 2026-06-19T20:01Z (mergeCommit
+      6966abc = current kiln main HEAD); issue kiln#338 CLOSED same time. The defect is
+      FIXED ON MAIN. BUT the released kiln v0.3.3 (tagged 2026-06-17T22:19, commit dated
+      06-17T22:09) PREDATES the #339 merge, so the latest RELEASE does NOT carry the
+      no-alloc fix - it is on main, unreleased. Per the AFD-026 precedent (mark resolved
+      only on a RELEASED artifact jess can pin + verify), AFD-027 stays open as
+      fixed-on-main/release-pending: jess will adopt + verify (thumbv7m-none-eabi
+      no-allocator-error gone, kiln-async no_alloc end-to-end) and mark resolved when the
+      next kiln tag (roadmap v0.3.4+) includes 6966abc. No upstream nag needed - merged,
+      just awaiting a routine cut.
     tags: [release-watch, kiln, no-alloc, gale-nano, on-target, blocker]
     fields:
-      detected-by: gale-side gale-nano profile (avrabe, gale#65); FIXED kiln #339 (jess's suggested shape - gate recovery+alloc behind the alloc feature); clears REQ-PIX-009 precondition (b)
+      detected-by: gale-side gale-nano profile (avrabe, gale#65); FIXED on kiln main via #339 (jess's suggested shape - gate recovery+alloc behind the alloc feature, merged 2026-06-19, kiln#338 closed); clears REQ-PIX-009 precondition (b); release-pending (v0.3.3 predates the merge)
       severity: major
-      triage-status: fix-in-progress
+      triage-status: fixed-on-main-release-pending
     links:
       - type: defect-against
         target: EXTERNALANCHOR-004
