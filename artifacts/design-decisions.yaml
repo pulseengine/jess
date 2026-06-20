@@ -601,3 +601,89 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-012
+
+  - id: DD-016
+    type: design-decision
+    title: Update + persistence architecture - flight TCB carries NO i.MX ROM; persistence=FRAM-own-driver; the ROM question lives ONLY in the on-ground update bootloader
+    status: accepted
+    description: >
+      Models jess's firmware-update + persistence path on the RT1176 (REQ-PIX-015),
+      a PREREQUISITE for finalizing the storage/ROM route (the user's point: "we
+      don't rewrite code-flash at runtime" only moves NOR-write to update time -
+      update IS NOR-write = the ROM's job, so it must be designed first). Grounded
+      in the PX4 v6xrt source (read directly):
+      PX4 uses the i.MX boot-ROM for TWO things, ONE of them real:
+        (A) app boot-time imxrt_octl_flash_initialize (CONFIG_BOARD_BOOTLOADER_FIXUP,
+            .ramfunc): re-inits FlexSPI to fast octal-DDR via ROM_FLEXSPI_NorFlash_Init
+            - PERFORMANCE ONLY (faster XIP), not functionally required; the adjacent
+            imxrt_flash_setup_prefetch_partition pokes the same registers directly,
+            proving the ROM isn't needed for it.
+        (B) bootloader (imxrt_common/main.c): ROM_FLEXSPI_NorFlash_Erase/ProgramPage
+            over USB-DFU - writes the app into octal NOR during UPDATE. This is the
+            genuinely-hard read-while-write octal-NOR path; the ROM driver (RAM-
+            resident, NXP-vetted) avoids writing+maintaining one. This is the ONLY
+            real ROM need.
+      Params -> FRAM (FM25V02A, MTD_PARAMETERS), its own FlexSPI driver, NOT the ROM.
+      DECISION for jess (two TCBs):
+        - FLIGHT TCB (in-flight): falcon + gale + a verified FRAM-over-FlexSPI param
+          driver. NO i.MX ROM. The (A) fast-XIP re-init is simply DROPPED - jess does
+          not need flash performance because falcon does NOT execute from the NOR:
+          it is a small synth-fused image (.text ~63KB) that fits the M7's zero-wait
+          ITCM/DTCM/OCRAM, so it is LOAD-TO-RAM (copied to TCM at boot, run from
+          there); the octal NOR is purely a boot-time read source + an update-time
+          write target, never on the execution path -> XIP speed is irrelevant. And
+          for hard-real-time WCET it is the BETTER choice: TCM execution is
+          deterministic, with none of the flash-fetch/cache-miss jitter XIP carries
+          (what the spar RTA/WCET story wants). PX4 needs fast-XIP only because its
+          big monolithic image runs in place from NOR; jess's maximal-wasm small
+          image does not. (A faster boot-copy, if ever wanted, is direct FlexSPI
+          register writes, no ROM.)
+          DEPENDENCY (must formalize): this no-ROM/no-XIP/load-to-RAM conclusion holds
+          ONLY if the M7 flight runtime is gale-MAXIMAL-WASM (gale verified primitives
+          as the thin native base + kiln + falcon/drivers fused wasm, DD-006) - which
+          gust just proved viable (gale runs without Zephyr on the M3). If instead the
+          M7 runs gale-ON-FULL-ZEPHYR (a big RTOS image that XIP-executes from NOR and
+          boots through the SoC/ROM init like PX4), then this DD's no-ROM/no-XIP claim
+          is WRONG for the M7 and the romapi/XIP analysis re-enters. The M7 flight
+          runtime (maximal-wasm vs gale-on-Zephyr) is a SEPARATE keystone decision to
+          model (the spar model does not yet represent the gale runtime layer as a
+          component - only app processes). Recommendation: maximal-wasm on the M7 too
+          (unify M7+F100, smallest verified TCB, keeps this DD valid; Zephyr demoted to
+          a bring-up/reference aid). If Zephyr is required on the M7, revise this DD.
+        - UPDATE TCB (on-ground, at update time only, NOT in flight): a bootloader
+          that programs the app NOR. THIS is the only place the ROM question lives.
+          OPEN sub-decision (the one fork): (b1) reuse the i.MX ROM NOR driver in the
+          bootloader - update-time-only opaque code, never in flight, low effort, the
+          ROM solves the hard RWW; or (b2) ship jess's own verified octal-NOR driver -
+          zero ROM anywhere, but jess owns the hard RWW/XIP-suspend problem.
+        - INTEGRITY (the safety-critical part of update, same either way): sigil-signed
+          images (embedded sig / Sigstore / SLSA provenance) + relay-sec authenticated/
+          anti-replay transport + anti-rollback; the bootloader verifies before flashing.
+      So the storage/ROM route (jess owns its drivers, no ROM in flight) is CONFIRMED
+      for flight; the only ROM use jess might keep is the update bootloader's NOR write
+      (b1) - bounded, on-ground, integrity-gated. Renode fidelity follow-on: model the
+      FlexSPI controller + FRAM device (currently FlexSPI2 = plain memory) so the
+      verified FRAM param driver is exercisable; the boot-ROM romapi stays off the
+      FLIGHT path either way.
+    tags: [phase-2, update, persistence, bootloader, fram, security, tcb, on-target]
+    fields:
+      rationale: >-
+        Separating flight TCB from update TCB lets the in-flight code stay fully
+        verified (no opaque ROM) while not pretending the NOR-write problem vanished -
+        it is real, but it lives only in the on-ground updater. The safety-critical
+        part of update is integrity (authenticity/anti-rollback), which jess already
+        owns via sigil + relay-sec; the mechanical NOR-write is where reusing the
+        ROM (b1) is a defensible, bounded convenience. Decided BEFORE the storage
+        route so we don't commit to "no ROM" and then have to switch back when the
+        update path resurfaces it (exactly the failure the user flagged).
+      alternatives: >-
+        "No ROM, decided in isolation" - rejected: incomplete until update is modeled;
+        update = NOR-write = the ROM's domain. ROM in the flight TCB (PX4's fast-XIP
+        fixup) - rejected: perf-only, opaque code in the flight TCB, droppable. SWD/
+        external-only update (no bootloader) - rejected: no field update. Skipping a
+        signed-image/anti-rollback chain - rejected: integrity is the safety core of
+        update.
+      release: v0.8.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-015
