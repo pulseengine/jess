@@ -99,8 +99,43 @@ does real work; returns-0 stubs only go so far.
 Then: symbol'd-ELF boot (VTOR 0x30022000, SP 0x20259994, PC 0x300223a9) for exact
 backtraces → nsh banner → line-based robot oracle into CI.
 
-> Honest scope: this is the **console-reached** sub-milestone, NOT a full `nsh`
-> boot. Stage 2 stays in progress.
+## Path 1 EXECUTED (iter#44) — romapi wall REMOVED; new frontier = Renode throughput
+
+Took path 1: rebuilt PX4 fmu-v6xrt with **`CONFIG_BOARD_BOOTLOADER_FIXUP=n`** (a
+Renode board variant — the Kconfig default is `n`, so the line is just removed from
+`boards/px4/fmu-v6xrt/nuttx-config/nsh/defconfig`). Result confirmed:
+- **`imxrt_octl_flash_initialize` is ABSENT** from the rebuilt ELF (`nm` shows it
+  gone) → `imxrt_boardinitialize` now calls `imxrt_flash_setup_prefetch_partition`
+  directly (the direct-register path, no ROM) and continues NuttX init.
+- **The romapi abort is GONE** — the firmware no longer branches to `0xFFFFFFFE` /
+  reaches the real boot-ROM at `0x00220000`. The documented hard wall is eliminated.
+  New boot vectors for this variant: VTOR `0x30022000`, SP `0x20258f94`, PC `0x300223a9`.
+- New frontier diagnosed: after the first console byte `B` the firmware runs real
+  NuttX init and sits in **`up_mdelay`** (PC `0x3005c4e2`) — a *software busy-delay*
+  loop (`CONFIG_BOARD_LOOPSPERMSEC=104926`), **not** a missing peripheral and **not**
+  a fault. It is wall-clock-pathological in Renode: 0.3 s of simulated time costs
+  >180 s wall on this model (the M7 burns many cycles through init/delays).
+- Mitigation tried: a variant with **`CONFIG_BOARD_LOOPSPERMSEC=100`** (≈1000× cheaper
+  delays) — still does not reach the nsh banner within a feasible short sim, so the
+  bottleneck is **Renode interpretation throughput on the model's CPU clock**, not the
+  delay calibration alone.
+
+**So path 1 achieved its objective** (remove the boot-ROM/romapi dependency — the thing
+that actually blocked progress) and advanced the boot from "aborts at romapi" to "runs
+NuttX init." Reaching the full nsh banner is now a **Renode performance-tuning** task,
+not a firmware-logic wall — next levers: lower the modeled CPU frequency in
+`pixhawk6xrt.repl`, tune `cpu PerformanceInMips` / the sync quantum, or fast-skip the
+init delays; then line-based robot oracle into CI.
+
+> **Strategic scope (DD-016/DD-017):** PX4→nsh is a **reference / model-fidelity**
+> exercise — jess's *flight* image is the all-wasm synth build (no NuttX, no romapi,
+> load-to-RAM in TCM), so the boot ROM is off the flight path *by design*. Path 1's
+> romapi-removal is the load-bearing validation; brute-forcing PX4 all the way to nsh
+> is bounded-value polish on a reference target, gated on Renode throughput tuning.
+
+> Honest scope: still the **console-reached** sub-milestone (one byte `B`), NOT a full
+> `nsh` boot — but the romapi wall (the prior blocker) is now removed. Stage 2 stays in
+> progress, re-pointed at Renode throughput.
 
 ## Map (where this is going)
 
