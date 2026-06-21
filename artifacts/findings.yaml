@@ -1031,6 +1031,24 @@ artifacts:
       (TEST-PIX-013, the harness that closed synth bulk-mem #374) as the hermetic
       trap-on-arena-exhaustion gate for #4. Budgets: gust/F100 = 8KB SRAM (~7.5KB
       free), M7 = load-to-RAM in TCM (DD-016). Comments posted on wit-bindgen #4/#5/#6.
+      VERIFIED 2026-06-21 (jess tested the fork branch integration/embedded-rt-no-grow,
+      a2d46c4): the cabi-realloc-extern feature does clear the kill-criterion. Built a
+      minimal wasm32-unknown-unknown cdylib exercising wit_bindgen::rt::cabi_realloc
+      (rustc 1.94.1, wasm-tools 1.245.1, lto, panic=abort) two ways:
+        - default (growing global allocator): memory.grow x2.
+        - --features cabi-realloc-extern + a bounded no-grow arena backing both the
+          #[global_allocator] and __cabi_arena_realloc (traps on exhaustion): memory.grow
+          x0, cabi_realloc export retained, __cabi_arena_realloc wired in.
+      So a component built this way clears meld#299's --memory shared --address-rebase
+      precondition AT THE SOURCE. Branch test suite also green here: default 19+15;
+      --features cabi-realloc-extern,async 20 incl. cabi_realloc_routes_to_extern_arena,
+      next/write_one_inline_blocked_then_cancel_no_uaf, *_true_zero_heap_scalar. Result
+      posted on wit-bindgen#4 (issuecomment-4761824958). SCOPE of this check: validates
+      the cabi_realloc MECHANISM on a raw module + the feature is not(target_env=p2)-gated
+      (correct - wasip2 uses wasi-libc's cabi_realloc; the no-grow path applies to the
+      wasm32-unknown-unknown embedded target MCU lowering uses). NEXT RUNG (still owed):
+      a full generate!-world -> component -> meld --memory shared -> synth run on a
+      componentized no-grow artifact for RT1176, end-to-end. Stays open until that lands.
     tags: [release-watch, wit-bindgen, memory-grow, no-alloc, maximal-wasm, on-target, blocker]
     fields:
       detected-by: jess cron-loop review of the pulseengine/wit-bindgen fork embedded issues (#1/#4/#5/#6); cross-repo chain meld#299/#298 + gale#89; jess comments #4 issuecomment-4761323601, #5, #6
