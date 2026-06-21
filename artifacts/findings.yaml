@@ -746,6 +746,18 @@ artifacts:
       #275 dispatch). Evidence: results/jess-build-falcon-v1.83.0.xml. (jess-build.sh's
       stale sibling synth 0.11.47 still shows the spurious MemoryFill/MemoryCopy - tooling
       follow-up unchanged.)
+      UPDATE 2026-06-21 (cron loop, falcon-v1.84.0 = HAL surface expansion): relay
+      falcon-v1.84.0 = "GNSS embedded-io-async + ESC relay-hal PwmOut + NAV-PVT carrier"
+      (relay #219/#214/#177) - extends relay-hal past the transport traits into the
+      embedded-io-async byte-link (GNSS) + the frame-PwmOut custom trait (ESC). So the
+      relay-hal surface jess binds the RT1176 HAL against now spans SpiDevice (IMU) +
+      I2c (baromag) + embedded-io-async (GNSS) + PwmOut (ESC) + Presence/health.
+      Per-piece gate GREEN, SIL PASS (kiln==wasmtime); authoritative skip inventory
+      (released wasm, synth 0.11.50) = 3 of 18, all #369 hard-float - STABLE across
+      v1.81-v1.84, bulk-mem clean. The GNSS/ESC/NAV-PVT additions add no new unlowered
+      op-class. Evidence: results/jess-build-falcon-v1.84.0.xml. (Per the experience
+      report pulseengine.eu#90: recording jess-side; skipping a 4th near-identical relay
+      ack to avoid nagging an active maintainer - relay knows jess's gate is green.)
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
