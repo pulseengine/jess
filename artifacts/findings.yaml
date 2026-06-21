@@ -758,6 +758,20 @@ artifacts:
       op-class. Evidence: results/jess-build-falcon-v1.84.0.xml. (Per the experience
       report pulseengine.eu#90: recording jess-side; skipping a 4th near-identical relay
       ack to avoid nagging an active maintainer - relay knows jess's gate is green.)
+      UPDATE 2026-06-22 (cron loop, falcon-v1.85.0 = relay-hal SURFACE COMPLETE): relay
+      falcon-v1.85.0 = "battery monitor on relay-hal AdcIn + BatteryState carrier -
+      completes the transport matrix" (relay #220/#214/#177). MILESTONE: the full
+      relay-hal surface jess binds the RT1176 HAL against is now CUT - all of DD-018's
+      trait kinds: SpiDevice (IMU) + I2c (baromag) + embedded-io-async (GNSS) + PwmOut
+      (ESC) + AdcIn (battery, monitor-only per DD-014) + Presence/health. Per-piece gate
+      GREEN, SIL PASS (kiln==wasmtime); authoritative skip inventory (released wasm, synth
+      0.11.50) = 3 of 18, all #369 hard-float - STABLE across v1.81-v1.85, bulk-mem clean;
+      the AdcIn/BatteryState add no new unlowered op-class. So the relay side of the
+      REQ-PIX-012 contract is fully delivered against a now-frozen surface; jess's binding
+      (the RT1176 embedded-hal-async HAL wasm component) builds against it next. Posted a
+      single milestone ack on jess#62 (matrix complete) - the deferred-from-v1.84 ack, at
+      the meaningful boundary rather than per-release. Evidence:
+      results/jess-build-falcon-v1.85.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
