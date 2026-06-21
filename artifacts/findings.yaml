@@ -735,6 +735,17 @@ artifacts:
       those lower fine (#374). Follow-up: refresh the sibling synth checkout (or point cli
       at the released synth) so the script inventory matches current synth. Hard gates
       (SIL/synth-ELF) pass either way. Evidence: results/jess-build-falcon-v1.82.0.xml.
+      UPDATE 2026-06-21 (cron loop, falcon-v1.83.0 = baromag I2c cut, TRANSPORT SURFACE
+      COMPLETE): relay shipped falcon-v1.83.0 = "baromag embedded-hal-async I2c +
+      relay-bus inter-core carrier + FV-014 sigil hygiene" (relay #218/#214/#177/#216) -
+      so both transport traits are now cut (SpiDevice for the IMU in v1.82, I2c for
+      baromag here). Per-piece gate GREEN, SIL PASS (kiln==wasmtime). Authoritative skip
+      inventory (released wasm, current synth 0.11.50) = 3 of 18, ALL #369 hard-float -
+      unchanged from v1.81/v1.82, bulk-mem clean. The baromag I2c + relay-bus carrier add
+      no new unlowered op-class. #369 hard-float remains the sole control-core gap (+
+      #275 dispatch). Evidence: results/jess-build-falcon-v1.83.0.xml. (jess-build.sh's
+      stale sibling synth 0.11.47 still shows the spurious MemoryFill/MemoryCopy - tooling
+      follow-up unchanged.)
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
