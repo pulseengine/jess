@@ -980,6 +980,68 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-029
+    type: ai-found-defect
+    title: wit-bindgen-generated cabi_realloc emits memory.grow - blocks meld --memory shared single-address-space MCU lowering (the maximal-wasm on-target path)
+    status: open
+    description: >
+      Surfaced 2026-06-21 (cron loop) reviewing the pulseengine/wit-bindgen fork's
+      embedded issues. A NEW on-target blocker on jess's maximal-wasm punch-list,
+      distinct from the synth (#369 AFD-024 / #275 AFD-008) and kiln-no_alloc
+      (AFD-027) items - it lives at the BINDING-GENERATOR layer.
+      THE DEFECT: the guest cabi_realloc wit-bindgen generates
+      (cabi_realloc_wit_bindgen_* -> crate::rt::cabi_realloc) is backed by the global
+      GROWING allocator, so any component built with these bindings emits memory.grow
+      (canonical-ABI realloc + Vec/String lift/lower, AND - per the now-closed
+      wit-bindgen#6 - even a fully-SCALAR world still EXPORTS a grow-able cabi_realloc
+      behind $sbrk). That single opcode blocks the embedded lowering chain:
+        - meld#299: `meld fuse --memory shared --address-rebase` (single-address-space
+          MCU mode) FAIL-LOUDS on memory.grow (a frozen shared static layout can't
+          survive a runtime grow) -> a component with one memory.grow is NOT
+          MCU-lowerable.
+        - gale#89: gale-app-demo / gale-kiln each carry exactly one memory.grow "from
+          the default Rust/wit-bindgen wasip2 allocator"; the multi-memory fallback is
+          not MCU-lowerable (2x1088KB, synth rejects). This directly blocks the jess ->
+          Pixhawk 6X-RT all-wasm pipeline (DD-017/DD-018: component -> wac -> meld
+          --memory shared -> synth -> ARM + TCB seam).
+      A second related async-layer source is wit-bindgen#1/#5: StreamReader::next /
+      StreamWriter::write_one heap-allocate per item (real-time control-loop churn /
+      WCET) - the maintainer's branches make the scalar path amortized- then
+      true-zero-heap (Miri-gated). jess on-target nuance (posted on #5): the inline
+      zero-heap path is gated on-silicon by synth - f32 payloads still loud-skip
+      (#369/AFD-024) so it helps fixed-point (gust Q8, DD-011) NOW and float once #369
+      lands.
+      RESOLUTION SPLIT (two halves, both in flight):
+        (1) wit-bindgen#4 (OPEN): a build-time mode retargeting cabi_realloc to an
+            embedder-provided no-grow symbol (e.g. __cabi_arena_realloc / a bounded
+            static arena, fail-loud/trap on exhaustion) so components are born
+            MCU-lowerable. jess endorsed the extern-symbol shape (= the maximal-wasm
+            TCB host-interface model) and proposed backing it with gale's
+            Rocq/Verus-VERIFIED mem_slab/mempool, giving a formally-verified bounded
+            cabi_realloc (issuecomment-4761323601).
+        (2) wit-bindgen#6 (CLOSED -> meld#298): for the dual-runtime requirement
+            (same artifact must link on wasmtime AND lower for MCU) wit-bindgen keeps
+            emitting standard cabi_realloc; the REMOVAL of the vestigial export +
+            $sbrk + memory.grow happens in meld (un-export on the --memory shared
+            fused core) + loom (DCE). This matches DD-018 (the WIT seam meld-fused to
+            ZERO runtime cost).
+      jess STAKE + OWED VERIFICATION: jess is the downstream MCU gate. (a) verify the
+      meld#298 un-export + loom DCE actually yields a memory.grow-free, synth-lowerable
+      fused core on the RT1176 path; (b) offer the Renode RT1176 OOB-trap oracle
+      (TEST-PIX-013, the harness that closed synth bulk-mem #374) as the hermetic
+      trap-on-arena-exhaustion gate for #4. Budgets: gust/F100 = 8KB SRAM (~7.5KB
+      free), M7 = load-to-RAM in TCM (DD-016). Comments posted on wit-bindgen #4/#5/#6.
+    tags: [release-watch, wit-bindgen, memory-grow, no-alloc, maximal-wasm, on-target, blocker]
+    fields:
+      detected-by: jess cron-loop review of the pulseengine/wit-bindgen fork embedded issues (#1/#4/#5/#6); cross-repo chain meld#299/#298 + gale#89; jess comments #4 issuecomment-4761323601, #5, #6
+      severity: major
+      triage-status: scoping
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-007
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: TEST-PIX-001
     type: test-spec
     title: synth compiles the falcon fused core for cortex-m7dp (RT1176 M7) without error
