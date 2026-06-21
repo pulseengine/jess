@@ -720,9 +720,21 @@ artifacts:
       v1.81/v0.11.50. i64 clean (AFD-025). So GI-FPU-002 (#369 real VFP hard-float) is
       now the SOLE remaining unlowered op-class in falcon's flight-control core (the
       other on-target long pole being #275/AFD-008 dispatch for self-contained linking).
-      Evidence: results/jess-build-falcon-v1.81.0.xml. (A transient from-source build in
-      the first invocation showed a func_180 memory.copy skip; it did NOT reproduce on
-      the sha256-verified release - not a regression, no finding filed.)
+      Evidence: results/jess-build-falcon-v1.81.0.xml.
+      UPDATE 2026-06-21 (cron loop, falcon-v1.82.0 = relay-hal TRANSPORT cut): relay
+      shipped falcon-v1.82.0 = "anchor falcon-imu-icm42688 on embedded-hal-async
+      SpiDevice" (relay #217/#214) - the transport-trait re-target jess builds the RT1176
+      HAL against. Per-piece gate GREEN, SIL PASS (stab 0.0234, pos-hold 0.1317,
+      kiln==wasmtime). AUTHORITATIVE skip inventory (released falcon-flight-v1.82.wasm
+      compiled with CURRENT synth 0.11.50) = 3 of 18, ALL #369 hard-float (F32Load x2 +
+      F32Const) - IDENTICAL to v1.81, bulk-mem clean. ROOT-CAUSE of the earlier
+      "memory.copy/fill" sightings (the v1.81 'transient'): scripts/jess-build.sh resolves
+      `cli synth synth` from the SIBLING synth checkout, currently stale at synth 0.11.47
+      (pre-#374), so the SCRIPT's on-screen loud-skip inventory shows extra MemoryFill/
+      MemoryCopy - that is the stale 0.11.47, NOT a falcon regression; on synth 0.11.49+
+      those lower fine (#374). Follow-up: refresh the sibling synth checkout (or point cli
+      at the released synth) so the script inventory matches current synth. Hard gates
+      (SIL/synth-ELF) pass either way. Evidence: results/jess-build-falcon-v1.82.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
@@ -850,7 +862,7 @@ artifacts:
   - id: AFD-027
     type: ai-found-defect
     title: kiln-error forces a global allocator transitively (recovery.rs alloc), breaking kiln-async no_alloc on the 8KB-SRAM STM32F100
-    status: open
+    status: resolved
     description: >
       Found 2026-06-18 (iter#33) during the gale-nano deep-dive (gale#65). kiln-async
       is documented + built as no_std + NO-alloc, but linking it to wasm32/bare-metal
@@ -889,11 +901,22 @@ artifacts:
       no-allocator-error gone, kiln-async no_alloc end-to-end) and mark resolved when the
       next kiln tag (roadmap v0.3.4+) includes 6966abc. No upstream nag needed - merged,
       just awaiting a routine cut.
+      RESOLVED 2026-06-21 (cron loop): kiln v0.3.4 RELEASED 2026-06-20T21:21Z and it
+      CARRIES the fix - the #339 merge 6966abc is an ANCESTOR of the v0.3.4 tag (GitHub
+      compare 6966abc...v0.3.4 = "5 ahead, 0 behind") and the v0.3.4 changelog lists
+      "fix(error): gate heap-backed recovery behind `alloc` - restore kiln-async no-alloc
+      (#338)" (PR #339). Maintainer already verified locally (thumbv7m-none-eabi
+      missing-allocator error gone, no_alloc by default, 89 kiln-async tests pass). So
+      the LAST gale-nano scheduler-substrate precondition (REQ-PIX-009 (b); (a)=synth#372
+      i64 done v0.11.47) is cleared ON A RELEASED ARTIFACT. jess on-target binary
+      re-verify (build kiln-async for thumbv7m against v0.3.4) deferred to the gust
+      maximal-wasm dissolution work - not blocking resolution given containment is
+      cryptographically confirmed + maintainer-verified.
     tags: [release-watch, kiln, no-alloc, gale-nano, on-target, blocker]
     fields:
-      detected-by: gale-side gale-nano profile (avrabe, gale#65); FIXED on kiln main via #339 (jess's suggested shape - gate recovery+alloc behind the alloc feature, merged 2026-06-19, kiln#338 closed); clears REQ-PIX-009 precondition (b); release-pending (v0.3.3 predates the merge)
+      detected-by: gale-side gale-nano profile (avrabe, gale#65); FIXED kiln #339 (jess's suggested shape - gate recovery+alloc behind the alloc feature); RELEASED in kiln v0.3.4 (2026-06-20, contains 6966abc + changelog-listed, maintainer-verified); clears REQ-PIX-009 precondition (b)
       severity: major
-      triage-status: fixed-on-main-release-pending
+      triage-status: resolved
     links:
       - type: defect-against
         target: EXTERNALANCHOR-004
