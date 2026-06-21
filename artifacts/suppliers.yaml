@@ -88,3 +88,18 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-001
+
+  - id: EXTERNALANCHOR-007
+    type: external-anchor
+    title: wit-bindgen (PulseEngine fork) — binding generator supplier boundary
+    status: accepted
+    description: >
+      pulseengine/wit-bindgen is the PulseEngine fork of the WebAssembly interface-types binding generator (synced to upstream 0.58.0). It is the SOURCE of the guest-side canonical-ABI code (cabi_realloc, lifting/lowering, async stream helpers) that jess's all-wasm components carry into the meld -> loom -> synth MCU lowering. An external supplier; its internal implementation is not traced here. Defects affecting jess's on-target (no-grow / no_alloc / real-time) line are recorded as ai-found-defects against this boundary.
+    tags: [supplier, wit-bindgen, codegen, on-target]
+    fields:
+      expected-derived-types: ["ai-found-defect"]
+      received-status: not-received
+      source-of-truth: {"org": "pulseengine", "doc-id": "wit-bindgen-fork-interface"}
+    links:
+      - type: traces-to
+        target: REQ-001
