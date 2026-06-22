@@ -848,3 +848,57 @@ artifacts:
         target: REQ-PIX-012
       - type: traces-to
         target: REQ-PIX-002
+
+  - id: DD-019
+    type: design-decision
+    title: Two-track simulation for the combined M7+F100 vehicle - wasmtime (hardware-free SIL) parallel to Renode (real-hardware model), same components, plus physical silicon
+    status: accepted
+    description: >
+      The flight system is TWO cooperating nodes (M7 falcon + relay-hal = primary
+      sensing/control/GCS-CAN; F100 gust = always-alive failsafe: RC-in, failsafe PWM,
+      fatal), joined by the inter-node IPC (relay-bus carrier, relay#177 / DD-009). To
+      develop + verify the WHOLE vehicle (not one piece), jess runs TWO simulation tracks
+      IN PARALLEL on the same wasm/ARM artifacts:
+        TRACK A - wasmtime (hardware-free SIL): the portable wasm components run in
+          wasmtime, no board, no Renode wall-clock, every-PR-fast. falcon control already
+          via the SIL gate (scripts/jess-build.sh); gust failsafe via sim/gust-wasmtime.sh
+          (gust_mix(1024)==1500, the REFLASH silicon kill-criterion checked in software
+          first) - PASSING. Next: a COMBINED harness (falcon+gust over a shared simulated
+          plant + an IPC channel, exercising the M7-healthy->gust-passive /
+          M7-fault->gust-failsafe handoff).
+        TRACK B - Renode (real-hardware model): the actual synth->ARM binaries on modeled
+          silicon. M7 = pixhawk6xrt.repl (REQ-PIX-005/TEST-PIX-013); F100 = gale's
+          gust_m3_8k.repl (TEST-PIX-016, gale owns its CI). Next (Stage 4): a MULTI-NODE
+          Renode emulation - RT1176 + the F100 machine in one mach, joined by the IPC
+          link, with sensor (RESD) + motor (PWM-capture) models = the real-hardware
+          simulation of the whole vehicle.
+        TRACK C - physical silicon (staged): gust on the ordered STM32VLDISCOVERY
+          (hardware/silicon/), the Pixhawk M7 READ-ONLY/greenlight-gated.
+      WHY BOTH IN PARALLEL: wasmtime = fast hardware-free feedback on the portable logic;
+      Renode = real-ISA/real-timing fidelity (the silicon contract + WCET). Running both
+      on the same components means a DIVERGENCE localizes the bug - logic (Track A) vs the
+      synth->ARM lowering (Track B). This is the SIL-differential discipline (DD-010)
+      lifted from per-piece to the whole multi-node vehicle. The shared plant/scenario
+      definition (sensors, motors, IPC, fault injection) is authored once and consumed by
+      both tracks so they test the same system.
+    tags: [phase-2, simulation, wasmtime, renode, multi-node, sil, hil, on-target]
+    fields:
+      rationale: >-
+        A flight system is the two nodes + their IPC, not falcon alone; it must be
+        simulatable as a whole, early, without waiting on hardware. wasmtime gives
+        hardware-free speed (CI on every PR); Renode gives silicon fidelity; the two
+        in parallel on identical components turn any divergence into a localized
+        logic-vs-lowering signal (DD-010 at vehicle scale). Physical silicon (Track C)
+        is the final confirmation, not the development loop.
+      alternatives: >-
+        Renode-only - rejected: too slow for every-PR feedback (M3/M7 RunFor is
+        wall-clock-heavy) and needs the toolchain; wasmtime covers the logic in seconds.
+        wasmtime-only - rejected: misses the synth->ARM lowering + real timing/WCET (the
+        on-target gaps #369/#275 only show on the ARM path). Single-node sims only -
+        rejected: the failsafe handoff + IPC are vehicle-level behaviors that only appear
+        with both nodes present.
+      release: v0.9.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-017
+
