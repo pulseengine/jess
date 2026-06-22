@@ -472,6 +472,22 @@ artifacts:
       scry bump ever raises the proven depth above the flashed budget). So the 4096
       budget this oracle flashes is verified sound on synth's side. STILL BLOCKED on
       gale's #383 link recipe to produce firmware.elf (requested, gale#65).
+      RESOLVED-NOT-BLOCKED 2026-06-22: gale ALREADY did the link - benches/gust/ ships
+      the full setup (memory.x, the Rust TCB harness src/, the cortex-m3 .o, AND a linked
+      gust_wasm.elf text 5016 / data 532 / bss 4256 = ~4.8KB, + renode-test/gust_m3_8k.repl
+      + gust_renode.robot + renode/gust_f100.robot on platforms/boards/stm32vldiscovery.repl
+      + REFLASH.md). So no link recipe was owed - jess reuses gale's artifacts. RENODE RUNG
+      CONFIRMED (jess reproduced gale's bench locally, Renode v1.16.1): loaded gust_wasm.elf
+      on gust_m3_8k.repl -> SP=0x20002000 (top of 8KB SRAM), .bss 4256 B loaded at
+      0x20000214 (inside the 8KB window), 5,000,000 instr executed in 0.05s sim with NO
+      early fault = dissolved gust boots+runs on the real M3 ISA model @8KB. gale owns the
+      Renode CI gate (renode-tests.yml), so jess does NOT duplicate it. jess's UNIQUE rung
+      = the PHYSICAL STM32VLDISCOVERY (STM32F100RBT6B, 8KB, onboard ST-LINK): board ORDERED;
+      interface = openocd 0.12.0 (have it) + semihosting; flash oracle STAGED at
+      hardware/silicon/gust-vldiscovery-flash.sh + README (fetches gale's elf, openocd
+      program+semihosting, asserts REFLASH kill-criterion mix=1500 + stable poll rounds).
+      Runs when the board arrives (standalone eval board - unrestricted; Pixhawk F100 stays
+      greenlight-gated). So: Renode rung DONE, physical rung STAGED/pending-hardware.
     links:
       - type: verifies
         target: REQ-PIX-009
