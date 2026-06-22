@@ -27,9 +27,11 @@ The portable wasm components run in wasmtime — no board, no Renode wall-clock.
   first). **PASSING.**
 - **falcon control:** already covered by the SIL gate in `scripts/jess-build.sh`
   (`run-stabilization < 0.1 rad`, `run-position-hold < 0.6 m`, kiln==wasmtime).
-- **Next:** a *combined* harness — falcon (M7) + gust (F100) in one wasmtime run over
-  a shared simulated plant + an IPC channel, exercising the handoff (M7 healthy → gust
-  passive; M7 fault → gust drives failsafe PWM).
+- **combined vehicle:** `sim/vehicle-wasmtime.sh` — falcon (M7) + gust (F100) in one run
+  with a host-modeled IPC heartbeat + failsafe arbitration: nominal M7 control in-spec →
+  M7 FAULT injected → gust failsafe takeover (mix=1500), gap-free handoff. **PASSING**
+  (TEST-PIX-018). Next refinement: a stepped shared plant (closed-loop) rather than the
+  SIL one-shot + host arbitration.
 
 ## Track B — Renode (real-hardware model)   [node rungs done; multi-node next]
 The actual synth→ARM binaries on modeled silicon.
