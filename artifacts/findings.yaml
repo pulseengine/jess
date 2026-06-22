@@ -772,6 +772,13 @@ artifacts:
       single milestone ack on jess#62 (matrix complete) - the deferred-from-v1.84 ack, at
       the meaningful boundary rather than per-release. Evidence:
       results/jess-build-falcon-v1.85.0.xml.
+      UPDATE 2026-06-23 (cron loop, falcon-v1.86.0 + v1.87.0 = traceability closeout):
+      both are relay's RIGHT-SIDE-OF-V work (test-level evidence on the HAL arc +
+      drift-guarded gate, "last requirement-verification gaps closed", pulseengine.eu#89 /
+      relay #221/#223) - NOT flight-logic changes. Per-piece GREEN on v1.87.0, SIL PASS
+      (kiln==wasmtime), authoritative skip inventory UNCHANGED at 3 of 18 all #369
+      hard-float, bulk-mem clean. No new on-target gap. Evidence:
+      results/jess-build-falcon-v1.87.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
