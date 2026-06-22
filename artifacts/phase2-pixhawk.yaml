@@ -559,3 +559,30 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-017
+
+  - id: TEST-PIX-019
+    type: test-spec
+    title: Renode multi-node vehicle (Track B) - M7 + F100 real binaries co-execute in one emulation joined by the IPC hub (the real-hardware mirror of TEST-PIX-018)
+    status: draft
+    description: >
+      hardware/renode/vehicle/run-vehicle-multinode.sh - the Renode (real synth->ARM)
+      mirror of the wasmtime combined harness (TEST-PIX-018), same two-node scenario
+      (DD-019). Instantiates BOTH nodes in one Renode emulation: mach m7-fmu
+      (pixhawk6xrt.repl + a bring-up firmware) + mach f100-io (gale gust_m3_8k.repl +
+      gust_wasm.elf, the real dissolved failsafe), joined by a UARTHub "relaybus" (the
+      relay-bus carrier proxy, relay#177 / DD-009). CONFIRMED 2026-06-22: both machines
+      co-execute - `mach` lists m7-fmu (RT1176, SP 0x20040000) + f100-io (gust, bss 4256
+      @0x20000214, SP 0x20002000), both Machine started, M7 lpuart1 connected to the hub.
+      DEFERRED (honest scope, hence status=draft): the REACTIVE failsafe handoff (gust
+      consuming the M7 heartbeat over ipc-rx + tripping on loss) needs a gust ipc-rx build
+      with a connectable UART (gale - gust_m3_8k.repl has only a SemihostingUart, so only
+      the M7 side is hub-wired today); and real falcon on the M7 is a bring-up STUB until
+      the on-target punch-list clears (#369 hard-float/AFD-024, #275 dispatch/AFD-008).
+      Until then the handoff is orchestration-modeled (pause m7-fmu = M7 fault), mirroring
+      how the wasmtime track host-models the arbitration. Track A (TEST-PIX-018) carries
+      the handoff LOGIC end-to-end; the two together are the DD-010/DD-019 SIL-differential
+      at vehicle scale.
+    tags: [phase-2, simulation, renode, multi-node, vehicle, on-target]
+    links:
+      - type: verifies
+        target: REQ-PIX-017
