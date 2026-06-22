@@ -586,3 +586,41 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-017
+
+  - id: REQ-PIX-018
+    type: requirement
+    title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
+    status: draft
+    description: >
+      Inbound jess#91 (avrabe, org release-consistency campaign; hub pulseengine.eu#98):
+      jess builds/consumes wasm firmware but gates CI only on rivet + spar - add the
+      DO-178C/DO-333 verification legs witness (structural coverage) + scry (sound static
+      analysis) on the falcon wasm. Aligns with jess's verification posture + the
+      experience report pulseengine.eu#90 (close the right side of the V).
+      FEASIBILITY CONFIRMED 2026-06-23 (jess investigated locally):
+        - witness: instruments only CORE modules, not the falcon COMPONENT - but jess
+          ALREADY produces the meld-fused core in scripts/jess-build.sh (falcon.fused.wasm).
+          `witness instrument falcon.fused.wasm` succeeds (witness v0.36.0, SHA/sig-verified
+          darwin release) -> 1407 BRANCHES, 0 DWARF-correlated decisions. The released
+          falcon wasm is STRIPPED (no .debug_* DWARF, only a `name` section), so jess's
+          witness gate is structural BRANCH coverage on the fused core, NOT DWARF-correlated
+          MC/DC decisions. Running the instrumented core needs a harness (kilnd, which
+          jess-build.sh already has).
+        - scry: ships scry-1.17.0-wasm32-wasip2.wasm + a crates.io lib (synth-cli already
+          consumes it for the #383 shadow-stack analysis); runnable on the falcon core.
+      DEVIATION (raised at the hub pulseengine.eu#98, per the campaign rule): because jess
+      CONSUMES the released stripped falcon wasm (no source/DWARF), its witness gate is
+      branch-coverage + scry sound-analysis on the fused core - COMPLEMENTING relay's
+      source-level DWARF-correlated MC/DC gate (relay builds falcon with debuginfo), not
+      duplicating it. sigil-signing is N/A (jess cuts no release; blocked on sigil#164).
+      PLAN: add (a) a witness branch-coverage gate (meld fuse -> witness instrument -> run
+      via kilnd -> report -> assert no branch-coverage regression) and (b) a scry
+      sound-analysis gate, both on the fused falcon core, to .github/workflows/ci.yml -
+      the deliberate follow-on feature (not rushed in a supervisory tick).
+    fields:
+      category: process
+      priority: should
+      release: v0.9.0
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
