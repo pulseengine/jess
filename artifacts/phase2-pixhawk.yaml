@@ -491,3 +491,49 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-009
+
+  - id: REQ-PIX-017
+    type: requirement
+    title: The combined M7(falcon)+F100(gust) vehicle is simulatable on two parallel tracks - wasmtime (hardware-free SIL) and Renode (real-hardware) - over sensors -> control + failsafe -> motors + inter-node IPC
+    status: draft
+    description: >
+      The whole two-node vehicle (not one piece) must be developable + verifiable in
+      simulation, early, without waiting on hardware. Two tracks run in parallel on the
+      SAME components (DD-019): Track A wasmtime (hardware-free SIL, every-PR-fast) and
+      Track B Renode (real synth->ARM binaries on modeled silicon, real timing/WCET),
+      with Track C physical silicon as the final confirmation. The simulation must
+      eventually exercise: the M7 sensing/control path (relay-hal transports), the F100
+      failsafe path (RC-in -> Q8 mixer -> failsafe PWM), and the inter-node IPC handoff
+      (M7-healthy -> gust passive; M7-fault -> gust drives failsafe PWM). A shared
+      plant/scenario definition feeds both tracks so a divergence localizes the bug to
+      logic (A) vs synth->ARM lowering (B) - the SIL-differential (DD-010) at vehicle
+      scale. FIRST RUNGS LANDED: gust failsafe runs hardware-free in wasmtime
+      (sim/gust-wasmtime.sh, gust_mix(1024)=1500, TEST-PIX-017) and on the Renode M3/8K
+      model (TEST-PIX-016); falcon control runs in the wasmtime SIL gate (TEST-PIX-010
+      class). REMAINING: the combined falcon+gust+plant+IPC wasmtime harness, and the
+      multi-node Renode emulation (RT1176 + F100 + IPC + sensor/motor models, Stage 4).
+    fields:
+      category: functional
+      priority: should
+      release: v0.9.0
+    links:
+      - type: traces-to
+        target: REQ-PIX-004
+
+  - id: TEST-PIX-017
+    type: test-spec
+    title: gust failsafe runs hardware-free in wasmtime - gust_mix(1024)=1500 (Track A SIL, the wasmtime parallel to the eval board)
+    status: verified
+    description: >
+      sim/gust-wasmtime.sh runs gale's gust_kernel.wasm (the dissolved failsafe kernel's
+      pre-synth wasm) in wasmtime and asserts gust_mix(1024) == 1500 - the same value
+      REFLASH.md sets as the silicon kill-criterion, checked in software FIRST with zero
+      hardware and zero Renode wall-clock. The wasmtime SIL parallel to the eval-board
+      run (TEST-PIX-016) and the Renode M3/8K run. VERIFIED 2026-06-22: jess ran it,
+      gust_mix(1024)=1500, ORACLE PASS (wasmtime 42.0.1, --invoke gust_mix <wasm> 1024).
+      This is the first landed rung of the Track-A (wasmtime hardware-free) half of the
+      two-track simulation (DD-019).
+    tags: [phase-2, simulation, wasmtime, gust, sil, hardware-free]
+    links:
+      - type: verifies
+        target: REQ-PIX-017
