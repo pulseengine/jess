@@ -464,7 +464,14 @@ artifacts:
       stm32f103 .repl + the poll-rounds robot oracle + the renode CI job. Physical
       STM32F100 reflash on the Pixhawk 6X-RT is a SEPARATE, greenlight-gated follow-up
       (board WRITE); this Renode rung is hermetic.
-    tags: [phase-2, renode, gust, stm32f1, on-target, oracle, 8kb]
+      BUDGET PROVEN-SOUND 2026-06-22 (synth maintainer, gale#65 + synth#424): scry
+      proves gust_kernel.wasm's worst-case shadow-stack depth is 16 B (sp_global=0, no
+      reachable recursion, 6 reachable funcs), so the flashed --shadow-stack-size 4096
+      clears the proven depth with a 256x margin - not an under-reservation. Locked
+      frozen-safe in synth#424 (scry as dev-dep; CI reddens BEFORE silicon if a future
+      scry bump ever raises the proven depth above the flashed budget). So the 4096
+      budget this oracle flashes is verified sound on synth's side. STILL BLOCKED on
+      gale's #383 link recipe to produce firmware.elf (requested, gale#65).
     links:
       - type: verifies
         target: REQ-PIX-009
