@@ -436,3 +436,35 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-005
+
+  - id: TEST-PIX-016
+    type: test-spec
+    title: gust boots + runs N poll rounds on a Renode stm32f103 (Cortex-M3) - hermetic silicon-shaped confirmation of the synth v0.11.51 8KB link
+    status: draft
+    description: >
+      The silicon-confirm rung for REQ-PIX-009 (c), greenlit by the synth/gale side on
+      gale#65 (avrabe, 2026-06-22): an intermediate hermetic confirmation between qemu
+      (lm3s6965evb, where #383 was validated) and the physical STM32F100, using Renode's
+      stm32f103 model (Cortex-M3 = thumbv7m, the same --target cortex-m3 path the shrink
+      was validated on). Robot oracle (hardware/renode/ pattern, pinned Renode v1.16.1,
+      no board write): load a hand-authored stm32f103 .repl + the linked gust 8KB image,
+      boot, assert >=N stable poll rounds with correct mix() values (the gust superloop
+      liveness oracle), and confirm the image fits RAM=8K.
+      SYNTH RUNG CONFIRMED 2026-06-22 (jess reproduced on bootstrapped synth v0.11.51,
+      SHA-verified darwin release): `synth compile gust_kernel.wasm --target cortex-m3
+      --native-pointer-abi --shadow-stack-size 4096 --all-exports --relocatable` produces
+      the ET_REL ARM .o with the #383 shrink EXACTLY as released - "Native-pointer
+      shadow-stack shrink (#383): sp_init 1048576 -> 4096, reservation 1048720 -> 4240 B
+      (post-link oracle: stack/static disjoint, all reservation accesses in-range)";
+      6 functions, 19 relocations against the embedder symbols (incl __cabi_arena_realloc,
+      synth#418). REMAINING to build this oracle: gale's #383 LINK recipe (memory.x RAM=8K
+      + the native TCB arena allocator providing __cabi_arena_realloc + the kiln async
+      bridge + the PWM/SBUS/UART register shim -> firmware.elf, gale's reported
+      text 5016 / data 532 / bss 4256 ~= 4.8KB) - requested on gale#65; then the
+      stm32f103 .repl + the poll-rounds robot oracle + the renode CI job. Physical
+      STM32F100 reflash on the Pixhawk 6X-RT is a SEPARATE, greenlight-gated follow-up
+      (board WRITE); this Renode rung is hermetic.
+    tags: [phase-2, renode, gust, stm32f1, on-target, oracle, 8kb]
+    links:
+      - type: verifies
+        target: REQ-PIX-009
