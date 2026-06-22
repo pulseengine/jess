@@ -537,3 +537,25 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-017
+
+  - id: TEST-PIX-018
+    type: test-spec
+    title: Combined M7+F100 vehicle in wasmtime - nominal M7 control in-spec, M7-fault -> gust failsafe takeover, gap-free handoff (Track A hardware-free)
+    status: verified
+    description: >
+      sim/vehicle-wasmtime.sh runs BOTH node behaviors in wasmtime and models the
+      inter-node IPC heartbeat + failsafe arbitration (the relay-bus carrier / gust
+      supervisor abstracted at the host; node behaviors are the real wasm). Scenario:
+      PHASE 1 nominal - M7 (falcon component) run-stabilization()<0.1 rad +
+      run-position-hold()<0.6 m -> M7 healthy, drives actuators, gust passive/armed;
+      PHASE 2 M7 FAULT injected (heartbeat lost) -> gust supervisor trips, F100 (gust
+      core) gust_mix(1024)=1500 drives the failsafe PWM. Asserts: nominal control
+      in-spec, failsafe value correct, and a valid actuator command at EVERY step
+      (gap-free handoff). VERIFIED 2026-06-22: ORACLE PASS (falcon-flight-v1.85 +
+      gale gust_kernel.wasm, wasmtime 42.0.1) - stab 0.0234/pos 0.1317 nominal, mix=1500
+      failsafe, clean handoff. The first COMBINED (two-node) rung of Track A (DD-019);
+      the same scenario is mirrored onto Renode multi-node (Track B, next).
+    tags: [phase-2, simulation, wasmtime, vehicle, failsafe, handoff, hardware-free]
+    links:
+      - type: verifies
+        target: REQ-PIX-017
