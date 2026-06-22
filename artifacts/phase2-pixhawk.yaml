@@ -191,7 +191,15 @@ artifacts:
             0 by profile). MET: shipped synth v0.11.47, jess + gale verified (AFD-025
             resolved).
         (b) kiln-error exposes a no_alloc/embedded build excluding recovery.rs, so the
-            substrate links without a heap on 8KB SRAM. OPEN: kiln#338 / AFD-027.
+            substrate links without a heap on 8KB SRAM. MET: kiln#338 fixed (#339),
+            RELEASED kiln v0.3.4 (AFD-027 resolved 2026-06-21).
+        (c) synth sizes the wasm .bss to the data high-water-mark, not the full declared
+            memory page, so a large-memory module fits tiny RAM. MET: synth#383 CLOSED,
+            shipped synth v0.11.51 (--shadow-stack-size under --native-pointer-abi) -
+            gust's kernel dissolves to .bss 4240 (was ~1 MiB) and LINKS INTO 8 KB
+            (~4.8 KB used), boots + 5000 poll rounds correct on qemu cortex-m3
+            lm3s6965evb. Physical STM32F100 reflash PENDING (silicon-confirm rung is
+            jess's - see Remaining).
       Kill-criterion: re-profiling the substrate wasm shows 0 unlowerable ops AND the
       cdylib links with no #[global_allocator]. FAILSAFE APP op-set: PROFILED 2026-06-18
       (iter#37, gale#65) - SBUS/IPC/tick all clean; clears all four synth gaps IFF the
@@ -200,11 +208,16 @@ artifacts:
       whole gale-nano stack is synth-gap-free on v0.11.47. REALIZED: the gust mini-OS
       (gale feat/gust-mini-os, benches/gust + DOC-GUST-ARCH) BOOTS on Cortex-M3 (qemu
       lm3s6965evb): 5000 stable poll rounds, ~7.5KB free on 8KB SRAM, TCB = 5-import/
-      2-export WIT world. Remaining to production: (b) kiln#338, the meld->loom->synth
-      DISSOLUTION (gust is native thumbv7m today, not yet maximal-wasm), SysTick timer
-      wiring, and a Renode stm32vldiscovery (real F100) WCET calibration run (robot
-      ready - jess Renode/DD-008 wheelhouse). Caveat: F100 = Cortex-M3 = thumbv7m (no
-      DSP/FPU) - confirm synth M3 path + recalibrate fuel->cycles (kiln R4).
+      2-export WIT world. Remaining to production (preconditions (a)/(b)/(c) all now MET):
+      the meld->loom->synth DISSOLUTION (gust is native thumbv7m today, not yet
+      maximal-wasm), SysTick timer wiring, and the SILICON-CONFIRM rung - synth v0.11.51's
+      8 KB link is qemu-confirmed (lm3s6965evb) but NOT literal-silicon-confirmed; the
+      physical STM32F100 reflash is jess's rung (jess has the Pixhawk 6X-RT with the F100
+      IO-MCU + the Renode stm32f1 path as a hermetic intermediate). NOTE: physical F100
+      reflash is a board WRITE - gated on explicit greenlight (board stays READ-ONLY by
+      default); the Renode stm32f103 confirmation runs hermetically with no board write.
+      Offered on gale#65. Caveat: F100 = Cortex-M3 = thumbv7m (no DSP/FPU) - confirm synth
+      M3 path + recalibrate fuel->cycles (kiln R4).
     fields:
       category: functional
       priority: could
