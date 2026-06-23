@@ -362,7 +362,7 @@ artifacts:
   - id: TEST-PIX-010
     type: test-spec
     title: mav_bench decodes a real 6X-RT MAVLink sample (CRC-valid), identifies PX4, extracts attitude
-    status: verified
+    status: valid
     description: >
       Host oracle (tools/bench/test_mav_bench.py) over the committed real sample
       repro/pixhawk-bench/mavlink-sample.bin (8424 B captured from the connected
@@ -380,7 +380,7 @@ artifacts:
   - id: TEST-PIX-014
     type: test-spec
     title: Real PX4 fmu-v6xrt boots on the RT1176 Renode model far enough to drive the LPUART console
-    status: implemented
+    status: valid
     description: >
       Stage-2 console milestone oracle for REQ-PIX-014 (DD-008). hardware/renode/px4/
       run-px4-boot.sh boots the real PX4 fmu-v6xrt firmware (extracted from the .px4)
@@ -400,7 +400,7 @@ artifacts:
   - id: TEST-PIX-013
     type: test-spec
     title: Renode RT1176 confirms synth bulk-memory OOB access routes UDF -> Trap_Handler (synth#374 silicon gate)
-    status: verified
+    status: valid
     description: >
       Hermetic oracle for the one path synth's unicorn differential can't see
       (AFD-026 / synth#374): a wasm bulk-memory OOB access lowers to an inline UDF
@@ -425,7 +425,7 @@ artifacts:
   - id: TEST-PIX-005
     type: test-spec
     title: Renode i.MX RT1176 platform boots a bring-up firmware to a LPUART1 banner
-    status: verified
+    status: valid
     description: >
       Renode Robot oracle (hardware/renode/rt1176-smoke.robot) on the
       hand-authored RT1176 platform (hardware/renode/pixhawk6xrt.repl): load the
@@ -528,7 +528,7 @@ artifacts:
   - id: TEST-PIX-017
     type: test-spec
     title: gust failsafe runs hardware-free in wasmtime - gust_mix(1024)=1500 (Track A SIL, the wasmtime parallel to the eval board)
-    status: verified
+    status: valid
     description: >
       sim/gust-wasmtime.sh runs gale's gust_kernel.wasm (the dissolved failsafe kernel's
       pre-synth wasm) in wasmtime and asserts gust_mix(1024) == 1500 - the same value
@@ -546,7 +546,7 @@ artifacts:
   - id: TEST-PIX-018
     type: test-spec
     title: Combined M7+F100 vehicle in wasmtime - nominal M7 control in-spec, M7-fault -> gust failsafe takeover, gap-free handoff (Track A hardware-free)
-    status: verified
+    status: valid
     description: >
       sim/vehicle-wasmtime.sh runs BOTH node behaviors in wasmtime and models the
       inter-node IPC heartbeat + failsafe arbitration (the relay-bus carrier / gust
