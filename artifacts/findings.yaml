@@ -803,6 +803,12 @@ artifacts:
       bulk-mem clean - the CanBus seam + transfer layer add no new unlowerable op. Also
       meld v0.34.0 (resource_graph #295 / LS-A-17 hardening) - jess forward-chain fuse
       stayed green. Evidence: results/jess-build-falcon-v1.92.0.xml.
+      UPDATE 2026-06-24 (cron, falcon-v1.93.0 = DroneCAN ESC control, DC-P02, relay #229):
+      v1.93 = "ESC control path - NodeStatus decode + esc.RawCommand encode + single-frame
+      TX" (continues the v1.92 CAN foundation, REQ-PIX-006). Per-piece GREEN on synth
+      v0.12.0, authoritative skips 3/18 all #369 unchanged, bulk-mem clean - no new
+      unlowerable op. (spar v0.21.0 released; jess CI pins SPAR_VERSION v0.17.0 which gates
+      green - no blocker, not bumped.) Evidence: results/jess-build-falcon-v1.93.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
