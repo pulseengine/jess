@@ -139,10 +139,15 @@ artifacts:
     type: requirement
     title: DroneCAN/CAN-FD peripheral + smart-actuator path on the 6X-RT CAN buses
     status: draft
-    fields:
-      category: functional
-      priority: could
-      release: v0.8.0
+    description: >
+      jess binds the CAN path to the RT1176 silicon (the 3x CAN-FD on the 6X-RT,
+      2 broken out). RELAY-SIDE FOUNDATION LANDED 2026-06-23: relay falcon-v1.92.0
+      ("DroneCAN foundation - spar model + CanBus seam + verified transfer layer",
+      DC-P01 / relay #226) - the portable CanBus seam + verified transfer layer that
+      jess will bind, the CAN analogue of the relay-hal transport matrix (DD-018).
+      Per-piece GREEN on synth v0.12.0 (AFD-024). jess's binding (CAN controller +
+      transceiver over the RT1176 FlexCAN, via the embedded-hal-async-style seam) is
+      the on-silicon counterpart, sequenced after the core HAL binding (REQ-PIX-012).
     links:
       - type: traces-to
         target: FEATURE-002
