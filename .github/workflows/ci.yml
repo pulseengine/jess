@@ -16,7 +16,7 @@ env:
   # Pinned PulseEngine tool releases — bumped explicitly via PR. jess holds
   # rivet at 0.15.0 until a release carries the `accepted` status fix
   # (rivet#525, merged to main, not yet released — see AFD-012).
-  RIVET_VERSION: v0.15.0
+  RIVET_VERSION: v0.18.0
   SPAR_VERSION: v0.17.0
   # Pinned gale external (rivet.lock) — jess's stpa hazards trace to gale's
   # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.
