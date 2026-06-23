@@ -792,6 +792,10 @@ artifacts:
       is on the synth->ARM ELF, NOT the wasm; witness instruments the wasm core, so this
       does NOT change jess's wasm-side stripped-DWARF deviation (still branch-coverage).
       Evidence: results/jess-build-falcon-v1.88.0.xml.
+      UPDATE 2026-06-23 (cron, falcon-v1.89.0 = CRSF RC decode, RC-P03, relay #225):
+      the RC-input decode series (SBUS v1.88 + CRSF v1.89, both -> bounded RcInput).
+      Per-piece GREEN on synth v0.12.0, authoritative skips 3/18 all #369 unchanged,
+      bulk-mem clean - no new unlowerable op. Evidence: results/jess-build-falcon-v1.89.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
