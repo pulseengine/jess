@@ -779,6 +779,19 @@ artifacts:
       (kiln==wasmtime), authoritative skip inventory UNCHANGED at 3 of 18 all #369
       hard-float, bulk-mem clean. No new on-target gap. Evidence:
       results/jess-build-falcon-v1.87.0.xml.
+      UPDATE 2026-06-23 (cron loop, falcon-v1.88.0 = SBUS RC decode + synth v0.12.0):
+      falcon-v1.88.0 = "SBUS wire decode - verified byte-frame -> bounded RcInput"
+      (relay #224, RC-P02) - NEW flight-relevant code (the failsafe RC-input path, gust's
+      sbus-poll source). Also tested on the new MAJOR synth v0.12.0 (bootstrapped
+      SHA-verified darwin; v0.12.0 = DWARF source-line debugging VCR-DBG-001 + the gust
+      VCR-MEM-001 layer-2 budget + scry-sai 1.17). Per-piece GREEN, SIL PASS; authoritative
+      skip inventory on synth v0.12.0 = 3 of 18 all #369 hard-float - UNCHANGED, bulk-mem
+      clean; the SBUS decode adds no new unlowerable op. synth v0.12.0 does NOT clear the
+      two control-core poles (#369 hard-float, #275 dispatch both still OPEN) - it is DWARF
+      + VCR + gust-budget work. NOTE re REQ-PIX-018/witness: v0.12.0's --debug-line DWARF
+      is on the synth->ARM ELF, NOT the wasm; witness instruments the wasm core, so this
+      does NOT change jess's wasm-side stripped-DWARF deviation (still branch-coverage).
+      Evidence: results/jess-build-falcon-v1.88.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
@@ -1082,6 +1095,15 @@ artifacts:
       wasm32-unknown-unknown embedded target MCU lowering uses). NEXT RUNG (still owed):
       a full generate!-world -> component -> meld --memory shared -> synth run on a
       componentized no-grow artifact for RT1176, end-to-end. Stays open until that lands.
+      UPDATE 2026-06-23 (cron loop): synth v0.12.0 RELEASED (#418/#420) LOCKS the
+      `cabi-arena-realloc -> __cabi_arena_realloc` linkability in synth's dissolution path
+      (test(dissolve): lock cabi-arena-realloc linkability) - so the synth side of the
+      no-grow chain (consuming the wit-bindgen extern-arena symbol when dissolving a
+      component to the MCU) is now a released, regression-locked contract. So of the
+      no-grow halves: wit-bindgen#4 extern-arena (jess-verified on the branch, #85) +
+      synth linkability (now released v0.12.0) advance the source/dissolution side; the
+      meld#298 un-export + loom DCE half (closed-#6 path) is the remaining wasm-rewrite
+      piece. AFD-029 stays open on the end-to-end RT1176 rung.
     tags: [release-watch, wit-bindgen, memory-grow, no-alloc, maximal-wasm, on-target, blocker]
     fields:
       detected-by: jess cron-loop review of the pulseengine/wit-bindgen fork embedded issues (#1/#4/#5/#6); cross-repo chain meld#299/#298 + gale#89; jess comments #4 issuecomment-4761323601, #5, #6
