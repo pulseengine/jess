@@ -664,6 +664,12 @@ artifacts:
         - INTEGRITY (the safety-critical part of update, same either way): sigil-signed
           images (embedded sig / Sigstore / SLSA provenance) + relay-sec authenticated/
           anti-replay transport + anti-rollback; the bootloader verifies before flashing.
+          REFINED by DD-020: this sigil + relay-sec layer is the SOFTWARE FALLBACK of a
+          HARDWARE-FIRST root-of-trust - the production/certified build anchors the boot
+          chain in i.MX RT HAB (fused SRK + CSF-signed loader) and the keys in the SE050
+          secure element, with this software path used when the hardware is open/
+          unprovisioned/unhealthy. So integrity is no longer software-only; sigil + relay-sec
+          stay as the fallback + the application-layer E2E, with HW as the root.
       So the storage/ROM route (jess owns its drivers, no ROM in flight) is CONFIRMED
       for flight; the only ROM use jess might keep is the update bootloader's NOR write
       (b1) - bounded, on-ground, integrity-gated. Renode fidelity follow-on: model the
@@ -902,3 +908,80 @@ artifacts:
       - type: satisfies
         target: REQ-PIX-017
 
+
+  - id: DD-020
+    type: design-decision
+    title: Root-of-trust = HARDWARE-FIRST (SE050 secure element + i.MX RT HAB secure boot) with a SOFTWARE FALLBACK (sigil + relay-sec) when the hardware is absent/unprovisioned/unhealthy
+    status: accepted
+    description: >
+      The 6X-RT security root-of-trust decision (user direction: "hardware with a
+      software fallback if the hardware does not provide"). GROUNDED in the PX4
+      fmu-v6xrt source (read directly, research-first):
+      WHAT THE BOARD HAS (two distinct hardware trust anchors, both PRESENT but neither
+      ACTIVE in the stock dev build):
+        - NXP SE050 EdgeLock SECURE ELEMENT on I2C4 @ 0x48 (PX4_I2C_OBDEV_SE050; init.c
+          power/enable-sequences it via HW_VER_REV_DRIVE) - a tamper-resistant key vault
+          + ECC/RSA/AES + ECDSA/ECDH + attestation + TRNG. BUT PX4's default v6xrt crypto
+          backend is sw_crypto (src/drivers/sw_crypto) - the SE050 is wired, not the
+          default trust anchor.
+        - i.MX RT1176 HAB (High Assurance Boot) ROM secure boot: the IVT (struct ivt_s)
+          carries a `csf` (Command Sequence File / signature) field, but on v6xrt
+          CSF_ADDRESS=0 / csf=0 -> the default image is UNSIGNED (HAB "open" mode). HAB is
+          a silicon capability (CAAM engine + OCOTP SRK-hash fuses + boot ROM); enforcing
+          it = burn the SRK hash into OCOTP, sign with a CSF, "close" the device.
+      DECISION (two layers, each HW-first / SW-fallback):
+        (A) BOOT/LOAD-CHAIN INTEGRITY (is the flight image authentic before it runs):
+            HW = HAB - fused SRK + CSF-signed loader, ROM verifies before execution
+            (anchors the chain in silicon: ROM -> HAB-verified loader -> loads the
+            sigil-verified flight image to TCM, DD-016 load-to-RAM). FALLBACK (HAB open /
+            fuses not burned, e.g. dev + unprovisioned units) = the loader verifies the
+            sigil signature IN SOFTWARE (DD-016's current posture) + relay-sec anti-replay/
+            anti-rollback. Selection = device HAB state (closed -> HW enforces; open -> SW
+            gate).
+        (B) KEY STORAGE + CRYPTO OPS (where the verify keys + relay-sec long-term keys
+            live, where ECDSA-verify/attestation runs): HW = SE050 - holds the
+            image-verification public key + relay-sec keys, does verify/attest in the
+            tamper-resistant element. In the maximal-wasm model (DD-018) the SE050 is just
+            ANOTHER relay-hal I2c transport + a verified SE050 driver; the crypto ops are
+            SE050 I2c commands. FALLBACK (SE050 absent / unenumerated / unhealthy) = the
+            software crypto backend (relay-sec software AEAD + a key in protected FRAM/
+            flash). The HW/SW SELECTION REUSES THE EXISTING MECHANISM: DD-018's Presence/
+            health descriptor + DD-014's health-driven posture - "SE050 present & healthy
+            -> use it; else degrade to software" is the same enumerate-and-vote pattern,
+            with the downgrade LOGGED as a health event (monitor-visible, like DD-014
+            power redundancy), not silent.
+      HONEST CAVEAT (the safety/security trade): a SOFTWARE root is WEAKER - a software
+      signature check can be bypassed by an attacker who replaces the loader itself, and a
+      software key store lacks tamper resistance. So the software fallback is for (i) dev/
+      bring-up, (ii) unprovisioned units, and (iii) graceful field degradation if the SE050
+      fails - NOT the certified-flight target. The PRODUCTION / safety-certified
+      configuration MUST provision the hardware (burn HAB SRK fuses, provision the SE050),
+      and the fallback-active state is a reported, lower-assurance mode. This keeps dev
+      velocity (no fuse-burning to iterate) while making the hardware root the default for
+      shipped units.
+      FITS THE STACK: SE050 -> relay-hal I2c transport (DD-018); HW/SW select ->
+      Presence/health (DD-014/DD-018); HAB -> the boot/update-chain anchor for DD-016's
+      update TCB; sigil + relay-sec stay as the software-layer integrity (DD-009/DD-016) -
+      now positioned as the FALLBACK + the application-layer E2E, with HW as the root.
+    tags: [phase-2, security, root-of-trust, se050, hab, secure-boot, attestation, relay-sec, sigil, fallback]
+    fields:
+      rationale: >-
+        Hardware-first gives a tamper-resistant, silicon-anchored root (SE050 key vault +
+        HAB-fused secure boot) appropriate for an ASIL-D / DO-178 posture, while the
+        software fallback (sigil + relay-sec, already designed) keeps dev + unprovisioned +
+        degraded-field units functional without fuse-burning. Reusing the DD-014/DD-018
+        Presence/health pattern for the HW/SW selection means no new mechanism - the
+        secure element is enumerated, health-checked, and voted exactly like a sensor, with
+        the downgrade logged, not silent.
+      alternatives: >-
+        Software-only (sigil + relay-sec, no HW) - rejected as the production target: no
+        silicon root-of-trust, software signature/key bypassable; kept only as the
+        fallback. Hardware-only (require SE050 + HAB always) - rejected: blocks dev
+        iteration (fuse-burn per change), bricks unprovisioned units, and gives no graceful
+        degradation if the SE050 fails in the field. DPS/TPM or a different secure element -
+        rejected: the SE050 is the part already on the 6X-RT (I2C4 @ 0x48) and PX4-supported;
+        no reason to add another.
+      release: v0.8.0
+    links:
+      - type: satisfies
+        target: REQ-PIX-019

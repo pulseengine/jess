@@ -629,3 +629,40 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-PIX-001
+
+  - id: REQ-PIX-019
+    type: requirement
+    title: Hardware-first root-of-trust on the 6X-RT - bind the SE050 secure element + HAB secure boot, with an automatic software fallback (sigil/relay-sec) gated on hardware presence/health
+    status: draft
+    description: >
+      jess implements the DD-020 hardware-first / software-fallback root-of-trust on the
+      Pixhawk 6X-RT. Two layers:
+      (A) BOOT-CHAIN: support i.MX RT HAB secure boot (fused SRK + CSF-signed loader) as
+      the silicon root that verifies before execution; when HAB is open/unprovisioned, the
+      loader falls back to verifying the sigil image signature in software + relay-sec
+      anti-rollback (DD-016). The certified-flight build provisions HAB; dev/unprovisioned
+      units run the software gate (a reported lower-assurance mode).
+      (B) KEY VAULT + CRYPTO: bind the NXP SE050 (I2C4 @ 0x48) as a relay-hal I2c transport
+      + a verified SE050 driver (DD-018 maximal-wasm), holding the image-verification public
+      key + relay-sec long-term keys and performing ECDSA-verify/attestation in hardware;
+      fall back to the software crypto backend (relay-sec software AEAD + protected-FRAM key)
+      when the SE050 is absent/unenumerated/unhealthy. The HW/SW selection REUSES the
+      DD-018 Presence/health + DD-014 health-vote mechanism - enumerate the SE050, check
+      health, use it if present+healthy, else degrade to software with the downgrade LOGGED
+      as a health event (not silent).
+      VERIFICATION: SE050 driver Kani-totality (relay-side, like the sensor drivers) +
+      on-silicon enumeration/attestation on the connected 6X-RT (greenlit board access) +
+      a Renode/SIL test of the fallback selection (SE050-present vs SE050-absent paths) +
+      HAB provisioning validated on real silicon (fuse burn is irreversible -> gated on
+      explicit greenlight, tested on a dev unit first). GROUNDED in the PX4 fmu-v6xrt
+      research (SE050 @ I2C4 0x48, HAB IVT/CSF unsigned by default, sw_crypto default) -
+      DD-020. NOTE: this is a NEW security surface jess had not modeled; sequenced after the
+      core HAL binding (REQ-PIX-012) since the SE050 reuses the same embedded-hal-async I2c
+      seam.
+    fields:
+      category: functional
+      priority: should
+      release: v0.8.0
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
