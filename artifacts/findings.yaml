@@ -809,6 +809,15 @@ artifacts:
       v0.12.0, authoritative skips 3/18 all #369 unchanged, bulk-mem clean - no new
       unlowerable op. (spar v0.21.0 released; jess CI pins SPAR_VERSION v0.17.0 which gates
       green - no blocker, not bumped.) Evidence: results/jess-build-falcon-v1.93.0.xml.
+      UPDATE 2026-06-24 (cron, falcon-v1.94.0 = DroneCAN sensor ingest, DC-P03, relay #230):
+      v1.94 = "sensor ingest - float16 + esc.Status/mag/baro/battery decoders". Tested on
+      the new MAJOR synth v0.13.0 (bootstrapped SHA-verified; v0.13.0 = cmp->select ->
+      IT-block predication fusion, VCR-SEL-004, a CODEGEN PERF change - does NOT touch
+      #369/#275). Per-piece GREEN, authoritative skips 3/18 all #369 UNCHANGED - the
+      float16 CAN decoders live in the decode path, not the 18 flight exports analysed, so
+      no new unlowerable op. #369/#275 both still OPEN. ALSO rivet v0.19.0 released: the
+      jess store validates PASS on it (forward-compatible, 0 errors) - jess CI stays pinned
+      v0.18.0 (works; not bumped reflexively). Evidence: results/jess-build-falcon-v1.94.0.xml.
     tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
