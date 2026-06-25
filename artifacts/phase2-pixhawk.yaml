@@ -567,26 +567,35 @@ artifacts:
 
   - id: TEST-PIX-019
     type: test-spec
-    title: Renode multi-node vehicle (Track B) - M7 + F100 real binaries co-execute in one emulation joined by the IPC hub (the real-hardware mirror of TEST-PIX-018)
+    title: Renode multi-node vehicle (Track B) - THREE-CORE M7+M4+F100 co-execute in one emulation with a live M7<->M4 shared-mem link (real-hardware mirror of TEST-PIX-018)
     status: draft
     description: >
-      hardware/renode/vehicle/run-vehicle-multinode.sh - the Renode (real synth->ARM)
-      mirror of the wasmtime combined harness (TEST-PIX-018), same two-node scenario
-      (DD-019). Instantiates BOTH nodes in one Renode emulation: mach m7-fmu
-      (pixhawk6xrt.repl + a bring-up firmware) + mach f100-io (gale gust_m3_8k.repl +
-      gust_wasm.elf, the real dissolved failsafe), joined by a UARTHub "relaybus" (the
-      relay-bus carrier proxy, relay#177 / DD-009). CONFIRMED 2026-06-22: both machines
-      co-execute - `mach` lists m7-fmu (RT1176, SP 0x20040000) + f100-io (gust, bss 4256
-      @0x20000214, SP 0x20002000), both Machine started, M7 lpuart1 connected to the hub.
+      hardware/renode/vehicle/run-vehicle-multinode.sh - the Renode (real ISA) mirror of
+      the wasmtime combined harness (TEST-PIX-018), DD-019, now the FULL THREE-CORE
+      topology of the 6X-RT (Stage 4): mach "rt1176" = rt1176-dualcore.repl with cpu_m7
+      (smoke bring-up -> LPUART1 banner) + cpu_m4 (Cortex-M4 FPv4-SP, the on-die
+      SENSOR-OFFLOAD core, DD-018 T2) on the SHARED RT1176 sysbus, plus an OCRAM-adjacent
+      SHMEM ring @ 0x20400000 (relay-bus carrier region, DD-009) + an MU mailbox stub;
+      mach "f100-io" = gale gust_m3_8k.repl + gust_wasm.elf (the real dissolved failsafe).
+      Per-core NVIC via Renode BusPointRegistration (dual-core pattern, cf.
+      renesas-da14592). rt1176-dualcore.repl is SEPARATE from the CI-gated pixhawk6xrt.repl
+      (M7-only smoke), left untouched.
+      CONFIRMED 2026-06-25 (jess local, Renode v1.16.1): all THREE cores co-execute -
+      cpu_m7 boots smoke -> LPUART1 "JESS-RT1176 boot OK"; cpu_m4 boots the heartbeat
+      firmware (vectors/text/stack in OCRAM @0x20240000, SP 0x20250000) and WRITES AN
+      ADVANCING HEARTBEAT to the SHMEM ring @0x20400000 (read back ~0xA2C29 after 0.02s
+      sim) - proving the on-die M7<->M4 SHARED-MEMORY LINK is LIVE, not just that the M4
+      instantiates; f100-io (gust) co-executes. ORACLE PASS (M7 banner + M4 heartbeat>0).
       DEFERRED (honest scope, hence status=draft): the REACTIVE failsafe handoff (gust
-      consuming the M7 heartbeat over ipc-rx + tripping on loss) needs a gust ipc-rx build
-      with a connectable UART (gale - gust_m3_8k.repl has only a SemihostingUart, so only
-      the M7 side is hub-wired today); and real falcon on the M7 is a bring-up STUB until
-      the on-target punch-list clears (#369 hard-float/AFD-024, #275 dispatch/AFD-008).
-      Until then the handoff is orchestration-modeled (pause m7-fmu = M7 fault), mirroring
-      how the wasmtime track host-models the arbitration. Track A (TEST-PIX-018) carries
-      the handoff LOGIC end-to-end; the two together are the DD-010/DD-019 SIL-differential
-      at vehicle scale.
+      consuming the M7/M4 heartbeat over ipc-rx + tripping on loss) needs a gust build
+      whose ipc-rx is wired to a connectable transport (gale's gust_m3_8k.repl has only a
+      SemihostingUart) - asked gale for the driver + access (gale#65). Real falcon on the
+      M7 + real sensor drivers on the M4 are bring-up STUBS until the synth poles clear
+      (#369 hard-float/AFD-024, #275 dispatch/AFD-008); the M4 heartbeat stands in for the
+      sensor-offload workload. The MU mailbox is a plain-memory stub (doorbell-IRQ later);
+      the shared-mem ring itself is live. Until the reactive path lands the handoff is
+      orchestration-modeled; Track A (TEST-PIX-018) carries the handoff LOGIC end-to-end -
+      together the DD-010/DD-019 SIL-differential at vehicle scale.
     tags: [phase-2, simulation, renode, multi-node, vehicle, on-target]
     links:
       - type: verifies

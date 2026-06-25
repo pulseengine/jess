@@ -1,0 +1,46 @@
+// jess RT1176 DUAL-CORE (M7 + M4) platform for the multi-node vehicle sim
+// (TEST-PIX-019, Stage 4). Extends the M7-only pixhawk6xrt.repl (the CI smoke
+// gate, left untouched) with the second on-die core — Cortex-M4 (FPv4-SP), the
+// sensor-offload core (DD-018 T2) — sharing the RT1176 sysbus, plus an OCRAM-
+// adjacent shared-memory ring + an MU mailbox stub = the M7<->M4 AMP topology
+// (DD-009, the relay-bus carrier relay#177). Per-core NVIC via BusPointRegistration
+// (Renode dual-core pattern, cf. platforms/cpus/renesas-da14592.repl).
+
+nvic_m7: IRQControllers.NVIC @ sysbus new Bus.BusPointRegistration { address: 0xE000E000; cpu: cpu_m7 }
+    systickFrequency: 1000000000
+    priorityMask: 0xF0
+    IRQ -> cpu_m7@0
+
+cpu_m7: CPU.CortexM @ sysbus
+    cpuType: "cortex-m7"
+    nvic: nvic_m7
+
+nvic_m4: IRQControllers.NVIC @ sysbus new Bus.BusPointRegistration { address: 0xE000E000; cpu: cpu_m4 }
+    systickFrequency: 400000000
+    priorityMask: 0xF0
+    IRQ -> cpu_m4@0
+
+cpu_m4: CPU.CortexM @ sysbus
+    cpuType: "cortex-m4"
+    nvic: nvic_m4
+
+// shared RT1176 memory (OCRAM is accessible by both cores)
+itcm: Memory.MappedMemory @ sysbus 0x00000000
+    size: 0x40000
+dtcm: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x40000
+ocram: Memory.MappedMemory @ sysbus 0x20240000
+    size: 0x1C0000
+flexspi2: Memory.MappedMemory @ sysbus 0x30000000
+    size: 0x4000000
+lpuart1: UART.NXP_LPUART @ sysbus 0x4007C000
+    IRQ -> nvic_m7@20
+
+// M7<->M4 shared-memory ring (relay-bus carrier region, DD-009) — both cores see it.
+shmem: Memory.MappedMemory @ sysbus 0x20400000
+    size: 0x1000
+
+// MU (Messaging Unit) mailbox stub — the M7<->M4 doorbell path; plain memory for
+// the topology rung (real MU/IRQ semantics are a later increment).
+mu: Memory.MappedMemory @ sysbus 0x40C4C000
+    size: 0x1000

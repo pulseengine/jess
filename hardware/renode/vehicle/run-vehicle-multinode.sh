@@ -1,43 +1,47 @@
 #!/usr/bin/env bash
-# Track B (Renode real-hardware) mirror of the combined-vehicle wasmtime sim
-# (sim/vehicle-wasmtime.sh): BOTH nodes as real ARM binaries in ONE Renode emulation.
-#   M7 (FMU)  : pixhawk6xrt.repl + a bring-up firmware  (real falcon pending #369/#275)
-#   F100 (IO) : gale gust_m3_8k.repl + gust_wasm.elf     (the real dissolved failsafe)
-#   IPC link  : a Renode UARTHub (the relay-bus carrier proxy, relay#177 / DD-009)
-# Confirms the multi-node TOPOLOGY: both real node binaries co-execute in one emulation
-# joined by the inter-node link. The reactive failsafe handoff (gust consuming the M7
-# heartbeat over ipc-rx) needs a gust ipc-rx build (gale) + real falcon on the M7; until
-# then the handoff is orchestration-modeled (pausing the M7 machine = fault injection),
-# exactly as the wasmtime track host-models the arbitration.
+# Track B (Renode real-hardware) multi-node vehicle — the THREE-CORE topology of the
+# Pixhawk 6X-RT (TEST-PIX-019, Stage 4), mirror of the wasmtime sim (sim/vehicle-wasmtime.sh).
+#   mach "rt1176" : rt1176-dualcore.repl — cpu_m7 (smoke bring-up, LPUART banner) +
+#                   cpu_m4 (sensor-offload stub, writes a heartbeat to the M7<->M4
+#                   shared-memory ring @ 0x20400000), both on the shared RT1176 sysbus.
+#   mach "f100-io": gale gust_m3_8k.repl + gust_wasm.elf — the real dissolved failsafe.
+#   links: M7<->M4 = OCRAM-adjacent SHMEM ring + MU stub (on-die, DD-009); FMU<->F100
+#          = relay-bus carrier (relay#177; reactive consume pending gust ipc-rx, gale#65).
+# Confirms all THREE cores co-execute and the M7<->M4 shared-mem link is live. The
+# reactive failsafe handoff (gust consuming the heartbeat) is orchestration-modeled
+# until gale exposes gust ipc-rx; the handoff LOGIC is proven on the wasmtime track.
 set -euo pipefail
 RENODE="${RENODE:?set RENODE to the renode binary}"
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 M7ELF="$ROOT/hardware/renode/smoke/rt1176-smoke.elf"
-# fetch gale's gust artifacts (not vendored — avoid stale gale binary)
+M4ELF="$ROOT/hardware/renode/vehicle/m4/m4-heartbeat.elf"
 GUSTREPL=/tmp/gust_m3_8k.repl; GUSTELF=/tmp/gust_wasm.elf
 gh api repos/pulseengine/gale/contents/benches/gust/renode-test/gust_m3_8k.repl --jq '.content' | base64 -d > "$GUSTREPL"
 gh api repos/pulseengine/gale/contents/benches/gust/renode-test/gust_wasm.elf  --jq '.content' | base64 -d > "$GUSTELF"
-RESC=$(mktemp -t vehicle).resc
+UART="$(mktemp -t m7uart).txt"; : > "$UART"
+RESC=$(mktemp -t vehicle3).resc
 cat > "$RESC" <<RESC
-:name: jess vehicle multi-node (M7 + F100)
-emulation CreateUARTHub "relaybus"
-mach create "m7-fmu"
-machine LoadPlatformDescription @$ROOT/hardware/renode/pixhawk6xrt.repl
+mach create "rt1176"
+machine LoadPlatformDescription @$ROOT/hardware/renode/vehicle/rt1176-dualcore.repl
 sysbus LoadELF @$M7ELF
-connector Connect sysbus.lpuart1 relaybus
+sysbus LoadELF @$M4ELF
+sysbus.lpuart1 CreateFileBackend @$UART true
+cpu_m7 VectorTableOffset 0x0
+cpu_m4 VectorTableOffset 0x20240000
 mach clear
 mach create "f100-io"
 machine LoadPlatformDescription @$GUSTREPL
 sysbus LoadELF @$GUSTELF
 emulation RunFor "0.02"
-echo "--- machines ---"
-mach
-echo "--- m7 executed ---"
-mach set "m7-fmu"
-sysbus.cpu ExecutedInstructions
-echo "--- f100 executed ---"
-mach set "f100-io"
-sysbus.cpu ExecutedInstructions
+mach set "rt1176"
+sysbus ReadDoubleWord 0x20400000
 quit
 RESC
-"$RENODE" --console --disable-xwt -e "include @$RESC" 2>&1 | grep -iE 'm7-fmu|f100-io|machines|executed|[0-9]{5,}|relaybus|fault|error' | tail -20
+HB=$("$RENODE" --console --disable-xwt -e "include @$RESC" 2>&1 | grep -oE '0x000[0-9A-Fa-f]{5}' | tail -1)
+M7=$(tr -dc '[:print:]\n' < "$UART" | head -1)
+echo "M7 (cpu_m7) LPUART banner : ${M7:-<none>}"
+echo "M4 (cpu_m4) SHMEM heartbeat: ${HB:-<none>}  (M7<->M4 shared-mem ring @ 0x20400000)"
+ok=1
+echo "$M7" | grep -q 'JESS-RT1176 boot OK' || { echo "FAIL: M7 banner missing"; ok=0; }
+[ -n "$HB" ] && [ "$HB" != "0x00000000" ] || { echo "FAIL: M4 heartbeat not advancing (M7<->M4 shmem dead)"; ok=0; }
+[ "$ok" = 1 ] && echo "ORACLE PASS: M7+M4+F100 three-core topology co-executes; M7<->M4 shared-mem link live." || exit 1
