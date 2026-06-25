@@ -592,10 +592,22 @@ artifacts:
       SemihostingUart) - asked gale for the driver + access (gale#65). Real falcon on the
       M7 + real sensor drivers on the M4 are bring-up STUBS until the synth poles clear
       (#369 hard-float/AFD-024, #275 dispatch/AFD-008); the M4 heartbeat stands in for the
-      sensor-offload workload. The MU mailbox is a plain-memory stub (doorbell-IRQ later);
-      the shared-mem ring itself is live. Until the reactive path lands the handoff is
-      orchestration-modeled; Track A (TEST-PIX-018) carries the handoff LOGIC end-to-end -
-      together the DD-010/DD-019 SIL-differential at vehicle scale.
+      sensor-offload workload.
+      DOORBELL 2026-06-25: the M7<->M4 link now carries the REAL NXP MU model
+      (Miscellaneous.IMXRT700_MessagingUnit, same MU IP family as RT1176) replacing the
+      plain-memory stub - per-core instances (aInstance=cpu_m7 @0x40C4C000, bInstance=cpu_m4
+      @0x40C4D000) + the cross-core doorbell IRQ lines (AInstanceIRQ->nvic_m7, BInstanceIRQ
+      ->nvic_m4). This is the NXP IPCF/RPMsg mechanism modeled faithfully: MU = the doorbell,
+      the SHMEM ring @0x20400000 = the RPMsg vring/payload (the relay-bus carrier, relay#177,
+      maps onto exactly this on the on-die link). The 3-core harness still PASSES with the
+      MU wired (no regression). REMAINING for an interrupt-DRIVEN doorbell (vs the live
+      polled SHMEM ring): firmware to drive the MU's two-sided TR/RX-IE protocol needs the
+      RT1170/RT700 MU register map (TR offset, RX-interrupt-enable bit, IRQ number) - not
+      extractable from this Renode AOT build (no model source/robot), so asked gale for the
+      MU register access + the gust ipc-rx side (gale#65). Until then the doorbell hardware
+      is wired + the SHMEM ring is the live link; the reactive handoff is orchestration-
+      modeled. Track A (TEST-PIX-018) carries the handoff LOGIC end-to-end - together the
+      DD-010/DD-019 SIL-differential at vehicle scale.
     tags: [phase-2, simulation, renode, multi-node, vehicle, on-target]
     links:
       - type: verifies

@@ -40,7 +40,14 @@ lpuart1: UART.NXP_LPUART @ sysbus 0x4007C000
 shmem: Memory.MappedMemory @ sysbus 0x20400000
     size: 0x1000
 
-// MU (Messaging Unit) mailbox stub — the M7<->M4 doorbell path; plain memory for
-// the topology rung (real MU/IRQ semantics are a later increment).
-mu: Memory.MappedMemory @ sysbus 0x40C4C000
-    size: 0x1000
+// MU (Messaging Unit) — the NXP doorbell of IPCF/RPMsg (MU mailbox + SHMEM vring).
+// The real NXP MU model with per-core instances (aInstance=M7, bInstance=M4) and the
+// cross-core doorbell IRQ lines: a TR write on one side raises the other side's IRQ.
+// (Driving the two-sided TR/RX-IE register protocol from firmware needs the RT1170 MU
+// register map — asked gale#65; the SHMEM vring below is the live link meanwhile.)
+mu: Miscellaneous.IMXRT700_MessagingUnit @ {
+        sysbus new Bus.BusMultiRegistration { address: 0x40C4C000; size: 0x1000; cpu: cpu_m7; region: "aInstance" };
+        sysbus new Bus.BusMultiRegistration { address: 0x40C4D000; size: 0x1000; cpu: cpu_m4; region: "bInstance" }
+    }
+    AInstanceIRQ -> nvic_m7@118
+    BInstanceIRQ -> nvic_m4@118
