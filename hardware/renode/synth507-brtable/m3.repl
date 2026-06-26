@@ -1,0 +1,11 @@
+// Minimal Cortex-M3 (STM32F103-class): flash @0x0, 64 KB SRAM @0x20000000.
+// Matches brt_self.elf's link map (linear memory base 0x20000100).
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m3"
+    nvic: nvic
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    -> cpu@0
+flash: Memory.MappedMemory @ sysbus 0x0
+    size: 0x80000
+sram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x10000
