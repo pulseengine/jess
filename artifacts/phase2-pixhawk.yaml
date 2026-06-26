@@ -613,6 +613,35 @@ artifacts:
       - type: verifies
         target: REQ-PIX-017
 
+  - id: TEST-PIX-020
+    type: test-spec
+    title: Renode Cortex-M3 runtime oracle for synth br_table lowering (AFD-032/synth#507) - RED until fixed, the offered merge gate
+    status: draft
+    description: >
+      hardware/renode/synth507-brtable/ - a hermetic Cortex-M3 (Renode v1.16.1) RUNTIME
+      oracle for the synth#507 br_table miscompile (AFD-032), built on the proven
+      TEST-PIX-013 pattern (the OOB-trap oracle that became synth#374's merge gate).
+      brt_self.elf = `synth compile brt_self.wat --cortex-m -t cortex-m3` (the optimized/
+      non-relocatable path falcon firmware currently uses). The program loads a selector
+      from linear memory mem[100] (set to 2 by the harness so synth cannot const-fold it)
+      and dispatches a 4-arm br_table, each arm storing a distinct constant to a distinct
+      address. CORRECT lowering runs only the selected arm -> mem[8]=30, mem[0]=0; the
+      synth#507 bug elides the selector and runs ALL arms -> mem[0]=10,mem[4]=20,mem[8]=30,
+      mem[12]=40. brtable-507.robot writes selector=2 to 0x20000164, RunFor 0.02s, and
+      asserts mem[8]==0x1E AND mem[0]==0x0 (linmem base 0x20000100). CONFIRMED RED 2026-06-26
+      (jess local, renode-test): mem[8]=30 PASS, mem[0]=10 FAIL ("10 != 0") - the runtime
+      proof of #507 on the real M3 ISA model. wasmtime oracle + the --relocatable
+      correct-lowering contrast: repro/synth-507-brtable/. status=draft (RED) BY DESIGN -
+      flips valid/GREEN when synth#507 lands (the --relocatable path already passes), and
+      is deliberately NOT wired into the 4 CI gates until then (they must stay green).
+      Offered to the synth maintainer as the hermetic merge gate.
+    tags: [phase-2, renode, synth, br_table, on-target, oracle, gate-pending]
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+      - type: traces-to
+        target: AFD-032
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
