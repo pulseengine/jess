@@ -1272,14 +1272,21 @@ artifacts:
       gives mem[0]=10/20/30/40 selected by the param; synth -t cortex-m3 --cortex-m emits
       NO cmp/branch, never loads local 0, runs all four stores => always 40. Reproduced
       across 3 br_table shapes (sequential, shared-tail, value-returning arms).
-      CRITICAL SCOPE: the --relocatable path lowers the IDENTICAL module CORRECTLY
-      (cmp r0,#0/#1/#2;beq to distinct arms). gust and the shipped falcon firmware both
-      dissolve with --relocatable, so NO shipped artifact is wrong today - verified the
-      one gust br_table (kiln_async TaskTable::transition, func_0 in the dissolved object)
-      reads its selector and dispatches via a correct cmp-chain. This is an optimized-path
-      latent hazard, NOT a current gust/falcon correctness break. Same family as the OPEN
-      synth#500 / CLOSED synth#483 (optimized-path control-flow lowering) but a distinct,
-      worse symptom (whole dispatch elided vs a mis-placed target). Filed synth#507.
+      CRITICAL SCOPE (the bug is PATH-specific, not component-specific): the --relocatable
+      path lowers the IDENTICAL module CORRECTLY (cmp r0,#0/#1/#2;beq to distinct arms);
+      the non-relocatable/optimized (--cortex-m) path drops it. gust dissolves --relocatable
+      (linked into a native host image) so its one br_table (kiln_async TaskTable::transition,
+      func_0) lowers correctly - gust is SAFE. CORRECTION (initial claim overstated falcon as
+      safe): falcon is NOT exempt - the fused/loomed flight component carries 23 br_tables AND
+      jess's current firmware path is non-relocatable (jess-build.sh `synth compile --cortex-m`;
+      bazel //:falcon-firmware `all_exports` without --relocatable) = exactly the buggy path.
+      The only reason it is not an ACTIVE shipped miscompile today is that falcon does not fully
+      lower on that path anyway (#369 hard-float + #275 dispatch already block it; float-bearing
+      br_table funcs land in the skip set). Once those clear, this is a THIRD on-target blocker
+      for the self-contained path unless falcon moves to the --relocatable + TCB-link model (the
+      gale-maximal-wasm direction gust already uses). Same family as OPEN synth#500 / CLOSED
+      synth#483 (optimized-path control-flow) but a distinct, worse symptom (whole dispatch
+      elided). Filed synth#507; correction posted (issuecomment-4806889356).
       The PERF side of the same gust hot path (br_table-as-linear-cmp-chain on the
       relocatable path, gust_poll 3.9x) is already covered by synth#390/#428 - not re-filed.
     tags: [release-watch, synth, arm, br_table, control-flow, miscompile, optimized-path, correctness]

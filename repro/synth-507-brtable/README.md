@@ -14,6 +14,7 @@
     synth compile brtable2.wat -t cortex-m3 --relocatable --all-exports -o b.o
     arm-none-eabi-objdump -d b.o     # cmp r0,#0/#1/#2; beq to distinct arms
 
-Scope: gust's only br_table (kiln_async TaskTable::transition) dissolves --relocatable
-and lowers correctly — no shipped artifact is wrong today. Optimized-path latent hazard.
-Same family as synth#500/#483.
+Scope: PATH-specific. gust dissolves --relocatable → its one br_table lowers correctly
+(safe). falcon is NOT exempt: 23 br_tables, and its current firmware path is non-relocatable
+(jess-build.sh --cortex-m; bazel all_exports) = the buggy path — masked today only because
+#369/#275 already block falcon on that path. Same family as synth#500/#483.
