@@ -51,7 +51,7 @@ for tgt in cortex-m3 cortex-m7dp; do
   echo "  skipped: ${skip:-none}"
   echo "  by root cause:"
   f369=$(grep -c '#369' "$OUT/$tgt.err")
-  freg=$(grep -cE 'register exhaustion|spill-slot|callee-saved' "$OUT/$tgt.err")
+  freg=$(grep -cE 'register exhaustion|spill-slot|callee-saved|i64 register pair' "$OUT/$tgt.err")
   faap=$(grep -cE 'AAPCS stack-argument path|only i32 params' "$OUT/$tgt.err")
   printf "    %-22s %s\n" "#369 float"            "$f369"
   printf "    %-22s %s\n" "register-exhaustion"   "$freg"
