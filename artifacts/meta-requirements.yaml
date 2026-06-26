@@ -9,3 +9,24 @@ artifacts:
     tags: [meta, spine]
     fields:
       release: v0.1.0
+      category: process
+
+  - id: TEST-META-001
+    type: test-spec
+    title: The rivet artifact spine validates clean (rivet validate PASS) on every commit - the CI rivet-validate gate
+    status: valid
+    description: >
+      Closes the V on the spine meta-requirement (see verifies link): the artifact-
+      tracking spine is "established and traceable" iff it is well-formed under the
+      schema and its links resolve. The
+      mechanical oracle is `rivet validate` (sync + validate, exit 0 / Result: PASS),
+      run as the .github/workflows/ci.yml `rivet-validate` job - the core CI gate -
+      on every PR and push to main, pinned to rivet v0.20.0 against the gale sibling
+      external. A broken/dangling/ill-typed spine fails the gate and blocks merge, so
+      a green main IS the standing proof that the spine holds. The rivet sql punch-list/
+      V-gap snapshot (tools/rivet/snapshot.sh) runs in the same job for visibility.
+      Verified continuously: main is green; locally rivet v0.20.0 validate = Result: PASS.
+    tags: [meta, spine, rivet, ci-gate, traceability]
+    links:
+      - type: verifies
+        target: META-REQ-001
