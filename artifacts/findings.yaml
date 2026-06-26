@@ -818,7 +818,18 @@ artifacts:
       no new unlowerable op. #369/#275 both still OPEN. ALSO rivet v0.19.0 released: the
       jess store validates PASS on it (forward-compatible, 0 errors) - jess CI stays pinned
       v0.18.0 (works; not bumped reflexively). Evidence: results/jess-build-falcon-v1.94.0.xml.
-    tags: [release-watch, synth, fpu, miscompile, correctness, on-target, blocker]
+      UPDATE 2026-06-26 (F100/M3 chain re-measure for gale's 1.7x->0.7 perf ask, synth#494):
+      ran the full three-binary chain (falcon-flight-v1.94 -> meld fuse -> loom v1.1.16
+      optimize -> synth v0.15.1 compile) for BOTH -t cortex-m3 (F100, no FPU) and -t
+      cortex-m7dp. Two confirmations: (a) the M3 and M7dp ELFs are BYTE-IDENTICAL (68964 B,
+      same 29-fn skip set) - the -t profile is cosmetic for codegen, exactly #369's "no FPU
+      ever used" framing extended to the no-FPU M3 (still no soft-float *arithmetic* path).
+      (b) authoritative skip set widened on the full export graph (compiling all 145 fns, not
+      the 18 flight exports): 29/145, broken down by ROOT CAUSE = 23 #369 hard-float
+      (incl. BOTH run-stabilization + run-position-hold) + 3 register-exhaustion (synth VCR-RA
+      #242) + 3 AAPCS stack-arg-path (>8 scalar params / 64-bit stack param). The 3 AAPCS
+      skips are a SEPARATE, previously-untracked synth gap split out to AFD-030/synth#503
+      (the loud-skip cites a CLOSED #359). #369 remains the dominant flight-control blocker.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
@@ -1158,3 +1169,79 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-001
+
+  - id: AFD-030
+    type: ai-found-defect
+    title: synth arm backend skips functions needing the AAPCS stack-arg path (>8 scalar params, or any 64-bit stack param) - not lowered
+    status: open
+    description: >
+      Found 2026-06-26 measuring the falcon three-binary chain for the F100/M3 target
+      (gale's 1.7x->0.7 perf ask, synth#494). On the arm backend, synth compile SKIPS
+      (emits no code for) any function whose signature needs the AAPCS stack-argument
+      path: more than 8 scalar params, or ANY 64-bit (i64/f64) param that would land on
+      the stack. The function is dropped from the ELF rather than lowered - a
+      completeness gap on the self-contained-firmware / synth#494 0.7x track, in the same
+      class as #369 (float) and #275 (dispatch) but distinct from both.
+      MINIMAL REPRO (verified on RELEASED synth v0.15.1, checksum-verified darwin binary):
+      (func (export "sum10")(param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)(result i32) ...)
+      -> "skipping function 'sum10': ... #359: function has 10 params; the AAPCS
+      stack-argument path supports at most 8 scalar params". And
+      (func (export "mix")(param i32 i32 i32 i32 i64)(result i64) ...) ->
+      "#359: function has 5 params including a 64-bit (i64/f64) param; ... supports only
+      i32 params". CONTROL: the same shape with 8 i32 params compiles cleanly + emits an
+      ELF. The diagnostic cites #359, which is CLOSED and about a different bug (sret
+      first-arg shift) - the stack-arg-path limitation itself had no open tracking issue.
+      IMPACT (real workload): falcon-flight-v1.94 -> meld fuse -> loom v1.1.16 -> synth
+      v0.15.1 compile -t cortex-m3 skips 29 of 145 fns; 3 fail on exactly this -
+      func_57 (10 params), func_58 (25 params), func_163 (5 params incl 64-bit). These
+      survive meld/loom as legitimate lowered helpers; only the arm arg-passing can't
+      handle them. (Other 26 skips: 23 #369 float + 3 register-exhaustion.) Filed
+      https://github.com/pulseengine/synth/issues/503 (per-AAPCS lowering + fix the
+      stale #359 label). Supervising. Reproduce via tools/bench/chain-measure.sh.
+    tags: [release-watch, synth, arm, aapcs, calling-convention, on-target, perf-0.7]
+    fields:
+      detected-by: jess F100/M3 three-binary chain measurement (tools/bench/chain-measure.sh); minimal .wat repro on released synth v0.15.1; filed synth#503
+      severity: major
+      triage-status: confirmed-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
+
+  - id: AFD-031
+    type: ai-found-defect
+    title: loom default profile inflates falcon code +16% on the MCU path (inline pass, no -Os/size profile); --islands N returns larger than islands=1
+    status: open
+    description: >
+      Found 2026-06-26 measuring the falcon chain for the F100/M3 size budget (8 KB SRAM,
+      flash-bound; gale's 1.7x->0.7 ask, synth#494). On the meld-fused falcon-flight-v1.94
+      core, CODE-SECTION sizes under loom v1.1.16 (latest; measured with wasm-tools objdump,
+      attestation/custom sections excluded so this is real code not metadata):
+        meld-fused (loom input)                       = 68322 B
+        loom optimize (default: all passes, islands=1) = 79346 B  (+16.1%)
+        loom optimize --islands 4                      = 80872 B  (+18.4%)
+        loom optimize --passes <default minus inline>  = 68322 B  (+0.0%)
+      Two observations: (1) ALL the growth is the `inline` pass, and there is no
+      -Os/size/MCU optimization profile - the only way to avoid the +16% today is to
+      hand-enumerate --passes and drop inline, which also loses the inlines that DO help
+      (e.g. the gust hot-path seam, loom#226). A size-budgeted inline or an MCU profile
+      would let flash-bound targets keep useful inlines without blanket inflation. (2)
+      `--islands 4` returned a LARGER module than the islands=1 default (80872 > 79346 B)
+      despite --islands being documented as "picks the smallest verified result" - its
+      candidate pass-orderings don't include/beat the default for size on this input, so
+      it is strictly worse on the metric it advertises. This is an OPTIMIZATION finding
+      (not a miscompile): the chain is correct, but loom's default works against the
+      F100/MCU size budget and the synth#494 0.7x parity goal. Reported as a measured
+      data-point on loom#239 ("Make components small"), alongside #226/#219. Reproduce
+      via tools/bench/chain-measure.sh.
+    tags: [release-watch, loom, optimization, code-size, mcu, perf-0.7]
+    fields:
+      detected-by: jess F100/M3 three-binary chain measurement (tools/bench/chain-measure.sh) on loom v1.1.16; reported on loom#239
+      severity: minor
+      triage-status: reported-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-006
+      - type: traces-to
+        target: REQ-PIX-009
