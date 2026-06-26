@@ -13,10 +13,11 @@ permissions:
   contents: read
 
 env:
-  # Pinned PulseEngine tool releases — bumped explicitly via PR. jess holds
-  # rivet at 0.15.0 until a release carries the `accepted` status fix
-  # (rivet#525, merged to main, not yet released — see AFD-012).
-  RIVET_VERSION: v0.18.0
+  # Pinned PulseEngine tool releases — bumped explicitly via PR. rivet 0.20.0
+  # carries the per-schema status enums (AFD-012, resolved at 0.18.0) and the
+  # `rivet sql` surface (REQ-229 / DD-068) the snapshot step below relies on;
+  # the jess store validates clean on it.
+  RIVET_VERSION: v0.20.0
   SPAR_VERSION: v0.17.0
   # Pinned gale external (rivet.lock) — jess's stpa hazards trace to gale's
   # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.
@@ -59,6 +60,14 @@ jobs:
           rivet --version
           rivet sync
           rivet validate
+      # Non-gating visibility: the open-defect punch-list + the V-gap
+      # (non-draft requirements no test-spec verifies), emitted to the job
+      # summary on every run via `rivet sql`. The gate is `validate` above;
+      # this reports state so the V's right side can't drift open unseen.
+      - name: rivet sql snapshot (punch-list + V-gap)
+        if: always()
+        working-directory: jess
+        run: tools/rivet/snapshot.sh | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
   spar-model:
