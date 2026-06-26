@@ -1256,3 +1256,39 @@ artifacts:
         target: EXTERNALANCHOR-006
       - type: traces-to
         target: REQ-PIX-009
+
+  - id: AFD-032
+    type: ai-found-defect
+    title: synth optimized (non-relocatable) path silently miscompiles br_table — selector elided, all arms fall through
+    status: open
+    description: >
+      Found 2026-06-26 while measuring the gust 1.81x codegen gap (gale COMPARE.md /
+      gust_codegen_bench) for the 1.7x->0.7 ask. On the OPTIMIZED (non-relocatable)
+      path, synth 0.16.0 silently miscompiles br_table: the selector is never read and
+      ALL arms execute in fall-through sequence. No skip/warning, exit 0 - a silent
+      wrong-code that violates synth's #180/#185 "unlowerable => Err, never silently
+      continue" contract (same class as AFD-024). Minimal repro brtable2.wat
+      (br_table 0 1 2 3, each arm stores a distinct const then returns): wasmtime oracle
+      gives mem[0]=10/20/30/40 selected by the param; synth -t cortex-m3 --cortex-m emits
+      NO cmp/branch, never loads local 0, runs all four stores => always 40. Reproduced
+      across 3 br_table shapes (sequential, shared-tail, value-returning arms).
+      CRITICAL SCOPE: the --relocatable path lowers the IDENTICAL module CORRECTLY
+      (cmp r0,#0/#1/#2;beq to distinct arms). gust and the shipped falcon firmware both
+      dissolve with --relocatable, so NO shipped artifact is wrong today - verified the
+      one gust br_table (kiln_async TaskTable::transition, func_0 in the dissolved object)
+      reads its selector and dispatches via a correct cmp-chain. This is an optimized-path
+      latent hazard, NOT a current gust/falcon correctness break. Same family as the OPEN
+      synth#500 / CLOSED synth#483 (optimized-path control-flow lowering) but a distinct,
+      worse symptom (whole dispatch elided vs a mis-placed target). Filed synth#507.
+      The PERF side of the same gust hot path (br_table-as-linear-cmp-chain on the
+      relocatable path, gust_poll 3.9x) is already covered by synth#390/#428 - not re-filed.
+    tags: [release-watch, synth, arm, br_table, control-flow, miscompile, optimized-path, correctness]
+    fields:
+      detected-by: jess gust codegen measurement (gust_codegen_bench / chain probe); minimal .wat repro + wasmtime oracle on synth 0.16.0; --relocatable contrast proves gust safe; filed synth#507
+      severity: major
+      triage-status: confirmed-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-009
