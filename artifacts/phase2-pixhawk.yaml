@@ -615,8 +615,8 @@ artifacts:
 
   - id: TEST-PIX-020
     type: test-spec
-    title: Renode Cortex-M3 runtime oracle for synth br_table lowering (AFD-032/synth#507) - RED until fixed, the offered merge gate
-    status: draft
+    title: Renode Cortex-M3 runtime gate for synth br_table lowering (AFD-032/synth#507) - GREEN on synth 0.17.0, now a CI regression gate
+    status: valid
     description: >
       hardware/renode/synth507-brtable/ - a hermetic Cortex-M3 (Renode v1.16.1) RUNTIME
       oracle for the synth#507 br_table miscompile (AFD-032), built on the proven
@@ -631,11 +631,15 @@ artifacts:
       asserts mem[8]==0x1E AND mem[0]==0x0 (linmem base 0x20000100). CONFIRMED RED 2026-06-26
       (jess local, renode-test): mem[8]=30 PASS, mem[0]=10 FAIL ("10 != 0") - the runtime
       proof of #507 on the real M3 ISA model. wasmtime oracle + the --relocatable
-      correct-lowering contrast: repro/synth-507-brtable/. status=draft (RED) BY DESIGN -
-      flips valid/GREEN when synth#507 lands (the --relocatable path already passes), and
-      is deliberately NOT wired into the 4 CI gates until then (they must stay green).
-      Offered to the synth maintainer as the hermetic merge gate.
-    tags: [phase-2, renode, synth, br_table, on-target, oracle, gate-pending]
+      correct-lowering contrast: repro/synth-507-brtable/.
+      RESOLVED 2026-06-26: synth v0.17.0 (PR #508, "optimized path declines br_table to the
+      direct selector", #507/#242) fixed it. jess verified GREEN - rebuilt brt_self.elf on
+      0.17.0 (linmem base shifted 0x20000100->0x20000000), re-ran renode-test: with selector=2
+      only the case-2 arm runs (mem[8]=30, mem[0]=mem[4]=mem[12]=0), status OK. Flipped
+      draft->valid and WIRED INTO the renode-smoke CI job as a permanent regression gate
+      (the TEST-PIX-013->synth#374 pattern completed); a #507 regression would set mem[0]=10
+      and fail the gate. brt_self.elf + the robot literals are a matched pair (rebuild together).
+    tags: [phase-2, renode, synth, br_table, on-target, oracle, ci-gate]
     links:
       - type: verifies
         target: REQ-PIX-001
