@@ -1198,6 +1198,17 @@ artifacts:
       handle them. (Other 26 skips: 23 #369 float + 3 register-exhaustion.) Filed
       https://github.com/pulseengine/synth/issues/503 (per-AAPCS lowering + fix the
       stale #359 label). Supervising. Reproduce via tools/bench/chain-measure.sh.
+      UPDATE 2026-06-26 (synth v0.16.0, PR #504/#505, built+verified from source 4a6b1ef):
+      the maintainer shipped the >8-scalar-i32 stack-arg path (oracle sum10/sum25). jess
+      re-measured falcon-v1.94 on 0.16.0: skips UNCHANGED at 29/145 - the fix unblocks 0 of
+      the 3 named helpers, NOT 2, because all 3 carry i64 (the >8-scalar check had masked it
+      in 0.15.1). Actual signatures: func_57 (i32x6,i64x3) + func_163 (i32,i64x4) = 64-bit
+      STACK params, now correctly cite #503 (the open follow-up); func_58 fails DEEPER post-
+      fix at "i64 register pair: no high register available for R8" - an i64-pair regalloc
+      wall (#242 territory), not the stack-arg path. So the on-target win needs the 64-bit-
+      stack-param lowering (#503) + the i64-pair fix. Diagnostic-precision + standalone
+      >8-i32 capability confirmed; falcon skip-count not yet moved. Posted on synth#503
+      (issuecomment-4806708182). #503 stays open.
     tags: [release-watch, synth, arm, aapcs, calling-convention, on-target, perf-0.7]
     fields:
       detected-by: jess F100/M3 three-binary chain measurement (tools/bench/chain-measure.sh); minimal .wat repro on released synth v0.15.1; filed synth#503
