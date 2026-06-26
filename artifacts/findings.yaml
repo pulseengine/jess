@@ -830,6 +830,15 @@ artifacts:
       #242) + 3 AAPCS stack-arg-path (>8 scalar params / 64-bit stack param). The 3 AAPCS
       skips are a SEPARATE, previously-untracked synth gap split out to AFD-030/synth#503
       (the loud-skip cites a CLOSED #359). #369 remains the dominant flight-control blocker.
+      UPDATE 2026-06-26 (cron loop, falcon-v1.95.0 = DroneCAN node pump DC-P04 + FLIGHT-CRITICAL
+      DSDL conformance fix #232): relay shipped v1.95 fixing the hand-rolled DSDL bit-field
+      decoders (were LSB-first; DroneCAN v0 is be_from_le_bits - esc.RawCommand int14 was
+      decoding garbage throttles, caught by external pydronecan vectors not self-referential
+      proptests/Kani). Per-piece GREEN on synth 0.16.0: SIL PASS (run-stabilization 0.0234 rad
+      < 0.1, run-position-hold 0.1317 m < 0.6), chain byte-IDENTICAL to v1.94 (wasm 99024,
+      fused 68322, loom 79346, m3≡m7dp ELF 68628, 29/145 skip = 23 #369 + 4 regalloc + 2 AAPCS).
+      The DSDL fix is in the CAN decode path, not the 18 flight exports, so codegen unchanged.
+      #369/#275 still OPEN. Evidence: tools/bench/chain-measure.sh on falcon-flight-v1.95.wasm.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
