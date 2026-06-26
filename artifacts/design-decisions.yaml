@@ -1003,3 +1003,54 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-019
+
+  - id: DD-021
+    type: design-decision
+    title: jess release roadmap + cut criteria - the rivet release field is the plan; readiness is a query; v0.6.0 = the RT1176 emulation + MAVLink bench milestone
+    status: accepted
+    description: >
+      Makes the release plan live in rivet (the `release:` field) rather than in
+      GitHub milestones alone, per the release-planning method: a release's SCOPE is
+      the set of requirements tagged `release: vX.Y`; READINESS is the query "are all
+      scope artifacts `verified`/`accepted` with the V closed?" (tools/rivet/snapshot.sh
+      + the V-closure SQL); a release is CUTTABLE only when every artifact in its scope
+      is verified. Roadmap (the substantive Phase-2 line; v0.1-v0.5 carried the early
+      generic bootstrap requirements):
+        - v0.1.0  spine            META-REQ-001 (accepted; TEST-META-001)
+        - v0.6.0  RT1176 emu+bench REQ-PIX-005 + REQ-PIX-010  <- CUTTABLE (both accepted)
+        - v0.7.0  on-target bring-up REQ-PIX-001/002/003/004/006/007/008/011/012
+        - v0.8.0  PX4 HITL + persistence + root-of-trust  REQ-PIX-014/015/019
+        - v0.9.0  gust/F100 + combined vehicle + witness/scry gates  REQ-PIX-009/017/018
+      SCOPE DECISION logged here: REQ-PIX-001 ("compiles+links for Cortex-M7, fpv5-d16
+      hard-float") MOVED v0.6.0 -> v0.7.0. Its "hard-float" claim cannot reach `verified`
+      until synth#369 (GI-FPU-002 VFP lowering) + #275 (dispatch) land - both external -
+      so keeping it in v0.6.0 would block a release that is otherwise done. v0.6.0 cuts on
+      the two genuinely-complete, V-closed requirements: REQ-PIX-005 (the hand-authored
+      RT1176 Renode platform boots bring-up firmware to the LPUART1 banner; TEST-PIX-005,
+      + the synth#374 OOB oracle TEST-PIX-013 and the synth#507 br_table oracle TEST-PIX-020
+      ride the same renode-smoke gate) and REQ-PIX-010 (the MAVLink CRC bench over the
+      committed 6X-RT sample; TEST-PIX-010). CUT MECHANICS for jess (no published binary -
+      it is the integration hub): an annotated git tag vX.Y on a green main + a GitHub
+      release whose notes carry the FALSIFICATION STATEMENT for the milestone's behavior,
+      and the scope requirements flipped verified -> accepted. RELEASES.md is the
+      human-readable log. v0.7.0+ are driven by pulling `release: vX.Y` + status != verified
+      and running each through the feature loop; they are gated on the synth poles
+      (#369/#275/#503), gale#65, and hub#98, so they are PLANNED not yet cuttable.
+    tags: [phase-2, release-planning, rivet, roadmap, process, traceability]
+    fields:
+      rationale: >-
+        The V-model artifacts should drive the roadmap and gate the cut, which is only
+        possible if the plan lives in the trace (the `release:` field) where readiness is
+        a query over verification state - not a spreadsheet or milestone divorced from it.
+        Moving a blocked requirement out of a ready release (vs shipping it unverified or
+        stalling the release) is the deliberate, logged scope move the method prescribes.
+      alternatives: >-
+        Plan only in GitHub milestones - rejected: the roadmap then can't be gated on
+        verification state. Hold v0.6.0 until REQ-PIX-001 verifies - rejected: that bets a
+        done milestone on external synth fixes (#369/#275) with no jess lever. Verify
+        REQ-PIX-001 at the "compiles" bar now - rejected: its title claims hard-float,
+        which is not met; verifying it would overclaim (the honest split is to defer).
+      release: v0.6.0
+    links:
+      - type: satisfies
+        target: META-REQ-001

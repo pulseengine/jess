@@ -72,7 +72,11 @@ artifacts:
     fields:
       category: functional
       priority: must
-      release: v0.6.0
+      # MOVED v0.6.0 -> v0.7.0 (2026-06-26, DD-021 scope decision): the "fpv5-d16
+      # hard-float" claim cannot reach `verified` until synth#369 (GI-FPU-002 VFP
+      # lowering) + #275 (dispatch) land - both external. Deferred to v0.7.0 with the
+      # rest of the on-target bring-up rather than block the v0.6.0 emulation+bench cut.
+      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -126,7 +130,7 @@ artifacts:
   - id: REQ-PIX-005
     type: requirement
     title: HIL emulation for the i.MX RT1176 (Renode .repl authored, or EVK/real-silicon bring-up)
-    status: verified
+    status: accepted
     fields:
       category: non-functional
       priority: should
@@ -234,7 +238,7 @@ artifacts:
   - id: REQ-PIX-010
     type: requirement
     title: Real-hardware bench harness - MAVLink-over-USB to the connected 6X-RT (read telemetry/state, differential vs falcon SIL)
-    status: verified
+    status: accepted
     fields:
       category: functional
       priority: must
