@@ -1285,17 +1285,21 @@ artifacts:
       path lowers the IDENTICAL module CORRECTLY (cmp r0,#0/#1/#2;beq to distinct arms);
       the non-relocatable/optimized (--cortex-m) path drops it. gust dissolves --relocatable
       (linked into a native host image) so its one br_table (kiln_async TaskTable::transition,
-      func_0) lowers correctly - gust is SAFE. CORRECTION (initial claim overstated falcon as
-      safe): falcon is NOT exempt - the fused/loomed flight component carries 23 br_tables AND
-      jess's current firmware path is non-relocatable (jess-build.sh `synth compile --cortex-m`;
-      bazel //:falcon-firmware `all_exports` without --relocatable) = exactly the buggy path.
-      The only reason it is not an ACTIVE shipped miscompile today is that falcon does not fully
-      lower on that path anyway (#369 hard-float + #275 dispatch already block it; float-bearing
-      br_table funcs land in the skip set). Once those clear, this is a THIRD on-target blocker
-      for the self-contained path unless falcon moves to the --relocatable + TCB-link model (the
-      gale-maximal-wasm direction gust already uses). Same family as OPEN synth#500 / CLOSED
-      synth#483 (optimized-path control-flow) but a distinct, worse symptom (whole dispatch
-      elided). Filed synth#507; correction posted (issuecomment-4806889356).
+      func_0) lowers correctly - gust is SAFE. SCOPE REFINED 2026-06-26 (falcon-reloc-spike,
+      tools/bench/falcon-reloc-spike.sh - SUPERSEDES the earlier "falcon affected" correction):
+      the #507 drop is a NARROW STRUCTURAL case (the minimal repro: br_table arms that
+      store-then-return / a memory-loaded selector). falcon has 18 br_table-bearing functions
+      (3 skipped for #369 floats; 15 EMITTED). The 15 emitted ones lower CORRECTLY AND
+      IDENTICALLY on BOTH paths - verified func_41 disassembles byte-for-byte equal on
+      --cortex-m and --relocatable (same cmp/bne/subs dispatch; only absolute addrs differ),
+      and total conditional-branch count is EQUAL (780 = 780). So falcon's REAL br_tables are
+      NOT hit by #507 on either path - falcon is neither actively nor latently miscompiled by it.
+      NET: #507 is a real silent-miscompile of VALID wasm (worth fixing; same family as OPEN
+      synth#500 / CLOSED synth#483) but is NOT currently exercised by falcon OR gust code. The
+      earlier "third on-target blocker / forces falcon to --relocatable" framing was WRONG and
+      is retracted: the --cortex-m-vs--relocatable choice is the LINKING MODEL (self-contained
+      ELF vs gale-maximal-wasm TCB-link, DD-018), not br_table correctness. TEST-PIX-020 remains
+      a valid regression oracle for the bug. Filed synth#507; corrections posted.
       The PERF side of the same gust hot path (br_table-as-linear-cmp-chain on the
       relocatable path, gust_poll 3.9x) is already covered by synth#390/#428 - not re-filed.
     tags: [release-watch, synth, arm, br_table, control-flow, miscompile, optimized-path, correctness]

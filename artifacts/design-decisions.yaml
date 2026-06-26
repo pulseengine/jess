@@ -822,6 +822,24 @@ artifacts:
       (SVD -> svd2rust -> PAC informs the register logic; DMA + completion-IRQ -> wake) +
       the bottom TCB host iface that synth seams in natively; the WCET harness lands on the
       Renode RT1176 model first (REQ-PIX-005) as the hermetic CI gate, then real board.
+      SPIKE-VALIDATED 2026-06-26 (tools/bench/falcon-reloc-spike.sh, falcon-v1.95 on synth
+      0.16.0): the "synth is the last compile-to-ARM step seaming in the native TCB" claim is
+      now evidenced. falcon (meld-fused -> loom -> synth) dissolves with `--relocatable
+      --all-exports` to a VALID ELF relocatable object (`ELF 32-bit ... ARM ... relocatable`) -
+      the TCB-link form, vs the self-contained `--cortex-m` ELF jess-build.sh/bazel emit today.
+      The emitted functions are functionally identical between the two paths (conditional-branch
+      count 780=780, incl. br_tables; func_41 byte-identical dispatch), so the path choice is the
+      LINKING MODEL, not codegen correctness (it does NOT change the synth#507/AFD-032 picture).
+      THE TCB-SEAM SURFACE made concrete = the relocatable object's 20 UNDEFINED symbols the
+      native trusted base must provide: 19 WASI host primitives (output-stream write/flush/
+      check-write/subscribe, pollable.block, the resource-drops, exit, get-std{in,out,err} +
+      terminal accessors, get-environment) - exactly the "thin native register/DMA/IRQ/wake/time
+      shim" this DD describes, here for the flight-demo world's WASI plumbing - PLUS one
+      dangling `func_72` (a skipped function, AFD-030 i64-reg-pair, referenced by emitted code):
+      so a COMPLETE self-contained link is blocked on BOTH paths equally by the #369/#275/#503
+      skips creating unresolved refs, NOT by the path. NEXT RUNG: provide the 19 WASI primitives
+      as a minimal TCB shim + clear the skip poles, then link -> Renode boot (the gust model at
+      falcon scale). The maximal-wasm/TCB-link path is viable; the blockers are the synth poles.
     tags: [phase-2, hal, seam, embedded-hal-async, maybe-async, wit, wac, component-model, maximal-wasm, relay, m4]
     fields:
       rationale: >-
