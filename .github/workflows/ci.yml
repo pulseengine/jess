@@ -123,6 +123,8 @@ jobs:
         run: /tmp/renode/renode-test hardware/renode/rt1176-smoke.robot
       - name: RT1176 bulk-memory OOB-trap oracle (synth#374 / AFD-026)
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
+      - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
+        run: /tmp/renode/renode-test hardware/renode/synth507-brtable/brtable-507.robot
 
   # NOTE: a third job building the hermetic falcon firmware chain
   # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused

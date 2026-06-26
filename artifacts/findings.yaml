@@ -1269,7 +1269,7 @@ artifacts:
   - id: AFD-032
     type: ai-found-defect
     title: synth optimized (non-relocatable) path silently miscompiles br_table — selector elided, all arms fall through
-    status: open
+    status: resolved
     description: >
       Found 2026-06-26 while measuring the gust 1.81x codegen gap (gale COMPARE.md /
       gust_codegen_bench) for the 1.7x->0.7 ask. On the OPTIMIZED (non-relocatable)
@@ -1302,6 +1302,11 @@ artifacts:
       a valid regression oracle for the bug. Filed synth#507; corrections posted.
       The PERF side of the same gust hot path (br_table-as-linear-cmp-chain on the
       relocatable path, gust_poll 3.9x) is already covered by synth#390/#428 - not re-filed.
+      RESOLVED 2026-06-26: synth v0.17.0 (PR #508, "optimized path declines br_table to the
+      direct selector", #507/#242). jess verified GREEN on 0.17.0 - the brt_self.elf entry now
+      loads the selector (ldr [fp,#100]) + dispatches (cmp #0/#1/#2;beq), and TEST-PIX-020
+      (renode-test) passes (selector=2 -> only mem[8]=30). TEST-PIX-020 flipped valid + WIRED
+      into the renode-smoke CI job as the permanent regression gate. status -> resolved.
     tags: [release-watch, synth, arm, br_table, control-flow, miscompile, optimized-path, correctness]
     fields:
       detected-by: jess gust codegen measurement (gust_codegen_bench / chain probe); minimal .wat repro + wasmtime oracle on synth 0.16.0; --relocatable contrast proves gust safe; filed synth#507
