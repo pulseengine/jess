@@ -13,11 +13,12 @@ permissions:
   contents: read
 
 env:
-  # Pinned PulseEngine tool releases — bumped explicitly via PR. rivet 0.20.0
-  # carries the per-schema status enums (AFD-012, resolved at 0.18.0) and the
-  # `rivet sql` surface (REQ-229 / DD-068) the snapshot step below relies on;
-  # the jess store validates clean on it.
-  RIVET_VERSION: v0.20.0
+  # Pinned PulseEngine tool releases — bumped explicitly via PR. rivet 0.22.0
+  # ("Release planning, complete", REQ-232/233/234, #516) carries the first-class
+  # top-level `release:` dimension + `rivet release status/move` and `list --release`,
+  # on top of the per-schema status enums (AFD-012) and the `rivet sql` surface the
+  # snapshot step uses. The jess store validates clean on it (DD-021).
+  RIVET_VERSION: v0.22.0
   SPAR_VERSION: v0.17.0
   # Pinned gale external (rivet.lock) — jess's stpa hazards trace to gale's
   # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.

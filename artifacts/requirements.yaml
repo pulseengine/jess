@@ -3,25 +3,25 @@ artifacts:
     type: requirement
     title: falcon firmware image boots on the STM32F4 Renode target
     status: draft
+    release: v0.2.0
     fields:
       category: functional
       priority: must
 
-      release: v0.2.0
   - id: REQ-002
     type: requirement
     title: HIL run reproduces relay-simulated flight scenarios within tolerance
     status: draft
+    release: v0.3.0
     fields:
       category: functional
       priority: must
 
-      release: v0.3.0
   - id: REQ-003
     type: requirement
     title: Each adopted upstream component release is pinned and traceable
     status: draft
+    release: v0.5.0
     fields:
       category: non-functional
       priority: must
-      release: v0.5.0
