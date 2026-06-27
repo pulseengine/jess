@@ -6,6 +6,7 @@ artifacts:
     type: design-decision
     title: Phase-2 hardware target is the Holybro Pixhawk 6X-RT (NXP i.MX RT1176)
     status: accepted
+    release: v0.6.0
     description: >
       jess Phase-2 (falcon on real drone hardware) targets the Holybro Pixhawk
       6X-RT, Standard v2A Set (FMU + carrier + PM02D), PX4 board px4_fmu-v6xrt,
@@ -55,7 +56,6 @@ artifacts:
         and the STM32 path doesn't exercise the crossover-MCU / Zephyr story.
         Stay STM32F4/Renode only - rejected: that is emulation, not Phase-2 real
         hardware (though it remains the emulation fallback while AFD-018 stands).
-      release: v0.6.0
     links:
       - type: satisfies
         target: REQ-PIX-001
@@ -69,6 +69,7 @@ artifacts:
     type: requirement
     title: falcon firmware compiles and links for Cortex-M7 (i.MX RT1176, fpv5-d16 hard-float)
     status: implemented
+    release: v0.7.0
     fields:
       category: functional
       priority: must
@@ -76,7 +77,6 @@ artifacts:
       # hard-float" claim cannot reach `verified` until synth#369 (GI-FPU-002 VFP
       # lowering) + #275 (dispatch) land - both external. Deferred to v0.7.0 with the
       # rest of the on-target bring-up rather than block the v0.6.0 emulation+bench cut.
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -85,6 +85,7 @@ artifacts:
     type: requirement
     title: gale verified kernel primitives are the M7 flight native base — maximal-wasm (standalone gale + kiln + fused falcon), NOT via full Zephyr
     status: draft
+    release: v0.7.0
     description: >
       REVISED iter#43 (DD-017): the M7 flight runtime is gale-MAXIMAL-WASM, not
       gale-on-full-Zephyr. gale is a verified Zephyr-primitive REPLACEMENT with a
@@ -98,7 +99,6 @@ artifacts:
     fields:
       category: functional
       priority: must
-      release: v0.7.0  # M7 flight runtime = gale-maximal-wasm (DD-017); Zephyr = reference/validation only
     links:
       - type: traces-to
         target: FEATURE-002
@@ -107,10 +107,10 @@ artifacts:
     type: requirement
     title: ICM-42688-P driver validated on 6X-RT silicon (close the on-silicon bus/calibration gap)
     status: draft
+    release: v0.7.0
     fields:
       category: functional
       priority: must
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -119,10 +119,10 @@ artifacts:
     type: requirement
     title: Multi-processor binding realized - falcon on M7, failsafe on the STM32F100 I/O MCU; M4 reserved
     status: draft
+    release: v0.7.0
     fields:
       category: functional
       priority: should
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -131,10 +131,10 @@ artifacts:
     type: requirement
     title: HIL emulation for the i.MX RT1176 (Renode .repl authored, or EVK/real-silicon bring-up)
     status: accepted
+    release: v0.6.0
     fields:
       category: non-functional
       priority: should
-      release: v0.6.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -152,6 +152,7 @@ artifacts:
       Per-piece GREEN on synth v0.12.0 (AFD-024). jess's binding (CAN controller +
       transceiver over the RT1176 FlexCAN, via the embedded-hal-async-style seam) is
       the on-silicon counterpart, sequenced after the core HAL binding (REQ-PIX-012).
+    release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -160,10 +161,10 @@ artifacts:
     type: requirement
     title: Inter-core/inter-component comms - WIT-typed contracts, fused same-core / RPC cross-core over a shared-memory transport
     status: draft
+    release: v0.7.0
     fields:
       category: functional
       priority: should
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -172,10 +173,10 @@ artifacts:
     type: requirement
     title: Reuse relay-sec (no_std, Kani-proven E2E) as the inter-core E2E wrapper + WIT stream<T> contract over a net-new Zephyr ipc_service transport; relay-mavlink for off-board; spar to model it
     status: draft
+    release: v0.7.0
     fields:
       category: functional
       priority: must
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -184,6 +185,7 @@ artifacts:
     type: requirement
     title: Maximal-wasm gale-nano on the STM32F100 I/O MCU - minimal verified gale subset + kiln async scheduler, synth-compiled, thin native register shim
     status: draft
+    release: v0.9.0
     description: >
       gale-nano = {gale sem/mutex/msgq/timeout/event control primitives} +
       kiln-async scheduler + a ~4-item native shim (vector table+reset, one SysTick
@@ -230,7 +232,6 @@ artifacts:
     fields:
       category: functional
       priority: could
-      release: v0.9.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -239,10 +240,10 @@ artifacts:
     type: requirement
     title: Real-hardware bench harness - MAVLink-over-USB to the connected 6X-RT (read telemetry/state, differential vs falcon SIL)
     status: accepted
+    release: v0.6.0
     fields:
       category: functional
       priority: must
-      release: v0.6.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -251,10 +252,10 @@ artifacts:
     type: requirement
     title: Cross-validate the Renode i.MX RT1176 platform against the real 6X-RT board (emulation == silicon ground truth)
     status: draft
+    release: v0.7.0
     fields:
       category: non-functional
       priority: should
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -263,6 +264,7 @@ artifacts:
     type: requirement
     title: Bind the relay-hal peripheral seams (RegBus/SerialBus/PwmOut/AdcIn/CanBus) to i.MX RT1176 silicon - BSP + embedded-hal impls + on-silicon validation
     status: draft
+    release: v0.7.0
     description: >
       jess's half of the relay<->jess HAL contract (jess#62 / relay#214, DD-012):
       relay owns the portable verified peripheral ABSTRACTION (the bus/peripheral
@@ -291,7 +293,6 @@ artifacts:
     fields:
       category: functional
       priority: should
-      release: v0.7.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -300,6 +301,7 @@ artifacts:
     type: requirement
     title: Firmware-update + non-volatile persistence architecture for the RT1176 target (must be modeled before finalizing the storage/ROM route)
     status: draft
+    release: v0.8.0
     description: >
       jess must define how (a) parameters/calibration persist and (b) firmware is
       updated on the Pixhawk 6X-RT, BEFORE committing to the "own driver, no i.MX
@@ -318,7 +320,6 @@ artifacts:
     fields:
       category: functional
       priority: should
-      release: v0.8.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -327,6 +328,7 @@ artifacts:
     type: requirement
     title: PX4-on-Renode HITL — boot the real fmu-v6xrt firmware on the RT1176 model, then co-simulate with Gazebo physics in lockstep
     status: draft
+    release: v0.8.0
     description: >
       Take the Renode RT1176 platform from boot-a-stub-firmware (REQ-PIX-005) to
       running the REAL PX4 fmu-v6xrt firmware, then to a hardware-in-the-loop
@@ -358,7 +360,6 @@ artifacts:
     fields:
       category: functional
       priority: should
-      release: v0.8.0
     links:
       - type: traces-to
         target: FEATURE-002
@@ -505,6 +506,7 @@ artifacts:
     type: requirement
     title: The combined M7(falcon)+F100(gust) vehicle is simulatable on two parallel tracks - wasmtime (hardware-free SIL) and Renode (real-hardware) - over sensors -> control + failsafe -> motors + inter-node IPC
     status: draft
+    release: v0.9.0
     description: >
       The whole two-node vehicle (not one piece) must be developable + verifiable in
       simulation, early, without waiting on hardware. Two tracks run in parallel on the
@@ -524,7 +526,6 @@ artifacts:
     fields:
       category: functional
       priority: should
-      release: v0.9.0
     links:
       - type: traces-to
         target: REQ-PIX-004
@@ -654,6 +655,7 @@ artifacts:
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
     status: draft
+    release: v0.9.0
     description: >
       Inbound jess#91 (avrabe, org release-consistency campaign; hub pulseengine.eu#98):
       jess builds/consumes wasm firmware but gates CI only on rivet + spar - add the
@@ -683,7 +685,6 @@ artifacts:
     fields:
       category: process
       priority: should
-      release: v0.9.0
     links:
       - type: traces-to
         target: REQ-PIX-001
@@ -692,6 +693,7 @@ artifacts:
     type: requirement
     title: Hardware-first root-of-trust on the 6X-RT - bind the SE050 secure element + HAB secure boot, with an automatic software fallback (sigil/relay-sec) gated on hardware presence/health
     status: draft
+    release: v0.8.0
     description: >
       jess implements the DD-020 hardware-first / software-fallback root-of-trust on the
       Pixhawk 6X-RT. Two layers:
@@ -720,7 +722,6 @@ artifacts:
     fields:
       category: functional
       priority: should
-      release: v0.8.0
     links:
       - type: traces-to
         target: REQ-PIX-001

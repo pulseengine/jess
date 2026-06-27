@@ -9,6 +9,11 @@
 #   2. V-gap       — non-draft requirements (implemented/verified/accepted)
 #                    that NO test-spec `verifies`. A non-empty V-gap means a
 #                    requirement claims done with the right side of the V open.
+#   3. Release readiness — `rivet release status` (rivet >= 0.22.0) burn-down for
+#                    the next planned releases (REQ-233 / DD-021). Shown for
+#                    visibility; the EXIT-CODED form `rivet release status vX.Y`
+#                    is the pre-tag cut gate (it exits non-zero when not cuttable),
+#                    run at release time — NOT on every PR.
 #
 # Non-gating by design: this reports state, it does not fail the build. The
 # gate is `rivet validate`. Run locally in the release-watch loop, or in CI
@@ -39,4 +44,12 @@ echo
 echo "### V-gap — non-draft requirements lacking a verifying test"
 echo '```'
 "$RIVET" sql "$VGAP_SQL"
+echo '```'
+echo
+echo "### Release readiness — rivet release status (informational; cut gate is the exit code)"
+echo '```'
+for v in v0.6.0 v0.7.0 v0.8.0 v0.9.0; do
+  "$RIVET" release status "$v" 2>&1 || true
+  echo
+done
 echo '```'

@@ -947,7 +947,6 @@ artifacts:
       RESOLVED 2026-06-19 (iter#40): synth v0.11.49 RELEASED (= commit 39010ce, #374
       CLOSED); jess's Renode OOB-trap oracle (TEST-PIX-013) was the gate that closed
       it. jess adopted v0.11.49 (SHA-verified darwin release) and verified on the
-      release: falcon v1.80 fused-core bulk-mem loud-skips dropped 19->0 (i64 also 0);
       total on-target loud-skips 41->29, the remaining 29 ALL hard-float (#369). So
       falcon's on-target gap list collapses to JUST #369 (hard-float) + #275
       (dispatch). Committed oracle ELFs are the v0.11.49 content (no rebuild needed).

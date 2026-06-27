@@ -34,10 +34,10 @@ artifacts:
     type: feature
     title: "jess 0.1.0 — Reproducible forward chain (SIL and compile)"
     status: verified
+    release: v0.1.0
     tags: [roadmap, v0.1.0]
     fields:
       phase: phase-1
-      release: v0.1.0
     description: >
       One jess build command fetches a verified falcon-v* wasm, runs the wasmtime SIL gate, then meld->loom->synth to a Cortex-M ELF, recording evidence via rivet import-results. EXIT: one command yields falcon.elf plus a SIL PASS, ingested. (All steps already proven manually during bootstrap.)
     links:
@@ -48,10 +48,10 @@ artifacts:
     type: feature
     title: "jess 0.2.0 — Emulated bring-up on STM32F4"
     status: draft
+    release: v0.2.0
     tags: [roadmap, v0.2.0]
     fields:
       phase: phase-1
-      release: v0.2.0
     description: >
       Install Renode and arm-none-eabi-gcc; falcon firmware boots on emulated stm32f4_disco and an exported control function executes, reusing gale's Renode robot. EXIT: boot plus exec captured on Renode.
     links:
@@ -64,10 +64,10 @@ artifacts:
     type: feature
     title: "jess 0.3.0 — HIL flight bench with gated metrics"
     status: draft
+    release: v0.3.0
     tags: [roadmap, v0.3.0]
     fields:
       phase: phase-1
-      release: v0.3.0
     description: >
       Adapt gale's flight_control bench to falcon's control loop; capture CSV metrics (latency, jitter) and apply analyze.py gates vs a relay-sim baseline. EXIT: a green gated HIL run. Delivers REQ-002.
     links:
@@ -80,10 +80,10 @@ artifacts:
     type: feature
     title: "jess 0.4.0 — Supply-chain and provenance integration"
     status: draft
+    release: v0.4.0
     tags: [roadmap, v0.4.0]
     fields:
       phase: phase-1
-      release: v0.4.0
     description: >
       Verify sigil/cosign signatures; ingest the SBOM and relay's rivet-snapshot; create supply-chain artifacts per integrated build. EXIT: every integrated falcon build has verified provenance tracked.
     links:
@@ -94,10 +94,10 @@ artifacts:
     type: feature
     title: "jess 0.5.0 — Full dependency graph pinned"
     status: draft
+    release: v0.5.0
     tags: [roadmap, v0.5.0]
     fields:
       phase: phase-1
-      release: v0.5.0
     description: >
       Add relay plus meld/synth/kiln plus critical rules_* as externals/anchors; pin a baseline in rivet.lock; triage the unresolved-graph blockers (synth/meld/kiln/sigil). EXIT: complete pinned dependency graph, clean supplier coverage. Delivers REQ-003.
     links:
@@ -109,11 +109,11 @@ artifacts:
   - id: FEATURE-009
     type: feature
     title: "jess 0.6.0 — Release-watch automation v1"
-    status: draft
+    status: accepted
+    release: v0.6.0
     tags: [roadmap, v0.6.0]
     fields:
       phase: phase-1
-      release: v0.6.0
     description: >
       Scheduled poll of upstream releases; on change, rebuild plus re-HIL plus snapshot/impact/diff, auto-creating finding artifacts. EXIT: detects a new upstream release and emits a delta report plus findings.
     links:
@@ -124,10 +124,10 @@ artifacts:
     type: feature
     title: "jess 0.7.0 — Upstream feedback loop closed"
     status: draft
+    release: v0.7.0
     tags: [roadmap, v0.7.0]
     fields:
       phase: phase-1
-      release: v0.7.0
     description: >
       Auto-file gh issues for findings; track status open to reported to fixed to verified; first loom-bug issue filed and tracked. EXIT: a finding flows out to an upstream issue and back to verified.
     links:
@@ -138,10 +138,10 @@ artifacts:
     type: feature
     title: "jess 0.8.0 — Safety case (STPA and ISO 26262)"
     status: draft
+    release: v0.8.0
     tags: [roadmap, v0.8.0]
     fields:
       phase: phase-1
-      release: v0.8.0
     description: >
       Full STPA control structure, UCAs, ASIL safety goals, FMEA/DFA cross-linked to gale and relay analyses, with coverage gates. EXIT: a defensible Phase-1 safety argument.
     links:
@@ -152,10 +152,10 @@ artifacts:
     type: feature
     title: "jess 0.9.0 — CI, hermetic build, and own compliance report"
     status: draft
+    release: v0.9.0
     tags: [roadmap, v0.9.0]
     fields:
       phase: phase-1
-      release: v0.9.0
     description: >
       jess GitHub Actions runs the forward chain plus HIL per falcon release; hermetic Bazel build via rules_wasm_component; publish jess's own compliance-report.tar.gz. EXIT: CI-green on push plus a published compliance report.
     links:
@@ -166,10 +166,10 @@ artifacts:
     type: feature
     title: "jess 0.10.0 — Phase-1 complete and DO-178C bridge readiness"
     status: draft
+    release: v0.10.0
     tags: [roadmap, v0.10.0]
     fields:
       phase: phase-1
-      release: v0.10.0
     description: >
       Any falcon-v* is auto-built, HIL-tested on STM32F4, provenance-verified, with findings fed back; add DO-178C bridge scaffolding for the airborne Phase 2/3 transition. EXIT: Phase-1 (HIL vs relay sim on gale hardware) done and continuously validated.
     links:

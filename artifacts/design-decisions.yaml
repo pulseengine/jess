@@ -3,12 +3,12 @@ artifacts:
     type: design-decision
     title: Anchor safety case to STPA + ISO 26262 (score), defer DO-178C to Phase 3
     status: accepted
+    release: v0.1.0
     description: >
       Toolchain is ISO-26262-aligned today (gale is ASIL-D); the drone is the demonstrator. STPA is the methodology spine; the score schema (tenet/assertion) plus safety-case (safety-goal/fmea-entry) carry the ISO 26262 argument. DO-178C (rivet preset) is added when the airborne Phase 3 needs it.
     tags: [safety, standards]
     fields:
       rationale: Standards selection drives schema choices for the entire spine. ISO 26262 is already supported by the toolchain; committing to it now avoids rework. DO-178C is deferred to avoid premature complexity.
-      release: v0.1.0
     links:
       - type: satisfies
         target: META-REQ-001
@@ -17,12 +17,12 @@ artifacts:
     type: design-decision
     title: HIL build-flash mechanics are a separate Phase-1 spec
     status: accepted
+    release: v0.1.0
     description: >
       How falcon is compiled through meld->loom->synth->kiln and flashed to the STM32F4 target is out of scope for the tracking spine; it is brainstormed as its own spec.
     tags: [scope]
     fields:
       rationale: Keeping build-flash mechanics separate prevents the tracking spine from becoming a build-system spec. A dedicated Phase-1 document keeps responsibilities clean.
-      release: v0.1.0
     links:
       - type: satisfies
         target: META-REQ-001
@@ -31,10 +31,10 @@ artifacts:
     type: design-decision
     title: Drive jess firmware build via rules_wasm_component and rules_renode emulation
     status: accepted
+    release: v0.2.0
     tags: [build, bazel, toolchain]
     fields:
       rationale: Track the falcon firmware build hermetically through rules_wasm_component (pinned wasm toolchain bundle + meld_fuse/synth_compile) and run on-target tests via rules_renode EMULATION rather than hand-rolled installs or the physical board. Emulation-only keeps jess from contending with gale's hardware rig. Verus/rocq/lean proof toolchains are intentionally NOT jess build deps (jess builds firmware, not proofs).
-      release: v0.2.0
     links:
       - type: satisfies
         target: REQ-001
@@ -43,6 +43,7 @@ artifacts:
     type: design-decision
     title: Build falcon from relay source as the resilient integration input
     status: accepted
+    release: v0.1.0
     tags: [resilience, build, relay]
     fields:
       rationale: >-
@@ -54,7 +55,6 @@ artifacts:
         published release asset only as an additional cross-check when present.
         This keeps the goal (falcon onto hardware) progressing regardless of
         release-pipeline state.
-      release: v0.1.0
     links:
       - type: satisfies
         target: REQ-003
@@ -63,6 +63,7 @@ artifacts:
     type: design-decision
     title: jess targets DO-178C DAL-A, ISO 26262 ASIL-D, IEC 61508 SIL-4 with STPA and STPA-Sec
     status: accepted
+    release: v0.1.0
     tags: [safety, standards, integrity]
     fields:
       rationale: >-
@@ -88,7 +89,6 @@ artifacts:
         the demonstrator should validate the airborne assurance posture from
         commit one. Target a single domain only - rejected because falcon/relay
         carry multi-domain ambition.
-      release: v0.1.0
     links:
       - type: satisfies
         target: REQ-003
@@ -99,6 +99,7 @@ artifacts:
     type: design-decision
     title: gale-maximal-wasm - drivers compile to wasm components; native trusted base is gale primitives plus a thin bus interface
     status: accepted
+    release: v0.4.0
     description: >
       jess's stack is based on gale (the formally verified Verus/Rocq/Lean
       ASIL-D replacement for Zephyr kernel primitives), and the architecture
@@ -127,7 +128,6 @@ artifacts:
         Host-side native driver rlibs behind the ImuDriver seam (relay's current
         pattern) - rejected as the end state because it grows the unverified
         native surface and forks the test path between host and target.
-      release: v0.4.0
     links:
       - type: satisfies
         target: REQ-002
@@ -138,6 +138,7 @@ artifacts:
     type: design-decision
     title: Phase-2 bring-up methodology - Renode reuse + PX4/NuttX reference + C# peripheral reimpl, staged, SIL-differential gated
     status: accepted
+    release: v0.6.0
     description: >
       The proven jess bring-up method, applied to the Pixhawk 6X-RT (i.MX
       RT1176): (1) gather schematics/HW description (DD-007); (2) seed a Renode
@@ -192,7 +193,6 @@ artifacts:
         Skip Renode, go straight to EVK/real silicon via Zephyr - viable
         fallback (kept open) but loses the hermetic CI emulation jess relies on.
         Wait for upstream Renode RT1176 support - rejected: none is planned.
-      release: v0.6.0
     links:
       - type: satisfies
         target: REQ-PIX-005
@@ -203,6 +203,7 @@ artifacts:
     type: design-decision
     title: Inter-core comms - fuse same-core (meld), WIT-typed RPC cross-core over a shared-memory transport; NOT the wRPC crates
     status: accepted
+    release: v0.7.0
     description: >
       Architecture for "per-thread fused async component, multiple fused systems
       across cores" (the gale-maximal-wasm direction on the RT1176's M7+M4+IO).
@@ -273,7 +274,6 @@ artifacts:
         rejected (inter-NODE bus, wrong layer for M7<->M4 on one die);
         hand-rolled ad-hoc messaging with no contract - rejected (loses the
         typed/fuse-or-distribute property).
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-007
@@ -284,6 +284,7 @@ artifacts:
     type: design-decision
     title: Phase-2 verification ladder - SIL -> behavioral differential -> Renode hermetic HIL -> real-HW MAVLink bench, with Renode cross-validated against the real board
     status: accepted
+    release: v0.6.0
     description: >
       How jess ensures things work on the way to flight, now that the physical
       6X-RT is connected (DD-007 milestone). Four rungs, each a gate:
@@ -322,7 +323,6 @@ artifacts:
         confidently wrong (the RT1176 model is hand-authored); the board keeps it
         honest. SIL/differential only - rejected: never exercises the real
         peripherals/timing.
-      release: v0.6.0
     links:
       - type: satisfies
         target: REQ-002
@@ -333,6 +333,7 @@ artifacts:
     type: design-decision
     title: gale-nano (gust) failsafe mixer is FIXED-POINT (Q8) - keeps the STM32F100 path synth-gap-free
     status: accepted
+    release: v0.9.0
     description: >
       The gale-nano failsafe app's mixer SHALL be fixed-point (Q8), not float.
       Grounded in a measured op-set profile (iter#37, gale-side on gale#65,
@@ -378,7 +379,6 @@ artifacts:
         profile's IPC copies were small (<=22B, LLVM-inlined); a larger real
         IPC/telemetry frame could cross LLVM's memcpy threshold and pull #374 -
         re-profile against real frame sizes when the failsafe core firms up.
-      release: v0.9.0
     links:
       - type: satisfies
         target: REQ-PIX-009
@@ -387,6 +387,7 @@ artifacts:
     type: design-decision
     title: relay<->jess HAL contract - relay owns the verified peripheral abstraction (seams + protocol + WIT), jess owns the binding to RT1176 silicon
     status: accepted
+    release: v0.7.0
     description: >
       The split for getting falcon's verified cascade onto the Pixhawk 6X-RT
       (jess#62 / relay#214). relay owns the hardware ABSTRACTION: the bus/peripheral
@@ -449,7 +450,6 @@ artifacts:
         DShot via eFlexPWM - rejected: PX4's own RT117x path is FlexIO, which gives
         cleaner bit-timing; duty-PWM doesn't fit DShot framing. Sync-only traits -
         rejected: would break when DMA/IRQ completion is wired (it must be async).
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-012
@@ -460,6 +460,7 @@ artifacts:
     type: design-decision
     title: Board layout is a PARAMETER, not a constant - the HAL binding is {SoC-family driver set} x {board topology/cal}, seams stay board-agnostic
     status: accepted
+    release: v0.7.0
     description: >
       jess targets the Pixhawk 6X-RT now, but WILL face other boards with different
       layouts (architect, iter#40). The design must not hard-code one board. The
@@ -504,7 +505,6 @@ artifacts:
         portability. A single mega-.repl/BSP with #ifdef-style branches - rejected:
         couples variants, defeats hermetic per-board CI; prefer one .repl + one BSP
         + one cal set per board, composed over the shared seams.
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-012
@@ -513,6 +513,7 @@ artifacts:
     type: design-decision
     title: Redundancy architecture - isolated triple-IMU domains (SW voting in relay) + triple-source hardware-OR power (SW monitor-only)
     status: accepted
+    release: v0.7.0
     description: >
       How jess deals with the 6X-RT's sensor + power redundancy (architect, iter#40;
       grounded in the FMUv6X standard). Two independent redundancy mechanisms, modeled
@@ -550,7 +551,6 @@ artifacts:
         failover - rejected: puts code in the safety-critical instantaneous path; the
         hardware OR is correct. Voting in jess - rejected: it is portable verified
         algorithm = relay's lane (DD-012), and would duplicate the EKF.
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-012
@@ -561,6 +561,7 @@ artifacts:
     type: design-decision
     title: jess<->relay WIT seam is at the ISOLATED-TRANSPORT level - host provides per-bus transports, relay's wasm owns drivers + decode + voting
     status: accepted
+    release: v0.7.0
     description: >
       The seam granularity for the host(jess native)<->guest(relay wasm) WIT contract
       (architect deliberated, iter#40; chosen option B of three). The seam is as LOW as
@@ -602,7 +603,6 @@ artifacts:
         (imu/baro/power with read-sample/health): rejected, pulls relay's Kani-proven
         protocol bodies + health interpretation into jess's native TCB, shrinking the
         portable verified surface and coupling jess to sensor semantics.
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-012
@@ -611,6 +611,7 @@ artifacts:
     type: design-decision
     title: Update + persistence architecture - flight TCB carries NO i.MX ROM; persistence=FRAM-own-driver; the ROM question lives ONLY in the on-ground update bootloader
     status: accepted
+    release: v0.8.0
     description: >
       Models jess's firmware-update + persistence path on the RT1176 (REQ-PIX-015),
       a PREREQUISITE for finalizing the storage/ROM route (the user's point: "we
@@ -694,7 +695,6 @@ artifacts:
         external-only update (no bootloader) - rejected: no field update. Skipping a
         signed-image/anti-rollback chain - rejected: integrity is the safety core of
         update.
-      release: v0.8.0
     links:
       - type: satisfies
         target: REQ-PIX-015
@@ -703,6 +703,7 @@ artifacts:
     type: design-decision
     title: M7 flight runtime = gale-MAXIMAL-WASM (standalone gale verified primitives + kiln + fused falcon, NO Zephyr in flight); Zephyr = reference/bring-up only
     status: accepted
+    release: v0.7.0
     description: >
       The keystone the storage/boot story rests on (the gale-layer question): what runs
       on the M7 in flight. DECIDED via a gale deep-dive (iter#43, research-first):
@@ -751,7 +752,6 @@ artifacts:
         Kept ONLY as gale's validation track + an optional bring-up reference. Bare
         hand-rolled primitives (no gale) - rejected: throws away gale's Verus/Rocq/Lean
         verification, the entire point.
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-002
@@ -762,6 +762,7 @@ artifacts:
     type: design-decision
     title: The jess<->relay transport seam IS embedded-hal-async at TRANSACTION granularity, composed ALL-WASM (wac/meld/synth + TCB seam); maybe-async-cfg is relay's source-portability tool, NOT a jess native path - supersedes the bespoke RegBus shape of DD-015
     status: accepted
+    release: v0.7.0
     description: >
       Concretizes the DD-015 isolated-transport seam onto an EXISTING standard instead
       of bespoke RegBus/SerialBus traits (architect dialogue iter#44-#45; firmed with
@@ -866,7 +867,6 @@ artifacts:
         maximal-wasm thesis (DD-006/DD-017); only the TCB is native, seamed in by synth.
         Host provides typed device resources (DD-015 option C) - already rejected there:
         pulls Kani bodies into the native TCB.
-      release: v0.7.0
     links:
       - type: satisfies
         target: REQ-PIX-012
@@ -877,6 +877,7 @@ artifacts:
     type: design-decision
     title: Two-track simulation for the combined M7+F100 vehicle - wasmtime (hardware-free SIL) parallel to Renode (real-hardware model), same components, plus physical silicon
     status: accepted
+    release: v0.9.0
     description: >
       The flight system is TWO cooperating nodes (M7 falcon + relay-hal = primary
       sensing/control/GCS-CAN; F100 gust = always-alive failsafe: RC-in, failsafe PWM,
@@ -921,7 +922,6 @@ artifacts:
         on-target gaps #369/#275 only show on the ARM path). Single-node sims only -
         rejected: the failsafe handoff + IPC are vehicle-level behaviors that only appear
         with both nodes present.
-      release: v0.9.0
     links:
       - type: satisfies
         target: REQ-PIX-017
@@ -931,6 +931,7 @@ artifacts:
     type: design-decision
     title: Root-of-trust = HARDWARE-FIRST (SE050 secure element + i.MX RT HAB secure boot) with a SOFTWARE FALLBACK (sigil + relay-sec) when the hardware is absent/unprovisioned/unhealthy
     status: accepted
+    release: v0.8.0
     description: >
       The 6X-RT security root-of-trust decision (user direction: "hardware with a
       software fallback if the hardware does not provide"). GROUNDED in the PX4
@@ -999,7 +1000,6 @@ artifacts:
         degradation if the SE050 fails in the field. DPS/TPM or a different secure element -
         rejected: the SE050 is the part already on the 6X-RT (I2C4 @ 0x48) and PX4-supported;
         no reason to add another.
-      release: v0.8.0
     links:
       - type: satisfies
         target: REQ-PIX-019
@@ -1008,6 +1008,7 @@ artifacts:
     type: design-decision
     title: jess release roadmap + cut criteria - the rivet release field is the plan; readiness is a query; v0.6.0 = the RT1176 emulation + MAVLink bench milestone
     status: accepted
+    release: v0.6.0
     description: >
       Makes the release plan live in rivet (the `release:` field) rather than in
       GitHub milestones alone, per the release-planning method: a release's SCOPE is
@@ -1036,7 +1037,28 @@ artifacts:
       human-readable log. v0.7.0+ are driven by pulling `release: vX.Y` + status != verified
       and running each through the feature loop; they are gated on the synth poles
       (#369/#275/#503), gale#65, and hub#98, so they are PLANNED not yet cuttable.
-    tags: [phase-2, release-planning, rivet, roadmap, process, traceability]
+      TOOLING ADOPTED 2026-06-27 (rivet v0.22.0, "Release planning, complete",
+      REQ-232/233/234, #516): the release plan is now driven by first-class rivet commands,
+      not hand-rolled SQL. MIGRATION: `release:` moved from a nested `fields:` child to a
+      TOP-LEVEL artifact dimension across 85 artifacts (the nested form was invisible to the
+      new tooling); the junk `AFD-026: release=falcon` was dropped (findings are not
+      release-scoped). READINESS is now `rivet release status <ver>` (per-status burn-down;
+      EXITS NON-ZERO when not cuttable) - this is the PRE-TAG CUT GATE, run at release time
+      (the snapshot shows it informationally for v0.6.0-v0.9.0; not a per-PR gate since
+      planning releases are intentionally red). `rivet list --release <ver>` is the scope
+      view; `rivet release move <id> <ver>` logs scope changes. LESSON: the tool's
+      FULL-SCOPE gate caught FEATURE-009 ("release-watch automation v1") still `draft` in
+      v0.6.0 - a miss my earlier REQUIREMENT-ONLY readiness query did not see; FEATURE-009
+      is genuinely delivered (the CI gates + snapshot + chain-measure + per-piece process
+      all operate) so it was flipped accepted, and v0.6.0 is now `rivet release status` =
+      Cuttable. GOING FORWARD a release is tagged only after `rivet release status vX.Y`
+      exits 0 (full scope, not just requirements). Also assigned the backlog REQ-PIX-006
+      -> v0.7.0 (now 9 reqs). KNOWN FOLLOW-UP: the stpa/stpa-sec/safety-goal artifacts were
+      blanket-tagged release=v0.8.0 (foundational analysis, not v0.8.0 deliverables), so
+      `release status v0.8.0` shows ~40 artifacts / 38 draft - a scope-hygiene cleanup
+      (drop release: from the analysis layer, keep it on requirements/DDs) is owed before
+      v0.8.0 planning is meaningful.
+    tags: [phase-2, release-planning, rivet, roadmap, process, traceability, rivet-0.22]
     fields:
       rationale: >-
         The V-model artifacts should drive the roadmap and gate the cut, which is only
@@ -1050,7 +1072,6 @@ artifacts:
         done milestone on external synth fixes (#369/#275) with no jess lever. Verify
         REQ-PIX-001 at the "compiles" bar now - rejected: its title claims hard-float,
         which is not met; verifying it would overclaim (the honest split is to defer).
-      release: v0.6.0
     links:
       - type: satisfies
         target: META-REQ-001
