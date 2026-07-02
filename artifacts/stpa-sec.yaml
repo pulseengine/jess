@@ -4,7 +4,6 @@ artifacts:
     type: sec-loss
     title: Adversary causes loss of the vehicle via compromised control
     status: draft
-    release: v0.8.0
     description: >
       An adversary, by breaching the integrity or availability of the control
       chain, causes the vehicle to depart controlled flight or fly away beyond
@@ -21,7 +20,6 @@ artifacts:
     type: sec-loss
     title: Adversary issues unauthorized commands to the vehicle
     status: draft
-    release: v0.8.0
     description: >
       An adversary injects unauthorized commands over the control or telemetry
       link, breaching command-path integrity and taking partial or full control
@@ -36,7 +34,6 @@ artifacts:
     type: sec-hazard
     title: GNSS/GPS spoofing yields a false position estimate
     status: draft
-    release: v0.8.0
     description: >
       An adversary spoofs GNSS/GPS signals so the position estimate is false,
       causing the controller to drive the vehicle to an attacker-chosen location
@@ -54,7 +51,6 @@ artifacts:
     type: sec-hazard
     title: Command injection over the control/telemetry link yields unauthorized commands
     status: draft
-    release: v0.8.0
     description: >
       An adversary on the control or telemetry link injects forged or replayed
       commands that the vehicle accepts as authentic, gaining unauthorized
@@ -71,7 +67,6 @@ artifacts:
     type: sec-hazard
     title: Firmware or component tampering in the supply chain yields compromised control
     status: draft
-    release: v0.8.0
     description: >
       An adversary tampers with firmware or a component during the build or
       supply chain so the deployed control software is compromised. Ties to
@@ -89,7 +84,6 @@ artifacts:
     type: sec-constraint
     title: Position estimate shall be robust to and detect GNSS spoofing
     status: draft
-    release: v0.8.0
     description: >
       The estimator shall detect and reject spoofed GNSS/GPS signals (e.g. via
       cross-checks against inertial/other sensors and plausibility bounds) so a
@@ -104,7 +98,6 @@ artifacts:
     type: sec-constraint
     title: Control and telemetry commands shall be authenticated and replay-protected
     status: draft
-    release: v0.8.0
     description: >
       Commands over the control and telemetry link shall be authenticated and
       protected against replay so only authorized commands are accepted.
@@ -118,7 +111,6 @@ artifacts:
     type: sec-constraint
     title: Deployed firmware integrity shall be attested before execution
     status: draft
-    release: v0.8.0
     description: >
       The integrity and provenance of the deployed firmware and its components
       shall be attested (sigil) before execution so tampered images are detected
@@ -134,7 +126,6 @@ artifacts:
     type: sec-uca
     title: FlightCore acts on a spoofed position estimate, commanding the vehicle off-geofence
     status: draft
-    release: v0.8.0
     description: >
       Under GNSS spoofing, the FlightCore controller provides motor commands
       computed from a false position estimate, driving the vehicle toward an
@@ -162,7 +153,6 @@ artifacts:
     type: sec-scenario
     title: RF spoofing injects a false position the estimator accepts
     status: draft
-    release: v0.8.0
     description: >
       An RF adversary spoofs GNSS so the receiver locks onto counterfeit signals;
       with no spoof detection, the estimator accepts the false position (SU-001)

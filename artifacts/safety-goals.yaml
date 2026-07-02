@@ -3,7 +3,6 @@ artifacts:
     type: safety-goal
     title: Maintain the safe flight envelope
     status: draft
-    release: v0.8.0
     description: >
       The flight control system shall keep the drone within the safe flight
       envelope to prevent loss of controlled flight. Integrity - ISO 26262
@@ -27,7 +26,6 @@ artifacts:
     type: safety-goal
     title: Bound control-loop execution time to the real-time deadline
     status: draft
-    release: v0.8.0
     description: >
       The flight control loop shall complete each cycle within its real-time
       deadline so the vehicle is never effectively open-loop (ties H-004 and
@@ -54,7 +52,6 @@ artifacts:
     type: safety-goal
     title: Maintain geofence containment
     status: draft
-    release: v0.8.0
     description: >
       The flight control system shall keep the vehicle within the authorized
       operating volume (geofence) and never act on a commanded setpoint that
