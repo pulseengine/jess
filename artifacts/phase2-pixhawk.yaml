@@ -682,6 +682,14 @@ artifacts:
       via kilnd -> report -> assert no branch-coverage regression) and (b) a scry
       sound-analysis gate, both on the fused falcon core, to .github/workflows/ci.yml -
       the deliberate follow-on feature (not rushed in a supervisory tick).
+      REFRESH 2026-07-02 (cron loop, current tooling): re-ran the witness leg on
+      falcon-flight-v1.110 with witness v0.38.0 (SHA-verified darwin release) - meld fuse
+      (100086 -> 78690 B) -> `witness instrument` succeeds -> manifest schema v2, 1412
+      branches (was 1407 on witness 0.36.0 / older falcon; +5 as falcon grew to v1.110). The
+      released wasm is still STRIPPED (name section only, no DWARF), so the gate stays
+      structural branch-coverage on the fused core, complementing relay's source-level MC/DC.
+      Feasibility CONFIRMED on current tooling; the gate implementation remains the deliberate
+      follow-on. Evidence: /tmp witness run (falcon.fused.wasm sha256 03a6b806).
     fields:
       category: process
       priority: should
