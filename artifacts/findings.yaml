@@ -863,6 +863,11 @@ artifacts:
       v0.3.5, spar v0.22.0, loom v1.1.17 (transform tool - sibling chain green, deeper differential
       is the adoption gate), rivet v0.23.0 (jess validates PASS; loop pin stays 0.22.1, not bumped
       reflexively). Evidence: chain-measure on falcon-flight-v1.110.wasm.
+      UPDATE 2026-07-02 (cron loop, later tick): synth v0.20 -> v0.21.0 = DWARF internal
+      function names (#394) + rivet-0.23 tooling ONLY - NO arm codegen change, so falcon skip
+      inventory is unaffected (no chain re-run warranted); #369/#275 UNMOVED. rivet v0.23 ->
+      v0.24.0 = serve/UX traceability panels - no validation-semantics change; jess validates
+      PASS on 0.23/0.24, loop pin stays 0.22.1. No new inbound; main green. Goal poles all OPEN.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
