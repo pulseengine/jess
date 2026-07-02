@@ -433,7 +433,17 @@ artifacts:
       post-loom (not comparable to the prior pre-loom 25 series; this becomes the
       new baseline). Full meld v0.32 -> loom v1.1.14 (all passes) -> kiln chain
       is behaviorally exact (0.023399856).
-    tags: [release-watch, synth, regalloc, on-target]
+      UPDATE 2026-07-02 (cron loop, synth v0.24.0 "the allocator release"): Belady spilling
+      DEFAULT-ON (#583) + whole-function slot liveness (#579) + spill-on-exhaustion (#580)
+      verified on falcon v1.111 - real WIN: emitted .text 67350 -> 65866 B (-2.2%) vs 0.23.0.
+      BUT the falcon skip count is UNCHANGED (30/146): the remaining 4 ARM regalloc skips are
+      i64-SPECIFIC and NOT addressed by general Belady spilling - func_59 (i64 register pair:
+      no high reg for R8), func_60/func_73 (i64 spill-slot pool exhausted), func_83 (callee-saved
+      call-result). Sharpened + escalated to synth#587 (Belady -2.2% confirmation + exact repro).
+      So the regalloc pole is now definitively the i64-allocator (i64 pair pool + i64 spill-slot
+      pool), a distinct lever from the general spilling that shipped. (func_58/164 skip separately
+      on #503 AAPCS-64bit-stack-param.)
+    tags: [release-watch, synth, regalloc, i64, on-target]
     fields:
       detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
       severity: major
@@ -887,6 +897,15 @@ artifacts:
       manufactured this tick (would be false). #507 (fixed v0.17) + #509 (fixed v0.23) both closed;
       remaining synth control-flow/on-target poles = #369 hard-float + #275 dispatch (UNMOVED) +
       #503 AAPCS-64bit + #518 i64-param. Evidence: chain-measure + Renode on falcon/vrb, synth 0.23.0.
+      UPDATE 2026-07-03 (cron loop, 5th tick): falcon v1.110 -> v1.111.0 (estimator-robustness:
+      IEKF under noise + GNSS dropout, relay #250) + synth v0.23 -> v0.24.0 ("the allocator
+      release": Belady spilling default-on). falcon v1.111 per-piece GREEN: SIL PASS (0.0234/
+      0.1317), skip inventory 30/146 UNCHANGED. Belady is a real WIN (falcon .text 67350 ->
+      65866 B, -2.2%) but does NOT drop the skip count - the 4 regalloc skips are i64-specific
+      (i64 pair pool + i64 spill-slot pool), a distinct lever - characterized in AFD-016 +
+      escalated to synth#587. #369 hard-float (24) + #275 dispatch remain THE poles blocking
+      real falcon; the non-float remainder is now precisely 3 i64-exhaustion + 2 #503 + 1
+      callee-saved. No new inbound; main green. Evidence: chain-measure on falcon-flight-v1.111.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
