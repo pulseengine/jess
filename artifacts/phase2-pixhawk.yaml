@@ -690,6 +690,18 @@ artifacts:
       structural branch-coverage on the fused core, complementing relay's source-level MC/DC.
       Feasibility CONFIRMED on current tooling; the gate implementation remains the deliberate
       follow-on. Evidence: /tmp witness run (falcon.fused.wasm sha256 03a6b806).
+      MECHANICS PROVEN + GAP SCOPED 2026-07-02 (cron loop, next step): witness's full
+      instrument->run->report path works end-to-end (verified on the WASI-free br_table fixture:
+      `witness run --invoke entry` -> `witness report` = 1/4 branch coverage with a per-branch
+      uncovered list, MC/DC-capable). The falcon-specific gap is now EXACT: `witness run`'s
+      embedded wasmtime CANNOT run the meld-fused core directly ("unknown import
+      wasi:io/error@0.2.6::[resource-drop]error" - the 19 WASI/host imports, same set as the
+      DD-018 TCB-seam). So the falcon gate must use `witness run --harness <cmd>` (subprocess
+      mode: spawn a runner with WITNESS_MODULE/MANIFEST/OUTPUT env, runner writes the counter
+      snapshot before exit) with a WASI-providing harness (kilnd) that ALSO emits the witness
+      counter snapshot. THAT harness bridge (kilnd runs the instrumented core invoking
+      run-stabilization + dumps __witness_* counters to WITNESS_OUTPUT) is the one remaining
+      integration piece; the instrument + report halves are proven.
     fields:
       category: process
       priority: should
