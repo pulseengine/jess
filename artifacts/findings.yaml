@@ -868,6 +868,12 @@ artifacts:
       inventory is unaffected (no chain re-run warranted); #369/#275 UNMOVED. rivet v0.23 ->
       v0.24.0 = serve/UX traceability panels - no validation-semantics change; jess validates
       PASS on 0.23/0.24, loop pin stays 0.22.1. No new inbound; main green. Goal poles all OPEN.
+      UPDATE 2026-07-02 (cron loop, 3rd low-delta tick): synth v0.21 -> v0.22.1 = RV32
+      cmp->select + spill-re-choice spike (flag-off) + DWARF high_pc fix (#564) - RISC-V and
+      debug-info ONLY, NO ARM codegen change, falcon skip inventory unaffected, #369/#275 UNMOVED.
+      spar v0.22 -> v0.23.0 = TSN CQF long-link + EMV2 error-propagation projection (model
+      analysis; jess CI pins spar 0.17.0 for the parse/instance gate, not bumped). No new inbound;
+      main green. Goal advance this tick was the REQ-PIX-018 witness gate mechanics (see that req).
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
