@@ -839,6 +839,18 @@ artifacts:
       fused 68322, loom 79346, m3≡m7dp ELF 68628, 29/145 skip = 23 #369 + 4 regalloc + 2 AAPCS).
       The DSDL fix is in the CAN decode path, not the 18 flight exports, so codegen unchanged.
       #369/#275 still OPEN. Evidence: tools/bench/chain-measure.sh on falcon-flight-v1.95.wasm.
+      UPDATE 2026-06-30 (cron loop, falcon jumped v1.95 -> v1.104.0 over ~3 days): v1.104
+      = "enforce the 8 orphaned flight-critical control+estimator Kani proofs" (relay #243,
+      a correctness-hardening cut). Per-piece GREEN on synth 0.17.0: SIL PASS (run-stabilization
+      0.0234 rad, run-position-hold 0.1317 m - unchanged), skip inventory 30/146 (was 29/145):
+      the Kani-enforced control/estimator addition brought ONE new function, float-bearing, so
+      #369 float went 23 -> 24; register-exhaustion 4, AAPCS 2 UNCHANGED - no new unlowerable
+      op-class. #369/#275/#503 all still OPEN. Also seen this tick: meld v0.37.0 (scry fusion
+      premises + embedder passthrough - transform tool, sibling chain green; full kiln
+      differential is the deeper adoption gate) and rivet v0.22.1 (fixes #613 set-release
+      folded-scalar corruption; jess store validates PASS + release status Cuttable on it, and
+      the artifacts touched by 0.22.0's modify/move - REQ-PIX-005/006/001, FEATURE-009 - checked
+      clean, no corruption). Evidence: tools/bench/chain-measure.sh on falcon-flight-v1.104.wasm.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
