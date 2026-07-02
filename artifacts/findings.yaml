@@ -851,6 +851,18 @@ artifacts:
       folded-scalar corruption; jess store validates PASS + release status Cuttable on it, and
       the artifacts touched by 0.22.0's modify/move - REQ-PIX-005/006/001, FEATURE-009 - checked
       clean, no corruption). Evidence: tools/bench/chain-measure.sh on falcon-flight-v1.104.wasm.
+      UPDATE 2026-07-02 (cron loop): falcon v1.104 -> v1.110.0 ("three-way fail-safe campaigns",
+      relay #249) + synth v0.17 -> v0.20.0. Per-piece GREEN, ZERO delta: SIL PASS (0.0234/0.1317),
+      skip inventory 30/146 UNCHANGED (24 float / 4 regalloc / 2 AAPCS); TEST-PIX-020 br_table
+      oracle still GREEN on 0.20.0 (no regression). synth 0.18-0.20 did NOT touch #369 (hard-float)
+      or #275 (dispatch) - the two dominant on-target poles HOLD - but: #503 corrected by the
+      maintainer to "0 of 3, not 2 of 3" (PR #524, matches jess's earlier correction); #329 FIXED
+      v0.19.0 (sound value-stack pre-flight, PR #552); NEW synth control-flow miscompiles being
+      characterized oracle-first - #509 (value-returning-branch drop on the shipped path, same
+      family as #507/TEST-PIX-020) and #518 (i64-param, same area as AFD-030). Also seen: kiln
+      v0.3.5, spar v0.22.0, loom v1.1.17 (transform tool - sibling chain green, deeper differential
+      is the adoption gate), rivet v0.23.0 (jess validates PASS; loop pin stays 0.22.1, not bumped
+      reflexively). Evidence: chain-measure on falcon-flight-v1.110.wasm.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major

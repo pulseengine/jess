@@ -3,7 +3,6 @@ artifacts:
     type: loss
     title: Loss of controlled flight resulting in crash
     status: draft
-    release: v0.8.0
     description: >
       The drone departs from controlled flight and crashes, causing damage to
       the airframe, payload, and property, with potential injury to bystanders.
@@ -15,7 +14,6 @@ artifacts:
     type: hazard
     title: Drone departs the safe flight envelope
     status: draft
-    release: v0.8.0
     description: >
       The drone enters a system state (excessive attitude, airspeed, or altitude
       rate) outside the safe flight envelope which, under worst-case conditions,
@@ -34,7 +32,6 @@ artifacts:
     type: loss
     title: Injury to people from the vehicle
     status: draft
-    release: v0.8.0
     description: >
       A person (bystander, operator, or third party) is injured or killed by the
       vehicle, its rotating components, or debris during operation.
@@ -46,7 +43,6 @@ artifacts:
     type: loss
     title: Damage to property, vehicle, or payload
     status: draft
-    release: v0.8.0
     description: >
       The vehicle damages property in the environment, or the airframe or its
       payload is damaged, resulting in financial loss.
@@ -58,7 +54,6 @@ artifacts:
     type: loss
     title: Loss of the vehicle (flyaway or unrecoverable)
     status: draft
-    release: v0.8.0
     description: >
       The vehicle is lost - it flies away beyond recovery, ditches, or otherwise
       becomes unrecoverable, with total loss of the asset.
@@ -70,7 +65,6 @@ artifacts:
     type: loss
     title: Mission failure (fails to reach or hold commanded state)
     status: draft
-    release: v0.8.0
     description: >
       The vehicle fails to reach or maintain the commanded state (position,
       attitude, or trajectory), so the mission objective is not met even though
@@ -84,7 +78,6 @@ artifacts:
     type: hazard
     title: Actuator or motor commands saturate or are mis-mixed
     status: draft
-    release: v0.8.0
     description: >
       The control-allocation/mixing stage produces motor or actuator commands
       that saturate, are misallocated across effectors, or are otherwise
@@ -103,7 +96,6 @@ artifacts:
     type: hazard
     title: State estimate (IEKF) diverges or goes NaN
     status: draft
-    release: v0.8.0
     description: >
       The invariant extended Kalman filter state estimate diverges, becomes
       numerically invalid (NaN/Inf), or otherwise produces a grossly wrong
@@ -122,7 +114,6 @@ artifacts:
     type: hazard
     title: Control loop misses its real-time deadline
     status: draft
-    release: v0.8.0
     description: >
       The flight control loop does not complete a cycle within its real-time
       deadline, so commands are issued late or stale and the vehicle is
@@ -148,7 +139,6 @@ artifacts:
     type: hazard
     title: Commanded setpoint leads the vehicle outside the geofence
     status: draft
-    release: v0.8.0
     description: >
       The commanded setpoint or trajectory directs the vehicle beyond the
       authorized operating volume (geofence), so the vehicle leaves the
@@ -171,7 +161,6 @@ artifacts:
     type: system-constraint
     title: Vehicle shall remain within the safe flight envelope
     status: draft
-    release: v0.8.0
     description: >
       The flight control system shall keep the vehicle within the safe flight
       envelope (attitude, airspeed, altitude-rate bounds) under all defined
@@ -186,7 +175,6 @@ artifacts:
     type: system-constraint
     title: Actuator commands shall stay within authority and be correctly mixed
     status: draft
-    release: v0.8.0
     description: >
       The control-allocation stage shall produce motor and actuator commands
       that remain within actuator authority and are correctly mixed so the
@@ -201,7 +189,6 @@ artifacts:
     type: system-constraint
     title: State estimate shall remain bounded, numerically valid, and monitored
     status: draft
-    release: v0.8.0
     description: >
       The state estimator shall remain bounded and numerically valid (no
       NaN/Inf), and divergence shall be detected and handled so the controller
@@ -216,7 +203,6 @@ artifacts:
     type: system-constraint
     title: Control loop shall complete each cycle within the real-time deadline
     status: draft
-    release: v0.8.0
     description: >
       The flight control loop shall complete every cycle within its real-time
       deadline; the execution environment shall be fast enough that the loop is
@@ -233,7 +219,6 @@ artifacts:
     type: system-constraint
     title: Commanded setpoints shall be confined within the geofence
     status: draft
-    release: v0.8.0
     description: >
       Commanded setpoints and trajectories shall be confined to the authorized
       operating volume so the vehicle is never commanded outside the geofence.
@@ -248,7 +233,6 @@ artifacts:
     type: controlled-process
     title: Vehicle flight dynamics (actuators and airframe)
     status: draft
-    release: v0.8.0
     description: >
       The physical vehicle - its motors/actuators and rigid-body flight
       dynamics - whose attitude and trajectory are the process being controlled.
@@ -259,7 +243,6 @@ artifacts:
     type: controller
     title: FlightCore controller (falcon flight control)
     status: draft
-    release: v0.8.0
     description: >
       The automated flight controller (falcon FlightCore) that runs the
       estimation and control loop and issues motor commands to the vehicle.
@@ -276,7 +259,6 @@ artifacts:
     type: control-action
     title: Issue motor command to the vehicle
     status: draft
-    release: v0.8.0
     description: >
       The FlightCore controller issues a motor command (mixed actuator
       setpoints) to the vehicle flight dynamics each control cycle.
@@ -294,7 +276,6 @@ artifacts:
     type: uca
     title: FlightCore provides the motor command too late
     status: draft
-    release: v0.8.0
     description: >
       The FlightCore controller provides the motor command after the control
       deadline has passed, so the vehicle acts on a stale command.
@@ -321,7 +302,6 @@ artifacts:
     type: uca
     title: FlightCore provides a motor command with the wrong value
     status: draft
-    release: v0.8.0
     description: >
       The FlightCore controller provides a motor command whose value is wrong -
       saturated or mis-mixed across effectors - so the achieved control authority
@@ -348,7 +328,6 @@ artifacts:
     type: loss-scenario
     title: Execution runtime too slow to meet the control deadline
     status: draft
-    release: v0.8.0
     description: >
       The flight control loop runs on an execution runtime that cannot sustain
       the required step rate, so the loop overruns its real-time deadline and the

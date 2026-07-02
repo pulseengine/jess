@@ -1053,11 +1053,13 @@ artifacts:
       all operate) so it was flipped accepted, and v0.6.0 is now `rivet release status` =
       Cuttable. GOING FORWARD a release is tagged only after `rivet release status vX.Y`
       exits 0 (full scope, not just requirements). Also assigned the backlog REQ-PIX-006
-      -> v0.7.0 (now 9 reqs). KNOWN FOLLOW-UP: the stpa/stpa-sec/safety-goal artifacts were
-      blanket-tagged release=v0.8.0 (foundational analysis, not v0.8.0 deliverables), so
-      `release status v0.8.0` shows ~40 artifacts / 38 draft - a scope-hygiene cleanup
-      (drop release: from the analysis layer, keep it on requirements/DDs) is owed before
-      v0.8.0 planning is meaningful.
+      -> v0.7.0 (now 9 reqs). FOLLOW-UP RESOLVED 2026-07-02 (cron loop): the stpa/stpa-sec/
+      safety-goal artifacts were blanket-tagged release=v0.8.0 (foundational analysis, not
+      v0.8.0 deliverables) - stripped release: from 34 analysis-layer artifacts (they are the
+      standing safety case, traced-to by requirements, not release-scoped). `release status
+      v0.8.0` now shows 6 real deliverables (REQ-PIX-014/015/019 + FEATURE-011 + 2 accepted DDs)
+      instead of 40. RULE: release: belongs on the DELIVERABLE layer (requirements, per-release
+      feature markers, DDs, meta) - NOT the analysis layer (stpa/sec/safety-goals).
     tags: [phase-2, release-planning, rivet, roadmap, process, traceability, rivet-0.22]
     fields:
       rationale: >-
