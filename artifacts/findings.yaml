@@ -874,6 +874,19 @@ artifacts:
       spar v0.22 -> v0.23.0 = TSN CQF long-link + EMV2 error-propagation projection (model
       analysis; jess CI pins spar 0.17.0 for the parse/instance gate, not bumped). No new inbound;
       main green. Goal advance this tick was the REQ-PIX-018 witness gate mechanics (see that req).
+      UPDATE 2026-07-02 (cron loop, 4th tick): synth v0.22.1 -> v0.23.0 = value-carrying
+      br/br_if/br_table land the result in the block's designated register (#509 FIX, PR #577)
+      + Belady spill-plan re-choice (flat_flight frame traffic recovered, #242) + repro symtab
+      fix (#570). falcon v1.110 per-piece GREEN on 0.23.0: SIL PASS (0.0234/0.1317), skip
+      inventory 30/146 UNCHANGED (24 float/4 regalloc/2 AAPCS - #509 is a miscompile fix not a
+      skip). CONTROL-FLOW FAMILY now closing: TEST-PIX-020 br_table oracle still GREEN on 0.23.0
+      (no regression from the #509 fix); jess verified a value-returning br_table compiles
+      CORRECTLY on 0.23.0 in Renode (selector=2 -> mem[0]=30). Attempted a #509-specific hermetic
+      oracle but the constant-per-arm fixture does NOT reproduce #509's trigger (both 0.20.0 and
+      0.23.0 compute constants correctly - #509 needs non-constant carried values), so NO new gate
+      manufactured this tick (would be false). #507 (fixed v0.17) + #509 (fixed v0.23) both closed;
+      remaining synth control-flow/on-target poles = #369 hard-float + #275 dispatch (UNMOVED) +
+      #503 AAPCS-64bit + #518 i64-param. Evidence: chain-measure + Renode on falcon/vrb, synth 0.23.0.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
