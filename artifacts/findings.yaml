@@ -955,6 +955,18 @@ artifacts:
       path is --relocatable per DD-018). On-target pole list now: #369 hard-float + #275 dispatch
       (self-contained, TEST-PIX-021 RED) + the i64 regalloc/#518 remainder. AFD-030 -> resolved.
       Evidence: chain-measure on falcon-flight-v1.112 / synth 0.29.0.
+      UPDATE 2026-07-03 (cron loop, synth v0.29 -> v0.30.1): 0.30.0 = RV32 flip-trilogy + #494
+      proof-carrying design docs (no ARM change); 0.30.1 = "#610 i64 rotl/rotr/div_u/rem_u
+      compute real results - never silent 0". falcon v1.112 skip 28/146 UNCHANGED (24 float /
+      3 regalloc / 0 AAPCS), text stable ~81.6KB, #369 UNMOVED. BUT #610 is a real CORRECTNESS
+      fix for falcon's EMITTED on-target code: falcon uses 4 i64.div_u/rot ops, and the 0.29-vs-
+      0.30.1 --cortex-m ELF DIFFERS (81622 -> 81626; 0.30.0 was RV-only so the ARM delta isolates
+      #610) - so >=1 i64 rot/div sat in an EMITTED (non-skipped) falcon function silently computing
+      0 on synth <=0.30.0, now correct. This is invisible to the wasmtime SIL gate (SIL runs the
+      component = correct); only the per-piece ARM test surfaces it - another latent emitted-i64
+      silent-miscompile class, now closed. On-target poles unchanged: #369 hard-float (24) THE
+      dominant one + #275 dispatch (TEST-PIX-021 RED) + the 3-fn i64-regalloc/#518 tail. No new
+      inbound; main green. Evidence: 0.29-vs-0.30.1 ELF diff on falcon-flight-v1.112.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
