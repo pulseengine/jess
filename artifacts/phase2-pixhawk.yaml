@@ -651,6 +651,31 @@ artifacts:
       - type: traces-to
         target: AFD-032
 
+  - id: TEST-PIX-021
+    type: test-spec
+    title: Renode Cortex-M3 runtime gate for synth call_indirect on the self-contained path (AFD-008/synth#275) - RED, the dispatch-pole gate
+    status: draft
+    description: >
+      hardware/renode/synth275-callindirect/ - a hermetic Cortex-M3 (Renode) RUNTIME gate
+      for the synth#275 / AFD-008 call_indirect miscompile on the self-contained --cortex-m
+      path (the TEST-PIX-013/#374 + TEST-PIX-020/#507 pattern). ci_self.elf = `synth compile
+      ci_self.wat --cortex-m -t cortex-m3` (synth 0.28.0): entry call_indirects table[selector]
+      (selector from linmem mem[100]) over 3 funcs returning 100/200/300, storing the result
+      to mem[0]. CORRECT dispatch: selector=1 -> f1 -> mem[0]=0xC8 (200). The #275/AFD-008 bug
+      emits NO funcref table on the self-contained path (.rodata absent, Layer-3) and elides
+      the dispatch -> selector-passthrough -> mem[0]=selector. CONFIRMED RED 2026-07-03 (jess
+      local, Renode, selectors 0/1/2 -> mem[0]=0/1/2 not 100/200/300; wasmtime correct; the
+      --relocatable path emits real blx dispatch, so it is path-specific). callindirect-275.robot
+      asserts mem[0]==0xC8. status=draft (RED) BY DESIGN - flips valid/GREEN when synth emits
+      the funcref table on the self-contained path (or falcon adopts --relocatable + TCB-link,
+      DD-018); NOT wired into the 4 CI gates while RED. Minimal repro posted to synth#275.
+    tags: [phase-2, renode, synth, call-indirect, dispatch, on-target, oracle, gate-pending]
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+      - type: traces-to
+        target: AFD-008
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core

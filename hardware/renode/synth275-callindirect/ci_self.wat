@@ -1,0 +1,11 @@
+(module
+  (memory (export "memory") 1)
+  (type $ret (func (result i32)))
+  (func (export "entry")
+    (i32.store (i32.const 0)
+      (call_indirect (type $ret) (i32.load (i32.const 100)))))
+  (func $f0 (type $ret) (i32.const 100))
+  (func $f1 (type $ret) (i32.const 200))
+  (func $f2 (type $ret) (i32.const 300))
+  (table 3 funcref)
+  (elem (i32.const 0) $f0 $f1 $f2))
