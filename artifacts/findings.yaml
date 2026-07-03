@@ -920,6 +920,13 @@ artifacts:
       escalated to synth#587. #369 hard-float (24) + #275 dispatch remain THE poles blocking
       real falcon; the non-float remainder is now precisely 3 i64-exhaustion + 2 #503 + 1
       callee-saved. No new inbound; main green. Evidence: chain-measure on falcon-flight-v1.111.
+      UPDATE 2026-07-03 (cron loop, 7th tick): falcon v1.111 -> v1.112.0 ("Comprehensive
+      Simulation Validation - 5 dispersion campaigns + catalog", relay #251 - a validation cut,
+      wasm byte-identical-size 100086). Per-piece GREEN: SIL PASS (0.0234/0.1317), skip inventory
+      30/146 UNCHANGED. synth/poles unchanged (0.26.0). Goal-step this tick: mapped the witness
+      gate path to its exact blocker (see REQ-PIX-018 - witness 0.38 component --in-place needs a
+      single-core component, falcon's is multi-core; the gate needs a --harness counter-snapshot
+      bridge or an upstream single-core falcon). #369/#275 unmoved. Evidence: chain-measure on falcon-flight-v1.112.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
