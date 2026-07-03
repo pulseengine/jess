@@ -942,6 +942,19 @@ artifacts:
       gate path to its exact blocker (see REQ-PIX-018 - witness 0.38 component --in-place needs a
       single-core component, falcon's is multi-core; the gate needs a --harness counter-snapshot
       bridge or an upstream single-core falcon). #369/#275 unmoved. Evidence: chain-measure on falcon-flight-v1.112.
+      UPDATE 2026-07-03 (cron loop, synth v0.29.0 - FIRST SKIP REDUCTION OF THE RUN): PR #605
+      "i64 stack params + pair spill-slot growth - DIRECT-path completeness (#503, #587)"
+      dropped falcon v1.112 skips 30 -> 28 on --cortex-m. Breakdown: AAPCS 2 -> 0 (#503 RESOLVED,
+      func_58 now lowers; func_164 reclassified #503 -> #518), register-exhaustion 4 -> 3 (one
+      i64 fn lowered via the direct-path pair spill-slot growth, #587 partial). #369 float 24
+      UNCHANGED (still THE dominant pole). Remaining non-float skips (3): func_59 i64-register-pair,
+      func_60/73 i64-spill-slot-pool (one lowered), func_83 callee-saved + #518 func_164. SIZE
+      NOTE: falcon .text grew 65866 -> 81622 B (+24%) on 0.29.0 - coincides with #604 (const-CSE
+      default-on + inline-const-aliasing retirement); ~15KB beyond the 2 newly-emitted functions,
+      so a real codegen-size delta on the MCU path (flag for the loom#239/size track; shippable
+      path is --relocatable per DD-018). On-target pole list now: #369 hard-float + #275 dispatch
+      (self-contained, TEST-PIX-021 RED) + the i64 regalloc/#518 remainder. AFD-030 -> resolved.
+      Evidence: chain-measure on falcon-flight-v1.112 / synth 0.29.0.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
@@ -1284,7 +1297,7 @@ artifacts:
   - id: AFD-030
     type: ai-found-defect
     title: synth arm backend skips functions needing the AAPCS stack-arg path (>8 scalar params, or any 64-bit stack param) - not lowered
-    status: open
+    status: resolved
     description: >
       Found 2026-06-26 measuring the falcon three-binary chain for the F100/M3 target
       (gale's 1.7x->0.7 perf ask, synth#494). On the arm backend, synth compile SKIPS
@@ -1320,6 +1333,13 @@ artifacts:
       stack-param lowering (#503) + the i64-pair fix. Diagnostic-precision + standalone
       >8-i32 capability confirmed; falcon skip-count not yet moved. Posted on synth#503
       (issuecomment-4806708182). #503 stays open.
+      RESOLVED 2026-07-03 (synth v0.29.0, PR #605 "i64 stack params + pair spill-slot growth -
+      direct-path completeness"): #503 CLOSED. jess verified on falcon v1.112 / 0.29.0 - func_58
+      (the >8-param-with-i64 AAPCS case) NOW LOWERS + emits into the ELF; falcon AAPCS-classified
+      skips 2 -> 0. func_164 is still skipped but RECLASSIFIED from #503 to #518 ("i64/f64 param
+      in a frame-backing function - the param_slots path drops the high half"), a distinct
+      follow-on. status -> resolved (the AAPCS stack-arg path lowers; the residual is #518, a
+      separate i64-param lever tracked in AFD-016).
     tags: [release-watch, synth, arm, aapcs, calling-convention, on-target, perf-0.7]
     fields:
       detected-by: jess F100/M3 three-binary chain measurement (tools/bench/chain-measure.sh); minimal .wat repro on released synth v0.15.1; filed synth#503
