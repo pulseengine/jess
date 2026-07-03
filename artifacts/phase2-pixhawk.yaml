@@ -702,6 +702,21 @@ artifacts:
       counter snapshot. THAT harness bridge (kilnd runs the instrumented core invoking
       run-stabilization + dumps __witness_* counters to WITNESS_OUTPUT) is the one remaining
       integration piece; the instrument + report halves are proven.
+      PATH FULLY MAPPED 2026-07-03 (cron loop, witness v0.38): witness 0.38 added a COMPONENT
+      mode (#110, `instrument --in-place`: rewrite the inner core + re-emit the component so it
+      runs through wasmtime/kiln's component API - which WOULD supply WASI and dodge the
+      fused-core import wall). Tried it on falcon-flight-v1.112: REJECTED - "3 embedded core
+      modules (a preview1->p2 adapter is likely present); single-module auto-unbundle does not
+      apply". So `--in-place` needs a SINGLE-core component; the released falcon component is
+      multi-core (wasip1->p2 adapter). Confirmed no bare-core/wasip1 falcon artifact is released
+      (only the multi-core `falcon-flight-v*.wasm` component + a components tarball). NET - the
+      witness gate on falcon needs ONE of: (a) meld-fuse the component to a single core then
+      `witness run --harness <kilnd/wasmtime runner that dumps __witness_* counters to
+      WITNESS_OUTPUT>` - the counter-snapshot harness bridge (kilnd runs it but has no counter
+      dump; the snapshot-JSON writer is the missing piece), OR (b) relay shipping a single-core
+      wasm32-wasip2 falcon so `witness instrument --in-place` + component-run works directly.
+      This is a deliberate feature (harness bridge OR an upstream ask to relay), not a
+      supervisory-tick job - but the recipe + exact blocker are now pinned.
     fields:
       category: process
       priority: should
