@@ -443,6 +443,20 @@ artifacts:
       So the regalloc pole is now definitively the i64-allocator (i64 pair pool + i64 spill-slot
       pool), a distinct lever from the general spilling that shipped. (func_58/164 skip separately
       on #503 AAPCS-64bit-stack-param.)
+      UPDATE 2026-07-03 (cron loop, synth v0.26.0): #587 drove a real fix - PR #589 "i64
+      pair-aware Belady eviction on exhaustion" (SYNTH_SPILL_ON_EXHAUST extended from i32
+      singles to i64 register PAIRS on the OPTIMIZED path), shipped FLAG-OFF ("pending gale
+      silicon"). jess VERIFIED against falcon v1.111 on 0.26.0: flag-OFF and flag-ON
+      (SYNTH_SPILL_ON_EXHAUST=1) are BYTE-IDENTICAL on the `--cortex-m` firmware compile -
+      skip set unchanged (30/146, same 4 i64 regalloc). So the #589 fix does NOT reach jess's
+      falcon firmware path: #589 itself scopes OUT func_60/func_73 (direct-selector i64
+      spill-SLOT-pool exhaustion) + func_83 (callee-saved), and empirically func_59 (i64
+      register-pair) also stays skipped on `--cortex-m`. NET: falcon firmware still needs the
+      DIRECT-selector i64 work (func_59/60/73/83, in instruction_selector.rs), which #589
+      leaves for a follow-up lane - the maintainer already scoped this in #589's body, so
+      recorded jess-side, no re-comment on the closed #587. Also in 0.25/0.26 (non-pole):
+      --volatile-segment DMA (#543), native-pointer ABI #237 (relevant to the DD-018 TCB-link
+      host-pointer path), DWARF debug-line #394. #369/#275 UNMOVED.
     tags: [release-watch, synth, regalloc, i64, on-target]
     fields:
       detected-by: jess loop iter#9 (2026-06-11) - synth skip-warning count on falcon fused core, cross-version controlled
