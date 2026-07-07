@@ -785,3 +785,29 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-PIX-001
+
+  - id: REQ-PIX-020
+    type: requirement
+    title: Benewake TF02 Pro LiDAR rangefinder integrated on the 6X-RT - the net-new sensor class (RangefinderIn seam + relay driver + on-silicon validation)
+    status: draft
+    description: >
+      The purchased vehicle (DD-022) adds a Benewake TF02 Pro 40m single-point LiDAR - the
+      one sensor class NOT already covered by the relay-hal matrix (which has IMU/baro/mag/
+      GNSS/ESC/MAVLink/DroneCAN). jess shall integrate it end-to-end: a relay driver body
+      that parses the TF02 UART frame (115200, 9-byte: distance_cm + signal-strength + a
+      sanity/quality flag) over the DD-018 embedded-io-async byte-link, exposed as a
+      RangefinderIn(distance_cm, quality) reading the estimator consumes for AGL/terrain
+      altitude and the landing detector; bound to a 6X-RT LPUART (gale TCB primitive) on
+      silicon, cross-validated on the Renode RT1176 model then the board. The rangefinder is
+      MONITOR/augment for altitude - out-of-range/low-quality frames degrade to
+      baro-only per DD-014 health, never a hard dependency. THE net-new relay REQUEST from
+      DD-022 (rangefinder driver + seam); sequenced after the core HAL binding (REQ-PIX-012)
+      and gated on the synth on-target poles (#369/#275) like the rest of v0.7.0.
+    release: v0.7.0
+    tags: [phase-2, sensor, lidar, rangefinder, tf02, relay-hal, on-target]
+    fields:
+      category: functional
+      priority: should
+    links:
+      - type: traces-to
+        target: REQ-PIX-012

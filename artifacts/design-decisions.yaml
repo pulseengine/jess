@@ -1077,3 +1077,73 @@ artifacts:
     links:
       - type: satisfies
         target: META-REQ-001
+
+  - id: DD-022
+    type: design-decision
+    title: The Phase-2 PHYSICAL vehicle is a Holybro S500 quad on Pixhawk 6X-RT - concrete BOM -> relay-hal seam + relay driver + gale TCB-primitive mapping, and the request list for relay and gale
+    status: accepted
+    description: >
+      The real airframe is now bought (user BOM 2026-07-07), so the peripheral layer of
+      the model is grounded in hardware instead of placeholders. VEHICLE = Holybro S500
+      quad-X (~480mm, 4x motor+ESC) on the Pixhawk 6X-RT (i.MX RT1176: M7 falcon / M4
+      sensor-offload / STM32F100 gust failsafe; onboard ICM-42688-P IMU + baro + mag).
+      PURCHASED PERIPHERALS + their mapping to the DD-018 all-wasm seam / the relay driver
+      body / the gale native TCB primitive:
+        1. Holybro M9N GPS x2 (PM-5905 + PM-5906 = DUAL) - u-blox M9N GNSS (UBX over LPUART)
+           + IST8310 external compass on the combo module (over LPI2C). SEAM: embedded-io-async
+           byte-link (UBX) + embedded-hal-async I2c (mag). relay HAS GNSS embedded-io-async +
+           NAV-PVT (falcon-v1.84) + I2c mag; NEW = the DUAL-GPS blend/failover (two instances,
+           DD-014 health vote) + the EXTERNAL IST8310 (vs onboard mag). gale TCB: 2x LPUART +
+           1x LPI2C primitive.
+        2. Benewake TF02 Pro LiDAR (PM-5626) - 40m single-point rangefinder, UART 115200 (9-byte
+           frame: dist_cm + strength) or I2C. SEAM: a NEW rangefinder path - embedded-io-async
+           byte-link parsing the TF02 frame, exposed as a RangefinderIn(distance-cm, quality)
+           reading (terrain/AGL altitude + landing). relay LACKS this driver -> THE net-new relay
+           request (REQ-PIX-020). gale TCB: 1x LPUART primitive.
+        3. Holybro 433MHz Telemetry V3 - SiK radio, transparent LPUART carrying MAVLink to the
+           GCS. SEAM: embedded-io-async byte-link -> relay-mavlink (off-board). relay HAS
+           relay-mavlink; this is the concrete off-board transport (real-vehicle side of the
+           REQ-PIX-010 MAVLink bench). gale TCB: 1x LPUART primitive.
+        4. Gens Ace 4S 5000mAh 60C + XT90->XT60 (PM-5902/5517) - 14.8V nom / 16.8 full, via a
+           Holybro power module (INA-class voltage+current sense over LPI2C or analog) to the
+           6X-RT power port. SEAM: AdcIn (DD-014 MONITOR-ONLY, no cross-seam failover - power is
+           hardware-OR). relay's AdcIn/INA228 seam exists in DD-018; NEW = the 4S thresholds +
+           the gust LOW-BATTERY failsafe trip (battery-V -> fatal on the F100). gale TCB: LPI2C
+           (or ADC) primitive + gust reads the battery rail.
+        5. S500 airframe - quad-X, 4 ESCs (PWM/DShot). SEAM: relay-hal PwmOut (DShot frame; the
+           degenerate duty-PWM is the gust failsafe case, DD-018). relay HAS ESC PwmOut; NEW =
+           the quad-X mixer + the 4-channel map. gale TCB: 4x FlexPWM/eFlexPWM channels; gust
+           drives the 4 failsafe-PWM outs.
+      REQUEST LIST (recorded now, FILED when jess is ready to bind - the binding, REQ-PIX-012,
+      is v0.7.0 and gated on the synth poles #369/#275, so relay/gale must not build ahead of
+      jess being able to consume):
+        FROM RELAY: (a) TF02 Pro rangefinder driver + RangefinderIn seam [net-new, REQ-PIX-020];
+          (b) dual-M9N GNSS blend/failover + external IST8310 mag config; (c) 4S battery AdcIn
+          thresholds. relay already covers IMU/baro/mag/GNSS/ESC/MAVLink/DroneCAN.
+        FROM GALE: the 6X-RT native TCB primitives the above buses need - 4x LPUART (GPS x2,
+          LiDAR, telemetry), 2x LPI2C (ext mag, power monitor), 4x FlexPWM (ESCs), FlexCAN
+          (DroneCAN, REQ-PIX-006) - the "thin native register/DMA/IRQ/wake shim" synth seams in
+          (DD-018); PLUS gust's failsafe I/O on the F100: RC-in (SBUS/PPM), 4x failsafe-PWM out,
+          and the 4S low-battery trip. Extends the open gale#65 (MU-map + gust ipc-rx) thread.
+      FALLBACK MINI (deferred, user "not yet"): a smaller fallback quad as a lower-risk
+      first-flight / bring-up platform before the S500 - to be specced later; placeholder only.
+    release: v0.7.0
+    tags: [phase-2, vehicle, bom, s500, pixhawk-6xrt, relay-hal, gale-tcb, gnss, lidar, telemetry, power, esc]
+    fields:
+      rationale: >-
+        Grounding the peripheral requirements in the actual purchased hardware (dual M9N,
+        TF02 Pro LiDAR, 433MHz SiK, 4S power, S500 quad) turns REQ-PIX-003/006/012 from
+        placeholders into a concrete seam+driver+primitive matrix, and makes the relay/gale
+        ask-list explicit and correctly SEQUENCED (recorded now, filed when the synth poles
+        clear and jess can actually bind) rather than prompting suppliers to build ahead.
+      alternatives: >-
+        File the relay/gale driver requests immediately - rejected: the binding (REQ-PIX-012)
+        is pole-blocked (#369/#275), so suppliers would build drivers jess cannot yet consume;
+        record in the model now, file when ready. Model only the onboard 6X-RT sensors and
+        skip the external BOM - rejected: GPS/LiDAR/telemetry/power/ESC are exactly the flight
+        peripherals the safety case and the gust failsafe depend on.
+    links:
+      - type: satisfies
+        target: REQ-PIX-012
+      - type: traces-to
+        target: REQ-PIX-003
