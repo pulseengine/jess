@@ -811,3 +811,58 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-PIX-012
+
+  - id: REQ-PIX-021
+    type: requirement
+    title: Integrated flash-ready 3-core S500 vehicle - gust on all cores, per-core peripherals, inter-core IPC, relay partitioned + compiled per-core, whole thing running in the 3-core Renode model with the goal of being flashed
+    status: draft
+    description: >
+      THE NORTH-STAR INTEGRATION (DD-023): bring every strand together into one
+      flash-ready image for the physical S500 (DD-022). jess shall demonstrate, in the
+      3-core RT1176 Renode model (hardware/pixhawk6x-rt.aadl -> spar instance), the
+      COMPLETE partitioned vehicle and produce a flashable artifact set:
+        1. GUST ON ALL CORES: the gale-nano/gust maximal-wasm runtime hosts on each of the
+           three cores at its right scale - M7 (falcon flight stack, full FPU), M4 (estimator/
+           sensor-offload), STM32F100 (8KB gust failsafe). P3-async-everywhere down to the
+           F100 (the jess-p3-async-everywhere north-star), AOT via synth, no on-chip runtime.
+        2. PER-CORE PERIPHERALS: each core owns its silicon peripherals via the gale native
+           TCB primitives (DD-018 seam) - M7: LPUART x GPS/telem/LiDAR, LPI2C mag, FlexCAN;
+           M4: onboard IMU/baro SPI offload; F100: RC-in + 4x failsafe-PWM + 4S low-batt ADC.
+        3. INTER-CORE IPC + CORE COMMUNICATION: the WIT-contracted inter-core links
+           (REQ-PIX-007) over the i.MX MU + RPMsg/shared-SRAM (SHMEM/IO_LINK buses in the
+           AADL) - estimator(M4) -> falcon(M7) state, falcon(M7) -> failsafe(F100) actuator +
+           heartbeat. Depends on gale#65 (MU-map + gust ipc-rx).
+        4. RELAY SEPARATED, COMPILED + BUILT PER-CORE: the relay/falcon stack PARTITIONED
+           along the core boundaries (flight vs estimator vs failsafe), each partition
+           meld-fused -> loom -> synth-compiled for ITS target (M7 fpv5-d16 / M4 fpv4-sp /
+           M3 soft-float) as a separate image - the per-core build matrix, all-wasm single
+           path (DD-018: wac compose -> meld -> loom -> synth + native TCB seam).
+        5. TESTED IN RENODE THEN FLASHED: the three images loaded into the 3-core Renode
+           model running together (two-track sim, REQ-PIX-017 extended to all three cores),
+           a hermetic oracle asserting the cross-core dataflow (est->flight->failsafe) and the
+           failsafe heartbeat/trip; GOAL = a flashable, sigil-signed image set for the board.
+      This is the CAPSTONE requirement - it does not add new capability so much as compose
+      REQ-PIX-002/004/007/009/012/017/018 into one verified, partitioned, flash-ready whole.
+      Gated on the whole v0.7.0/v0.8.0 line (synth poles #369/#275, gale#65, the per-core
+      build matrix) - it is the v1.0.0 FIRST-FLASH milestone in the DD-021 roadmap. Board
+      interaction stays READ-ONLY until an explicit flight-readiness greenlight; "flash-ready"
+      here means the verified artifact set + the Renode-proven integration, not an autonomous
+      write to the vehicle.
+    release: v1.0.0
+    tags: [phase-2, north-star, integration, multi-core, gust, ipc, relay-partition, renode, flash, capstone]
+    fields:
+      category: functional
+      priority: must
+    links:
+      - type: traces-to
+        target: DD-023
+      - type: depends-on
+        target: REQ-PIX-002
+      - type: depends-on
+        target: REQ-PIX-004
+      - type: depends-on
+        target: REQ-PIX-007
+      - type: depends-on
+        target: REQ-PIX-009
+      - type: depends-on
+        target: REQ-PIX-017
