@@ -1512,7 +1512,25 @@ artifacts:
       on v0.34.0 (24 #369 float + 20 null-funcref-slot [#664] + 1 #518 + 1 #503). The multi-table
       pole moved from LINKING (resolved, #650) to NULL-SLOT LOWERING (open, #664) - still 20 funcs,
       still all behind #369. status stays open, tracking the residual under #664.
-    tags: [release-watch, synth, arm, call-indirect, multi-table, null-funcref-slot, dispatch, on-target, correctness]
+      UPDATE 2026-07-09 (synth v0.37.0; #664 FIXED in v0.36.0, CLOSED): null-slot dispatch shipped
+      ("sparse tables dispatch; null slots trap"), #650 linking stays fixed. Verified v0.37.0 on
+      the real falcon build: the SAME 20 funcs decline one layer DEEPER - the closed-world check
+      now reports a TYPE-SIGNATURE MISMATCH ("table 1 entry (function 93, type 7) has a different
+      signature than expected type 3 - a runtime type check is not implementable on the raw
+      code-pointer table"). ROOT CAUSE: falcon's fused (table 1 41) is a SINGLE HETEROGENEOUS elem
+      segment of 40 funcs spanning multiple signatures (types 3, 7, ...) - a vtable-style table.
+      Each call_indirect expects one type; at runtime the index always selects a correctly-typed
+      entry (falcon passes wasmtime SIL - heterogeneous tables are VALID wasm, type mismatch is a
+      RUNTIME trap per 4.4.8), but synth can't prove it statically and won't emit a runtime type
+      check -> declines all 20. TERMINAL layer of the dispatch story: index (#650 ✓) -> null-slot
+      (#664 ✓) -> type-heterogeneity (synth#676, OPEN). Minimal repro hetero_ci.wat. Fix offered:
+      a per-slot TYPE-ID SIDECAR (u32 type_id[] beside the code-pointer table; call_indirect =
+      bounds + load type_id[idx] + CMP expected + BNE->UDF + BLX) - the WASM-mandated runtime
+      check, which also subsumes #664's null-trap (reserved type_id=0). falcon inventory UNCHANGED
+      at 46/146 (24 #369 + 20 hetero-table [#676] + 1 #518 + 1 #503), all behind #369. Aside on
+      #676: meld emits 31 type decls for 25 distinct signatures (6 structural dups) - harmless
+      (synth compares structurally).
+    tags: [release-watch, synth, arm, call-indirect, multi-table, null-funcref-slot, heterogeneous-table, dispatch, on-target, correctness]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.33.1 (meld 0.33.0/loom 1.1.18, falcon v1.112); root-caused to 20 table-1 call_indirect declines + a minimal 2-table .wat repro; filed synth#650
       severity: major

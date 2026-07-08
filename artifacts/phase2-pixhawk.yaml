@@ -162,6 +162,19 @@ artifacts:
     title: Inter-core/inter-component comms - WIT-typed contracts, fused same-core / RPC cross-core over a shared-memory transport
     status: draft
     release: v0.7.0
+    description: >
+      Same-core components are meld-fused (WIT seams -> direct calls); cross-core (M4<->M7,
+      M7<->F100) is WIT-typed RPC over a shared-memory transport (the SHMEM/IO_LINK buses in
+      hardware/pixhawk6x-rt.aadl), the inter-core IPC leg of the north-star (DD-023).
+      GROUNDING 2026-07-09 (release-watch): gale shipped its FIRST release v0.1.0, which
+      includes THREE verified wasm primitives as consumable artifacts - gale-wasm-msgq,
+      gale-wasm-mutex, gale-wasm-sem (each .wasm + .wat + a cortex-m4f .o + cosign-signed
+      SHA256SUMS). gale-wasm-MSGQ is the concrete transport building block for this
+      requirement's cross-core RPC (the queue under the WIT RPC seam), and mutex/sem are the
+      shared-SRAM guards. So the gale TCB side of the inter-core IPC (the DD-023 GALE row +
+      the open gale#65 MU-map/gust-ipc-rx thread) now has a verified starting point. RECORD
+      only (per the DD-022/DD-023 sequencing rule): jess binds these when falcon can lower
+      on-target (#369), NOT before - suppliers must not build ahead of jess consuming.
     fields:
       category: functional
       priority: should
