@@ -1125,6 +1125,13 @@ artifacts:
           (DroneCAN, REQ-PIX-006) - the "thin native register/DMA/IRQ/wake shim" synth seams in
           (DD-018); PLUS gust's failsafe I/O on the F100: RC-in (SBUS/PPM), 4x failsafe-PWM out,
           and the 4S low-battery trip. Extends the open gale#65 (MU-map + gust ipc-rx) thread.
+      MODELED IN THE AADL 2026-07-08 (feature-loop step 1 - architecture starts in spar, not
+      just rivet prose): hardware/pixhawk6x-rt.aadl now carries the S500 externals as devices +
+      buses + connections - GPS_M9N_1/2 (GPS1/2_SER UBX + I2C_BUS ext mag), LIDAR_TF02
+      (LIDAR_SER), TELEM_SIK (TELEM_SER), ESC_MOTOR x4 (ESC_PWM + VBAT), RC_RX (RC_LINK),
+      BATTERY_4S (VBAT) - wired into Pixhawk6XRT.v2a. spar parse + instance GREEN (the spar-model
+      CI gate). The vehicle is now consistent across the model (AADL) and the trace (this DD +
+      REQ-PIX-020).
       FALLBACK MINI (deferred, user "not yet"): a smaller fallback quad as a lower-risk
       first-flight / bring-up platform before the S500 - to be specced later; placeholder only.
     release: v0.7.0
