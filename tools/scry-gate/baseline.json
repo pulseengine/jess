@@ -1,0 +1,17 @@
+{
+  "_comment": "Baseline scry sound-analysis verdict for the meld-fused falcon core (REQ-PIX-018 leg b / TEST-PIX-022). Evidence snapshot, NOT the CI assertion: the gate asserts the SOUNDNESS INVARIANTS below (call_edges_unsound_fallback==0 && diag_unsound_fallback==0 && analysis completes), which are stable across falcon versions. module_sha256/module_bytes are deliberately OMITTED because meld fusion is byte-nondeterministic (identical input -> different sha each run; see meld friction issue) so they are not gate keys. Regenerate with: tools/scry-gate/run.sh > /tmp/v.json",
+  "falcon_pin": "falcon-v1.112.0",
+  "scry_sai_core": "1.18.0",
+  "invariants_schema": "https://pulseengine.eu/scry-invariants/v1",
+  "program_points": 771,
+  "functions": 175,
+  "reachable_from_exports": 95,
+  "call_edges": 71,
+  "call_edges_indirect": 12,
+  "call_edges_unsound_fallback": 0,
+  "taint_findings": 0,
+  "diagnostics_total": 0,
+  "diag_info": 0,
+  "diag_warning": 0,
+  "diag_unsound_fallback": 0
+}

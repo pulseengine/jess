@@ -676,10 +676,42 @@ artifacts:
       - type: traces-to
         target: AFD-008
 
+  - id: TEST-PIX-022
+    type: test-spec
+    title: scry sound-analysis CI gate on the meld-fused falcon core (REQ-PIX-018 leg b) - GREEN, wired into CI
+    status: valid
+    description: >
+      tools/scry-gate/ - the DO-333 sound-static-analysis leg of the V, run in jess CI on
+      the CONSUMED (released, stripped) falcon wasm. Pipeline: fetch a pinned falcon
+      component (falcon-v1.112.0) -> `meld fuse` to a Core module -> `scry-run` (a ~90-line
+      host driver over the crates.io `scry-sai-core` crate = the same native sound-abstract-
+      interpretation lib synth-cli consumes for its #383 shadow-stack analysis) runs
+      `analyze()` and emits a compact JSON verdict. GATE (run.sh, exits non-zero on any):
+      (1) scry-run exits non-zero = scry could NOT soundly analyze the core; (2)
+      call_edges_unsound_fallback>0 = a call site dropped to an unsound top; (3)
+      diag_unsound_fallback>0 = any unsoundness-fallback diagnostic. CONFIRMED GREEN
+      2026-07-08 (jess local, scry-sai-core 1.18.0): the fused falcon v1.112 core analyzes
+      to 771 program points / 175 functions / 95 reachable-from-exports / 71 call-edges (12
+      of them call_indirect) with 0 unsound-fallback edges AND 0 unsound-fallback diagnostics
+      - i.e. scry carries a fully SOUND analysis over the whole fused core, resolving every
+      indirect call soundly. Robust across meld versions (0.33.0 and 0.37.0 both give the
+      identical invariant result; the fused BYTES differ - meld fusion is nondeterministic,
+      meld#325 - so the gate keys on the soundness invariants, not the fused sha; baseline.json
+      records the invariants as evidence). WIRED into .github/workflows/ci.yml as the
+      `scry-gate` job (pinned meld v0.37.0, SHA-verified). COMPLEMENTS relay's source-level
+      DWARF MC/DC (jess cannot run it on the stripped release) - the deviation recorded at hub
+      pulseengine.eu#98. This is leg b of REQ-PIX-018; leg a (witness branch-coverage) remains
+      the pinned follow-on (needs a counter-snapshot harness bridge OR an upstream single-core
+      wasip2 falcon).
+    tags: [phase-2, scry, sound-analysis, do-333, witness-scry, ci-gate, oracle, verification]
+    links:
+      - type: verifies
+        target: REQ-PIX-018
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
-    status: draft
+    status: implemented
     release: v0.9.0
     description: >
       Inbound jess#91 (avrabe, org release-consistency campaign; hub pulseengine.eu#98):
@@ -742,6 +774,16 @@ artifacts:
       wasm32-wasip2 falcon so `witness instrument --in-place` + component-run works directly.
       This is a deliberate feature (harness bridge OR an upstream ask to relay), not a
       supervisory-tick job - but the recipe + exact blocker are now pinned.
+      LEG B DELIVERED 2026-07-08 (feature loop, TEST-PIX-022): the scry sound-analysis gate
+      is BUILT + GREEN + WIRED into CI (the `scry-gate` job) - tools/scry-gate/ fetches a
+      pinned falcon, meld-fuses to a Core module, and runs scry-sai-core 1.18.0 `analyze()`,
+      asserting the analysis COMPLETES with ZERO unsound-fallback (0 unsound call-edges over
+      12 call_indirect sites, 0 unsound diagnostics on the v1.112 core = 771 pts/175 funcs).
+      That closes the DO-333 sound-static-analysis leg of the V unilaterally (no supplier
+      dependency - scry is released, the crate is on crates.io, the fused core is producible).
+      REMAINING: leg a (witness branch-coverage) still needs the counter-snapshot harness
+      bridge OR a relay single-core wasip2 build; this requirement reaches `verified` only
+      when BOTH legs gate. Moved draft->implemented to reflect the delivered scry half.
     fields:
       category: process
       priority: should

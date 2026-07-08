@@ -22,6 +22,11 @@ env:
   # to the release-handling workflow jess now uses; existing artifacts verified clean.
   RIVET_VERSION: v0.22.1
   SPAR_VERSION: v0.17.0
+  # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b). The gate
+  # keys on scry's soundness invariants, which are stable across meld versions
+  # (0.33.0 and 0.37.0 both give 771 pts / 71 edges / 0 unsound-fallback), so a
+  # meld bump is safe; pinned only for a reproducible fetch.
+  MELD_VERSION: v0.37.0
   # Pinned gale external (rivet.lock) — jess's stpa hazards trace to gale's
   # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.
   # fetch-depth: 0 because gale is force-pushed by the architect.
@@ -128,6 +133,36 @@ jobs:
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
         run: /tmp/renode/renode-test hardware/renode/synth507-brtable/brtable-507.robot
+
+  # REQ-PIX-018 leg b (TEST-PIX-022) — the DO-333 sound-static-analysis leg of
+  # the V, on the CONSUMED (stripped) falcon wasm: fetch a pinned falcon
+  # component -> meld fuse -> scry (scry-sai-core) analyze -> assert the analysis
+  # completes with ZERO unsound-fallback (every call_indirect edge resolved
+  # soundly). Complements relay's source-level MC/DC (jess can't run it on the
+  # stripped release); deviation at hub pulseengine.eu#98.
+  scry-gate:
+    name: scry sound-analysis (REQ-PIX-018 / TEST-PIX-022)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned meld release
+        run: |
+          set -euo pipefail
+          gh release download "$MELD_VERSION" --repo pulseengine/meld \
+            --pattern 'meld-*-x86_64-unknown-linux-gnu.tar.gz' \
+            --pattern 'SHA256SUMS.txt' --dir /tmp/meld
+          cd /tmp/meld
+          exp=$(grep 'x86_64-unknown-linux-gnu.tar.gz' SHA256SUMS.txt | awk '{print $1}')
+          act=$(sha256sum ./*x86_64-unknown-linux-gnu.tar.gz | awk '{print $1}')
+          test -n "$exp" && test "$exp" = "$act" || { echo "checksum mismatch"; exit 1; }
+          tar xzf ./*x86_64-unknown-linux-gnu.tar.gz
+          install -m755 "$(find . -name meld -type f | head -1)" /usr/local/bin/meld
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: scry gate (fuse + sound-analysis assert)
+        run: tools/scry-gate/run.sh | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   # NOTE: a third job building the hermetic falcon firmware chain
   # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused
