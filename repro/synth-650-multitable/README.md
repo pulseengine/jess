@@ -31,3 +31,14 @@ same 20 funcs now decline on a **null-funcref-slot** check. `nullslot_ci.wat` is
 the minimal repro (single table, one filled slot, rest null → `call_indirect`
 declines "slot is uninitialized (null funcref)"). Filed **synth#664**. falcon
 inventory unchanged at 46/146 (the 20 moved from linking to null-slot lowering).
+
+## Update 2026-07-09 (synth v0.37.0) — null-slot fixed, type-heterogeneity residual
+
+synth v0.36.0 fixed #664 (null slots trap). Verifying v0.37.0 on the real falcon
+core, the same 20 funcs decline one layer deeper: falcon's table 1 is a **single
+heterogeneous elem segment** (40 funcs, mixed signatures — types 3, 7, …), and
+synth's closed-world check finds a type mismatch it can't runtime-check.
+`hetero_ci.wat` is the minimal repro (2-slot table, mixed types, call_indirect
+expecting one). Filed **synth#676** — fix is a per-slot type-id sidecar
+(runtime type check before BLX, subsuming the null-slot trap). falcon dispatch
+story layers: index (#650 ✓) → null-slot (#664 ✓) → type-heterogeneity (#676).
