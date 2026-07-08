@@ -1,0 +1,15 @@
+[package]
+name = "scry-run"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "jess scry sound-analysis gate driver (REQ-PIX-018 leg b): run scry-sai-core on the meld-fused falcon core, emit a JSON verdict"
+
+[dependencies]
+# Pinned for a reproducible gate. scry's native sound-abstract-interpretation
+# crate (crates.io); the same lib synth-cli consumes for its #383 analysis.
+scry-sai-core = "=1.18.0"
+
+[[bin]]
+name = "scry-run"
+path = "src/main.rs"
