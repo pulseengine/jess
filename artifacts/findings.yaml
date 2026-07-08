@@ -1466,3 +1466,42 @@ artifacts:
         target: EXTERNALANCHOR-002
       - type: traces-to
         target: REQ-PIX-009
+
+  - id: AFD-033
+    type: ai-found-defect
+    title: synth arm backend links only table 0 (R11) - call_indirect through table index >=1 loud-declines; blocks multi-table fused components (falcon 20 funcs)
+    status: open
+    description: >
+      Found 2026-07-08 (release-watch, synth v0.33.1). synth's thumb-2 backend links only
+      TABLE 0 (at R11); any call_indirect whose table index is >=1 is refused:
+      "call_indirect: table index 1 is not supported (only table 0 is linked at R11) - #642".
+      The new closed-world verifier additionally refuses element segments targeting a non-zero
+      table ("closed-world type check failed - ... non-zero table ..."). SURFACED BY (not caused
+      by) the #642 fix: on <=v0.33.0 these sites were SILENTLY miscompiled (an uncontrolled
+      indirect branch - #642's own differential shows the decoy fn got called); v0.33.1 makes
+      them an honest loud-decline. So this is a correctness WIN that reveals a residual pole,
+      not a regression. jess IMPACT: the released falcon-flight v1.112 fused core (meld 0.33.0
+      -> loom 1.1.18) has TWO funcref tables - (table 0: 7 entries) + (table 1: 41 entries) -
+      and 20 of 146 functions dispatch through table 1, so on synth 0.33.1 -t cortex-m7dp the
+      skip inventory is 46/146: #369 float 24, table-1 call_indirect 20 (THIS), #518 i64
+      frame-param 1 (func_164), #503 i64 stack-arg 1. Multi-table dispatch is now the
+      SECOND-largest on-target skip class after #369, a distinct dispatch pole alongside #275
+      (self-contained path compiles only exports). Minimal hermetic repro:
+      repro/synth-650-multitable/table1_ci.wat (two tables; call_indirect $t1 -> declines; the
+      analogue of TEST-PIX-020/021). Fix directions offered upstream: (a) link table 1..N with
+      a per-table base + extend closed-world verification to non-zero-table elem segments, OR
+      (b) meld coalesces the component's funcref tables into a single table 0 during fusion
+      (re-index call_indirect + elem). Not urgent - falcon on-target is #369-gated regardless -
+      but the dispatch path must be complete when #369 lands. Filed synth#650. ALSO NOTED same
+      run: register-exhaustion skips 3->0 and the #518 i64-regalloc tail shrank to a single
+      function (func_164), so the i64-regalloc pole is nearly closed.
+    tags: [release-watch, synth, arm, call-indirect, multi-table, dispatch, on-target, correctness]
+    fields:
+      detected-by: jess release-watch chain-measure on synth v0.33.1 (meld 0.33.0/loom 1.1.18, falcon v1.112); root-caused to 20 table-1 call_indirect declines + a minimal 2-table .wat repro; filed synth#650
+      severity: major
+      triage-status: confirmed-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
