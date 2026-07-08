@@ -22,3 +22,12 @@ Surfaced (not caused) by the #642 fix: these were *silently* miscompiled on
 on-target is #369-gated regardless, so no urgency — but the dispatch path must be
 complete when #369 lands. Candidate to graduate into a hermetic Renode oracle
 (the TEST-PIX-020/021 pattern) once synth links table 1+.
+
+## Update 2026-07-08 (synth v0.34.0) — linking fixed, null-slot residual
+
+synth v0.34.0 shipped multi-table linking (#650 closed) — `table1_ci.wat`'s
+`via_t1` now compiles. But falcon's real table 1 is *sparsely populated*, so the
+same 20 funcs now decline on a **null-funcref-slot** check. `nullslot_ci.wat` is
+the minimal repro (single table, one filled slot, rest null → `call_indirect`
+declines "slot is uninitialized (null funcref)"). Filed **synth#664**. falcon
+inventory unchanged at 46/146 (the 20 moved from linking to null-slot lowering).

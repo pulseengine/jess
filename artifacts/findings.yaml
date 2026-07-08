@@ -1469,7 +1469,7 @@ artifacts:
 
   - id: AFD-033
     type: ai-found-defect
-    title: synth arm backend links only table 0 (R11) - call_indirect through table index >=1 loud-declines; blocks multi-table fused components (falcon 20 funcs)
+    title: synth call_indirect on falcon's fused table-1 (20 funcs) - multi-table LINKING fixed v0.34.0 (synth#650); residual = null-funcref-slot lowering (synth#664)
     status: open
     description: >
       Found 2026-07-08 (release-watch, synth v0.33.1). synth's thumb-2 backend links only
@@ -1495,7 +1495,24 @@ artifacts:
       but the dispatch path must be complete when #369 lands. Filed synth#650. ALSO NOTED same
       run: register-exhaustion skips 3->0 and the #518 i64-regalloc tail shrank to a single
       function (func_164), so the i64-regalloc pole is nearly closed.
-    tags: [release-watch, synth, arm, call-indirect, multi-table, dispatch, on-target, correctness]
+      UPDATE 2026-07-08 (synth v0.34.0, SAME-DAY fix): synth#650 (multi-table LINKING) SHIPPED
+      + CLOSED - contiguous table region at R11, per-table base offsets, per-table bounds +
+      closed-world type guards; single-table modules byte-identical by construction. Verified
+      against the REAL falcon build: the "table index N not supported" decline is GONE (0
+      occurrences), and the multi-table repro compiles. BUT the SAME 20 functions still decline
+      one layer deeper - falcon's (table 1 41 41) is SPARSELY populated, so they now hit a
+      closed-world NULL-FUNCREF-SLOT check: "table N slot M is uninitialized (null funcref) - a
+      call_indirect reaching it must trap, and the raw code-pointer table has no runtime null/
+      type id to check; refusing to emit an unchecked indirect branch." This is a DISTINCT root
+      cause (reproduces on a SINGLE table with a partial elem segment; orthogonal to multi-table)
+      -> filed synth#664 with a minimal repro (repro/synth-650-multitable/nullslot_ci.wat) + the
+      real-build report on #650 as the maintainer requested. Fix directions offered: (1) fill
+      null slots with a trap-trampoline sentinel address (call->UDF traps), or (2) a per-slot
+      null/type-id sidecar checked before the BLX. NET: falcon skip inventory UNCHANGED at 46/146
+      on v0.34.0 (24 #369 float + 20 null-funcref-slot [#664] + 1 #518 + 1 #503). The multi-table
+      pole moved from LINKING (resolved, #650) to NULL-SLOT LOWERING (open, #664) - still 20 funcs,
+      still all behind #369. status stays open, tracking the residual under #664.
+    tags: [release-watch, synth, arm, call-indirect, multi-table, null-funcref-slot, dispatch, on-target, correctness]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.33.1 (meld 0.33.0/loom 1.1.18, falcon v1.112); root-caused to 20 table-1 call_indirect declines + a minimal 2-table .wat repro; filed synth#650
       severity: major
