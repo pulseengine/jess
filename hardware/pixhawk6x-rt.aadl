@@ -88,6 +88,18 @@ public
   bus SHMEM    end SHMEM;      -- M7<->M4 shared-memory ring + MU mailbox IRQ (RPMsg/ICMsg-class)
   bus IO_LINK  end IO_LINK;    -- FMU<->IO MCU: LPUART6 @ 1.5 Mbaud (px4io-class register protocol)
 
+  --  S500 AIRFRAME I/O — the bought external peripherals (BOM: DD-022 / REQ-PIX-020).
+  --  These are the FMU serial/PWM/RC lines and the main battery rail on the physical
+  --  vehicle. gale provides the native TCB primitives (LPUART/FlexPWM); relay owns the
+  --  driver bodies (u-blox UBX, TF02, SiK/MAVLink) behind the DD-018 embedded-io-async seam.
+  bus GPS1_SER  end GPS1_SER;   -- LPUART: Holybro M9N #1 (u-blox M9N, UBX)
+  bus GPS2_SER  end GPS2_SER;   -- LPUART: Holybro M9N #2 (dual-GNSS redundancy / blend)
+  bus LIDAR_SER end LIDAR_SER;  -- LPUART: Benewake TF02 Pro 40 m rangefinder (REQ-PIX-020)
+  bus TELEM_SER end TELEM_SER;  -- LPUART: Holybro 433 MHz SiK telemetry (off-board MAVLink)
+  bus ESC_PWM   end ESC_PWM;    -- FlexPWM x4 -> S500 ESCs (DShot/PWM), driven by the IO mixer
+  bus RC_LINK   end RC_LINK;    -- RC/SBUS in -> IO_MCU failsafe (independent manual path)
+  bus VBAT      end VBAT;       -- Gens Ace 4S 5000 mAh main rail (ESC power + monitored)
+
   --------------------------------------------------------------------------
   -- Data carried across cores (sized so spar emits WIT type aliases)
   --------------------------------------------------------------------------
@@ -174,6 +186,59 @@ public
   end LDO;
 
   --------------------------------------------------------------------------
+  -- S500 EXTERNAL PERIPHERALS (the bought vehicle: DD-022 / REQ-PIX-020)
+  --------------------------------------------------------------------------
+  --  Dual Holybro M9N: u-blox M9N GNSS over LPUART (UBX) + an IST8310 compass over
+  --  I2C on the same combo module -> dual GNSS + dual external mag, blended under the
+  --  DD-014 health vote. Two independent instances so one dead module is a degrade, not a loss.
+  device GPS_M9N_1
+  features
+    ser     : requires bus access GPS1_SER;
+    mag_i2c : requires bus access I2C_BUS;
+    pwr     : requires bus access VSYS;
+  end GPS_M9N_1;
+  device GPS_M9N_2
+  features
+    ser     : requires bus access GPS2_SER;
+    mag_i2c : requires bus access I2C_BUS;
+    pwr     : requires bus access VSYS;
+  end GPS_M9N_2;
+
+  --  Benewake TF02 Pro LiDAR 40 m rangefinder (REQ-PIX-020): distance/quality over LPUART.
+  --  MONITOR/augment for AGL altitude + landing; degrades to baro-only (DD-014), never a dependency.
+  device LIDAR_TF02
+  features
+    ser : requires bus access LIDAR_SER;
+    pwr : requires bus access VSYS;
+  end LIDAR_TF02;
+
+  --  Holybro 433 MHz SiK telemetry radio: transparent LPUART carrying MAVLink to the GCS.
+  device TELEM_SIK
+  features
+    ser : requires bus access TELEM_SER;
+    pwr : requires bus access VSYS;
+  end TELEM_SIK;
+
+  --  S500 ESC + motor (x4, quad-X). PWM/DShot in from the IO_MCU mixer; power off the 4S rail.
+  device ESC_MOTOR
+  features
+    pwm : requires bus access ESC_PWM;
+    pwr : requires bus access VBAT;
+  end ESC_MOTOR;
+
+  --  RC receiver -> IO_MCU (SBUS): the independent manual / RC-loss failsafe path.
+  device RC_RX
+  features
+    rc : provides bus access RC_LINK;
+  end RC_RX;
+
+  --  Gens Ace 4S 5000 mAh main battery -> VBAT (ESC power; monitored by the power module).
+  device BATTERY_4S
+  features
+    vout : provides bus access VBAT;
+  end BATTERY_4S;
+
+  --------------------------------------------------------------------------
   -- Software: the verified falcon flight stack + the I/O failsafe path
   --------------------------------------------------------------------------
   --  falcon: geometric attitude -> ADRC -> mixer cascade. A fused component
@@ -231,6 +296,14 @@ public
     shmem : bus SHMEM;
     io_link : bus IO_LINK;
 
+    gps1_ser : bus GPS1_SER;   -- S500 airframe I/O buses (DD-022)
+    gps2_ser : bus GPS2_SER;
+    lidar_ser : bus LIDAR_SER;
+    telem_ser : bus TELEM_SER;
+    esc_pwm : bus ESC_PWM;
+    rc_link : bus RC_LINK;
+    vbat : bus VBAT;
+
     vbrick1 : bus VBRICK1;   -- power redundancy rails
     vbrick2 : bus VBRICK2;
     vusb    : bus VUSB;
@@ -250,6 +323,17 @@ public
     ldo1 : device LDO;         -- per-IMU-domain regulators off vsys
     ldo2 : device LDO;
     ldo3 : device LDO;
+
+    gps1 : device GPS_M9N_1;    -- S500 externals: dual GNSS + ext mag (DD-022)
+    gps2 : device GPS_M9N_2;
+    lidar : device LIDAR_TF02;  -- TF02 Pro rangefinder (REQ-PIX-020)
+    telem : device TELEM_SIK;   -- 433 MHz SiK
+    esc1 : device ESC_MOTOR;    -- quad-X motors
+    esc2 : device ESC_MOTOR;
+    esc3 : device ESC_MOTOR;
+    esc4 : device ESC_MOTOR;
+    rcrx : device RC_RX;
+    battery : device BATTERY_4S;
 
     falcon : process Falcon_Flight.cascade;
     estimator : process Estimator.iekf;
@@ -280,6 +364,29 @@ public
     imu1_pwr : bus access vsys <-> imu1.pwr;
     imu2_pwr : bus access vsys <-> imu2.pwr;
     imu3_pwr : bus access vsys <-> imu3.pwr;
+
+    --  S500 externals (DD-022): dual GPS (UBX serial + I2C ext mag), LiDAR, telemetry,
+    --  quad-X ESCs off the 4S rail, RC input to the IO failsafe, battery -> VBAT.
+    gps1_s : bus access gps1_ser <-> gps1.ser;
+    gps2_s : bus access gps2_ser <-> gps2.ser;
+    gps1_m : bus access i2c <-> gps1.mag_i2c;
+    gps2_m : bus access i2c <-> gps2.mag_i2c;
+    lidar_s : bus access lidar_ser <-> lidar.ser;
+    telem_s : bus access telem_ser <-> telem.ser;
+    esc1_p : bus access esc_pwm <-> esc1.pwm;
+    esc2_p : bus access esc_pwm <-> esc2.pwm;
+    esc3_p : bus access esc_pwm <-> esc3.pwm;
+    esc4_p : bus access esc_pwm <-> esc4.pwm;
+    rc_in  : bus access rcrx.rc <-> rc_link;
+    bat_out : bus access battery.vout <-> vbat;
+    esc1_v : bus access vbat <-> esc1.pwr;
+    esc2_v : bus access vbat <-> esc2.pwr;
+    esc3_v : bus access vbat <-> esc3.pwr;
+    esc4_v : bus access vbat <-> esc4.pwr;
+    gps1_v : bus access vsys <-> gps1.pwr;
+    gps2_v : bus access vsys <-> gps2.pwr;
+    lidar_v : bus access vsys <-> lidar.pwr;
+    telem_v : bus access vsys <-> telem.pwr;
 
     --  Cross-core / cross-MCU WIT-typed contracts (the wRPC topology).
     est_to_falcon : port estimator.state_out -> falcon.state_in;   -- M4 -> M7
