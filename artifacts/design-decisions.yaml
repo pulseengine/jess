@@ -1022,6 +1022,7 @@ artifacts:
         - v0.7.0  on-target bring-up REQ-PIX-001/002/003/004/006/007/008/011/012
         - v0.8.0  PX4 HITL + persistence + root-of-trust  REQ-PIX-014/015/019
         - v0.9.0  gust/F100 + combined vehicle + witness/scry gates  REQ-PIX-009/017/018
+        - v1.0.0  FIRST-FLASH: integrated 3-core flash-ready S500  REQ-PIX-021 (DD-023 north-star)
       SCOPE DECISION logged here: REQ-PIX-001 ("compiles+links for Cortex-M7, fpv5-d16
       hard-float") MOVED v0.6.0 -> v0.7.0. Its "hard-float" claim cannot reach `verified`
       until synth#369 (GI-FPU-002 VFP lowering) + #275 (dispatch) land - both external -
@@ -1060,6 +1061,12 @@ artifacts:
       v0.8.0` now shows 6 real deliverables (REQ-PIX-014/015/019 + FEATURE-011 + 2 accepted DDs)
       instead of 40. RULE: release: belongs on the DELIVERABLE layer (requirements, per-release
       feature markers, DDs, meta) - NOT the analysis layer (stpa/sec/safety-goals).
+      TERMINAL MILESTONE ADDED 2026-07-08: v1.0.0 FIRST-FLASH = the north-star integration
+      (DD-023 / REQ-PIX-021) - the flash-ready 3-core S500 (gust on all cores, per-core
+      peripherals, inter-core IPC, relay partitioned + compiled per-core, proven together in
+      the 3-core Renode model). It is the CAPSTONE that composes the v0.7.0-v0.9.0 line, so it
+      is planned-not-cuttable until they land; it gives the feature loop a single terminal
+      convergence target to pull toward each tick.
     tags: [phase-2, release-planning, rivet, roadmap, process, traceability, rivet-0.22]
     fields:
       rationale: >-
@@ -1154,3 +1161,81 @@ artifacts:
         target: REQ-PIX-012
       - type: traces-to
         target: REQ-PIX-003
+
+  - id: DD-023
+    type: design-decision
+    title: North-star integration + multi-agent coordination map - the flash-ready 3-core S500 vehicle (gust on all cores, per-core peripherals, inter-core IPC, relay partitioned + compiled per-core, Renode-integrated) and who supplies what
+    status: accepted
+    release: v1.0.0
+    description: >
+      Names the END STATE the whole jess programme drives toward and the coordination map
+      to the supplier agents, so the roadmap has a terminal milestone (v1.0.0 FIRST-FLASH)
+      and every open thread has an owner. NORTH-STAR (= REQ-PIX-021): one flash-ready image
+      set for the physical S500 (DD-022), proven in the 3-core RT1176 Renode model, where -
+        (1) GUST/gale-nano hosts on ALL THREE cores at its right scale (M7 falcon full-FPU,
+            M4 estimator, STM32F100 8KB failsafe) - P3-async-everywhere, AOT via synth, no
+            on-chip runtime (the jess-p3-async-everywhere pitch made concrete);
+        (2) EACH CORE owns its silicon peripherals through gale native TCB primitives
+            (DD-018 seam) - M7 the GPS/telem/LiDAR LPUARTs + mag LPI2C + FlexCAN, M4 the
+            IMU/baro SPI, F100 the RC-in + 4x failsafe-PWM + 4S low-batt ADC;
+        (3) INTER-CORE IPC over the i.MX MU + RPMsg/shared-SRAM (the SHMEM/IO_LINK buses
+            already in hardware/pixhawk6x-rt.aadl), WIT-contracted per REQ-PIX-007:
+            estimator(M4)->falcon(M7) state, falcon(M7)->failsafe(F100) actuator+heartbeat;
+        (4) the RELAY/falcon stack SEPARATED along those core boundaries and COMPILED PER
+            CORE - each partition meld-fused -> loom -> synth for its target ISA
+            (M7 fpv5-d16 / M4 fpv4-sp / M3 soft-float) as a distinct image, all-wasm single
+            path (DD-018);
+        (5) the three images run TOGETHER in the 3-core Renode model with a hermetic oracle
+            over the cross-core dataflow + failsafe trip, producing a sigil-signed flashable
+            set - GOAL = flashed to the board (READ-ONLY until an explicit greenlight).
+      MULTI-AGENT COORDINATION MAP (who jess depends on for the north-star; jess = the
+      integration hub, it composes + oracle-gates, it does not own these upstreams):
+        - SYNTH (codegen): clear the on-target poles that block ALL per-core compilation -
+          #369 hard-float VFP lowering (the dominant pole, 24 float skips, the M7/M4 FPU
+          path), #275 self-contained dispatch (call_indirect; falcon must ship
+          --relocatable + TCB-link per DD-018), and the i64-regalloc tail (#518). Also the
+          per-target ISA selection (fpv5-d16 / fpv4-sp / soft-float M3). jess supplies the
+          hermetic Renode oracles (TEST-PIX-013/020/021 pattern) as merge gates.
+        - GALE (verified TCB): the 6X-RT native primitives each core's peripherals need
+          (4x LPUART, 2x LPI2C, 4x FlexPWM, FlexCAN, SPI) + gust failsafe I/O on the F100
+          (RC-in, 4x failsafe-PWM, 4S low-batt trip) + THE INTER-CORE IPC: gale#65 (MU-map +
+          gust ipc-rx) is the open thread for (3). gale = the native trusted base under the
+          all-wasm seam.
+        - RELAY (falcon + relay-hal): PARTITION the stack along the core boundaries (flight
+          / estimator / failsafe) so each is separately fuse+compilable; plus the DD-022
+          driver asks (TF02 rangefinder REQ-PIX-020, dual-M9N blend, 4S AdcIn). Sequenced
+          AFTER jess can bind (REQ-PIX-012), not built ahead.
+        - KILN (P3 executor): kiln-async as the no_std P3 runtime shape on each core,
+          esp. the F100 8KB gust profile - the async scheduler the AOT images target.
+      SEQUENCING: this is the CAPSTONE - it composes REQ-PIX-002/004/007/009/012/017/018,
+      so it cannot precede them. It is the v1.0.0 milestone added to the DD-021 roadmap;
+      v0.7.0 (bring-up) -> v0.8.0 (HITL + root-of-trust) -> v0.9.0 (gust/F100 + combined
+      vehicle + witness/scry) -> v1.0.0 (this: all three cores integrated + flash-ready).
+      The requests to relay/gale stay RECORDED-not-filed until the poles clear and jess can
+      consume (the DD-022 sequencing rule), so suppliers are not prompted to build ahead.
+    tags: [phase-2, north-star, integration, multi-core, coordination, gust, ipc, relay-partition, gale-tcb, synth, kiln, flash, roadmap]
+    fields:
+      rationale: >-
+        A programme with many parallel supplier threads (synth poles, gale#65, relay
+        partition + drivers, kiln-async) needs one named end state and an explicit
+        owner-per-thread, or the threads drift without a composition target. Making the
+        north-star a rivet artifact (DD-023 + REQ-PIX-021) with a terminal release (v1.0.0)
+        gives the feature loop a single highest-value thing to pull toward each tick, and
+        gives every "who does what" a traceable home instead of living in chat.
+      alternatives: >-
+        Leave the north-star as prose in memory / the cron prompt only - rejected: then it
+        cannot be release-gated, traced, or pulled from `rivet release status`; the loop
+        would keep monitoring instead of converging. Fold it into DD-018/DD-022 - rejected:
+        those are the seam and the BOM; the integrated multi-core end state + the
+        agent-coordination map is a distinct decision that both feed into. File the relay/
+        gale partition + IPC requests now - rejected: same DD-022 sequencing rule, the
+        binding is pole-blocked, so record now / file when jess can consume.
+    links:
+      - type: satisfies
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-018
+      - type: traces-to
+        target: DD-021
+      - type: traces-to
+        target: DD-022
