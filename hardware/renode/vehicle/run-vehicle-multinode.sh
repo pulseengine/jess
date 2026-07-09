@@ -35,13 +35,21 @@ sysbus LoadELF @$GUSTELF
 emulation RunFor "0.02"
 mach set "rt1176"
 sysbus ReadDoubleWord 0x20400000
+sysbus ReadDoubleWord 0x40C4C280 cpu_m7
 quit
 RESC
-HB=$("$RENODE" --console --disable-xwt -e "include @$RESC" 2>&1 | grep -oE '0x000[0-9A-Fa-f]{5}' | tail -1)
+OUT=$("$RENODE" --console --disable-xwt -e "include @$RESC" 2>&1)
+# The two ReadDoubleWord echoes, in RESC order: last-2 = SHMEM heartbeat, last-1 = MU
+# aInstance RR0. Parsed portably (no bash-4 readarray, for macOS bash 3.2 + CI).
+HEX=$(printf '%s\n' "$OUT" | grep -oE '0x[0-9A-Fa-f]{8}')
+HB=$(printf '%s\n' "$HEX" | tail -2 | head -1)
+MU_RR=$(printf '%s\n' "$HEX" | tail -1)
 M7=$(tr -dc '[:print:]\n' < "$UART" | head -1)
 echo "M7 (cpu_m7) LPUART banner : ${M7:-<none>}"
 echo "M4 (cpu_m4) SHMEM heartbeat: ${HB:-<none>}  (M7<->M4 shared-mem ring @ 0x20400000)"
+echo "MU doorbell aInstance RR0  : ${MU_RR:-<none>}  (M4 bInstance TR0 -> M7 aInstance RR0; expect 0x0000BEEF)"
 ok=1
 echo "$M7" | grep -q 'JESS-RT1176 boot OK' || { echo "FAIL: M7 banner missing"; ok=0; }
 [ -n "$HB" ] && [ "$HB" != "0x00000000" ] || { echo "FAIL: M4 heartbeat not advancing (M7<->M4 shmem dead)"; ok=0; }
-[ "$ok" = 1 ] && echo "ORACLE PASS: M7+M4+F100 three-core topology co-executes; M7<->M4 shared-mem link live." || exit 1
+[ "$MU_RR" = "0x0000BEEF" ] || { echo "FAIL: MU doorbell not delivered (M4 TR0 -> M7 RR0 dead); got ${MU_RR:-<none>}"; ok=0; }
+[ "$ok" = 1 ] && echo "ORACLE PASS: M7+M4+F100 co-execute; SHMEM ring live AND the NXP MU doorbell datapath (M4 bInstance TR0 -> M7 aInstance RR0) delivers." || exit 1
