@@ -634,7 +634,23 @@ artifacts:
       is wired + the SHMEM ring is the live link; the reactive handoff is orchestration-
       modeled. Track A (TEST-PIX-018) carries the handoff LOGIC end-to-end - together the
       DD-010/DD-019 SIL-differential at vehicle scale.
-    tags: [phase-2, simulation, renode, multi-node, vehicle, on-target]
+      DOORBELL DRIVEN 2026-07-09: the MU register map that was the open ask (gale#65) was
+      SOURCED from the Renode IMXRT700_MessagingUnit model itself (TR0..3 @0x200/4/8/C write=
+      transmit; RR0..3 @0x280/4/8/C read=receive; SR @0xC bit6 RFP; RCR @0x128 bits0-3 RIE),
+      so the firmware side is no longer blocked. The M4 boot firmware now RINGS THE DOORBELL:
+      m4_boot.S writes a sentinel (0xBEEF) to bInstance TR0 (0x40C4D200); the MU model delivers
+      it to aInstance RR0 (0x40C4C280, M7 side) and asserts AInstanceIRQ. The multinode oracle
+      now ASSERTS the delivery: reads aInstance RR0 with cpu_m7 context == 0x0000BEEF, alongside
+      the M7 banner + M4 SHMEM heartbeat. VERIFIED GREEN 2026-07-09 (jess local, Renode v1.16.1):
+      RR0 = 0x0000BEEF; negative-controlled RED with a no-doorbell M4 build (RR0 != sentinel ->
+      FAIL). So the MU mailbox DATAPATH (M4 bInstance TR0 -> M7 aInstance RR0) is now firmware-
+      DRIVEN + asserted, not just wired. Posted the register map + the working recipe on gale#65
+      so gust's ipc-rx side can use the same offsets. REMAINING (still gale#65): the reactive
+      IRQ-handler side (M7 taking AInstanceIRQ + gust consuming over ipc-rx with a connectable
+      transport) - the datapath is proven; the ISR-driven consume is the next rung. Local Track-B
+      oracle (needs Renode + the gale gust fetch), not one of the 5 CI gates - consistent with
+      this test's draft/local status.
+    tags: [phase-2, simulation, renode, multi-node, vehicle, on-target, mu-doorbell, inter-core]
     links:
       - type: verifies
         target: REQ-PIX-017

@@ -43,8 +43,12 @@ shmem: Memory.MappedMemory @ sysbus 0x20400000
 // MU (Messaging Unit) — the NXP doorbell of IPCF/RPMsg (MU mailbox + SHMEM vring).
 // The real NXP MU model with per-core instances (aInstance=M7, bInstance=M4) and the
 // cross-core doorbell IRQ lines: a TR write on one side raises the other side's IRQ.
-// (Driving the two-sided TR/RX-IE register protocol from firmware needs the RT1170 MU
-// register map — asked gale#65; the SHMEM vring below is the live link meanwhile.)
+// DRIVEN by firmware since 2026-07-09: the M4 boot code writes bInstance TR0 (+0x200),
+// the IMXRT700 MU model delivers it to aInstance RR0 (+0x280, M7 side) and asserts
+// AInstanceIRQ. Register map (from the Renode IMXRT700_MessagingUnit model): TR0..3
+// @0x200/4/8/C (write=transmit), RR0..3 @0x280/4/8/C (read=receive), SR @0xC (bit6 RFP
+// receive-full), RCR @0x128 (bits0-3 RIE receive-int-enable). The multinode oracle
+// asserts the M4->M7 RR0 delivery (0xBEEF); the SHMEM vring is the payload carrier.
 mu: Miscellaneous.IMXRT700_MessagingUnit @ {
         sysbus new Bus.BusMultiRegistration { address: 0x40C4C000; size: 0x1000; cpu: cpu_m7; region: "aInstance" };
         sysbus new Bus.BusMultiRegistration { address: 0x40C4D000; size: 0x1000; cpu: cpu_m4; region: "bInstance" }
