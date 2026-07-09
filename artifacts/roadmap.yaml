@@ -123,13 +123,26 @@ artifacts:
   - id: FEATURE-010
     type: feature
     title: "jess 0.7.0 — Upstream feedback loop closed"
-    status: draft
+    status: accepted
     release: v0.7.0
     tags: [roadmap, v0.7.0]
     fields:
       phase: phase-1
     description: >
       Auto-file gh issues for findings; track status open to reported to fixed to verified; first loom-bug issue filed and tracked. EXIT: a finding flows out to an upstream issue and back to verified.
+      DELIVERED 2026-07-10 (draft->accepted): the exit criterion is met REPEATEDLY, closed
+      end-to-end. Strongest closed loops (finding -> respectful upstream issue -> supplier fix
+      -> jess VERIFIES against the real build, several via a hermetic jess oracle wired as the
+      merge gate): synth#374 bulk-mem (AFD-026) -> fixed v0.11.49 -> jess Renode oracle
+      TEST-PIX-013 GREEN in CI; synth#507 br_table (AFD-032) -> fixed v0.17.0 -> TEST-PIX-020
+      GREEN + wired into CI; synth#372 i64 load/store (AFD-025) -> fixed v0.11.47 -> verified;
+      and the 2026-07 dispatch trilogy synth#650 (multi-table) -> fixed v0.34.0, synth#664
+      (null-slot) -> fixed v0.36.0, both jess-verified against the real falcon build (AFD-033),
+      with synth#676 (heterogeneous-table) the open next layer. The mechanics (release-watch +
+      per-piece chain-measure + AFD artifacts linking the supplier external-anchor + PR flow +
+      supervise-until-verified) all operate every tick - the SAME delivery bar as FEATURE-009
+      (accepted). This makes v0.7.0 read one artifact closer; the remaining 10 are on-target
+      requirements genuinely gated on the synth poles (#369/#275) or the physical board.
     links:
       - type: implements
         target: FEATURE-001
