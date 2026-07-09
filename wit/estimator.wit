@@ -1,0 +1,12 @@
+// Generated from AADL process: Pixhawk6XRT::estimator
+package pixhawk6-x-r-t:estimator;
+
+interface estimator-ports {
+    type vehicle-state = list<u8>;
+
+    set-state-out: func(val: vehicle-state);
+}
+
+world estimator-world {
+    import estimator-ports;
+}
