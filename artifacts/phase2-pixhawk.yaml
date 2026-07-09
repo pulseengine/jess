@@ -175,6 +175,14 @@ artifacts:
       the open gale#65 MU-map/gust-ipc-rx thread) now has a verified starting point. RECORD
       only (per the DD-022/DD-023 sequencing rule): jess binds these when falcon can lower
       on-target (#369), NOT before - suppliers must not build ahead of jess consuming.
+      WIT CONTRACTS GENERATED 2026-07-09 (feature loop, TEST-PIX-023): the inter-core WIT is now
+      DERIVED from the AADL via `spar codegen --format wit` (spar v0.24.0, #319) and committed to
+      wit/ - falcon.wit (M7: imports vehicle-state, exports actuator-cmd), estimator.wit (M4:
+      exports vehicle-state), failsafe.wit (F100: imports actuator-cmd) = the estimator->falcon->
+      failsafe dataflow as WIT. tools/wit/regen.sh --check gates that wit/ stays spar-generated
+      (no hand-edits/drift), wired into the spar-model CI job. This is feature-loop step 2 (WIT
+      from spar, never hand-written) realized for the inter-core contracts; the RPC transport
+      binding onto these (gale msgq + the MU/shared-SRAM) remains #369/gale#65-sequenced.
     fields:
       category: functional
       priority: should
@@ -720,6 +728,30 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-018
+
+  - id: TEST-PIX-023
+    type: test-spec
+    title: WIT-derivation gate - the inter-core WIT contracts are spar-generated from the AADL, not hand-written (REQ-PIX-007, feature-loop step 2)
+    status: valid
+    description: >
+      wit/ + tools/wit/regen.sh - the feature-loop step-2 discipline made a gate: the inter-core
+      WIT interface contracts are DERIVED from hardware/pixhawk6x-rt.aadl via `spar codegen
+      --format wit` (spar#319, v0.24.0), never hand-written. spar generates one WIT package per
+      core process: wit/falcon.wit (M7 - imports vehicle-state, exports actuator-cmd),
+      wit/estimator.wit (M4 - exports vehicle-state), wit/failsafe.wit (F100 - imports
+      actuator-cmd) - i.e. the estimator(M4)->falcon(M7)->failsafe(F100) inter-core dataflow of
+      REQ-PIX-007 / the north-star (DD-023), expressed as WIT. GATE (tools/wit/regen.sh --check,
+      wired into the spar-model CI job): regenerate to a temp dir and diff against the committed
+      wit/; a hand-edit OR an un-regenerated AADL change fails. spar codegen is DETERMINISTIC
+      (byte-identical regen verified), so the diff is exact. CONFIRMED 2026-07-09 (jess local,
+      spar v0.24.0): green on match, red on a tampered wit/falcon.wit (negative-controlled both
+      directions). This closes the "WIT must be generated from the model, not drift by hand"
+      anti-pattern for jess's inter-core contracts; the byte payloads (list<u8>) are the v1 AADL
+      port types and will gain structure as the AADL feature types are refined.
+    tags: [phase-2, wit, spar, aadl, inter-core, north-star, ci-gate, oracle, derivation]
+    links:
+      - type: verifies
+        target: REQ-PIX-007
 
   - id: REQ-PIX-018
     type: requirement

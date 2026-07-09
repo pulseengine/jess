@@ -1,0 +1,12 @@
+// Generated from AADL process: Pixhawk6XRT::failsafe
+package pixhawk6-x-r-t:failsafe;
+
+interface failsafe-ports {
+    type actuator-cmd = list<u8>;
+
+    cmd-in: func() -> actuator-cmd;
+}
+
+world failsafe-world {
+    import failsafe-ports;
+}

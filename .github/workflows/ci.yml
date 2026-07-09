@@ -21,7 +21,10 @@ env:
   # adds the #613 fix (set-release no longer corrupts a folded scalar) — relevant
   # to the release-handling workflow jess now uses; existing artifacts verified clean.
   RIVET_VERSION: v0.22.1
-  SPAR_VERSION: v0.17.0
+  # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
+  # WIT-derivation gate below; verified backward-compatible with jess's model
+  # (parse + instance green). Bumped from v0.17.0.
+  SPAR_VERSION: v0.24.0
   # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b). The gate
   # keys on scry's soundness invariants, which are stable across meld versions
   # (0.33.0 and 0.37.0 both give 771 pts / 71 edges / 0 unsound-fallback), so a
@@ -101,6 +104,12 @@ jobs:
         run: |
           spar parse hardware/pixhawk6x-rt.aadl
           spar instance --root Pixhawk6XRT::Pixhawk6XRT.v2a hardware/pixhawk6x-rt.aadl
+      # REQ-PIX-007 / TEST-PIX-023 — the inter-core WIT contracts are DERIVED from
+      # the AADL via spar (feature-loop step 2, never hand-written). Assert the
+      # committed wit/ matches spar codegen from the model: a hand-edit or an
+      # un-regenerated AADL change fails here. spar codegen is deterministic.
+      - name: WIT-derivation gate (wit/ == spar codegen from AADL)
+        run: tools/wit/regen.sh --check
 
   # REQ-PIX-010 oracle — the MAVLink bench decoder against a real committed
   # 6X-RT sample (CRC-gated, board-free, deterministic).
