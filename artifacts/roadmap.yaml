@@ -171,6 +171,19 @@ artifacts:
       phase: phase-1
     description: >
       jess GitHub Actions runs the forward chain plus HIL per falcon release; hermetic Bazel build via rules_wasm_component; publish jess's own compliance-report.tar.gz. EXIT: CI-green on push plus a published compliance report.
+      PROGRESS 2026-07-10 (2 of 3 legs done; stays draft on the 3rd):
+      (1) CI-green on push - DONE: 5 gates (rivet-validate, spar-model, mav-bench, renode-smoke,
+          scry-gate) green on every push to main.
+      (2) Published compliance report - DONE (TEST-PIX-024): tools/compliance/gen.sh renders a
+          traceability/V&V compliance report (rivet coverage + the CI gate inventory + the
+          DO-178C/DO-333 verification-legs posture) to compliance/coverage-report.md + the CI
+          job summary, backed by a `rivet coverage --fail-under 60` COVERAGE-FLOOR GATE (65.3%
+          today). jess cuts no binary release, so the report is CI-published, not a release
+          tarball (consistent with the hub role).
+      (3) Hermetic Bazel build via rules_wasm_component - REMAINING: the falcon firmware chain
+          (//:falcon-validate/optimized/fused/firmware) is deferred until validated in the CI
+          runner + is partly synth-pole-gated (see the ci.yml NOTE). This is the only open leg,
+          so FEATURE-012 stays draft.
     links:
       - type: implements
         target: FEATURE-001

@@ -71,6 +71,15 @@ jobs:
           rivet --version
           rivet sync
           rivet validate
+      # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
+      # compliance report to the job summary, and GATE on a coverage floor so the
+      # right side of the V can't silently regress. jess cuts no binary release, so
+      # this CI-published report + floor gate is the "own compliance report" (TEST-PIX-024).
+      - name: compliance report + coverage-floor gate (FEATURE-012 / TEST-PIX-024)
+        working-directory: jess
+        run: |
+          tools/compliance/gen.sh | tee -a "$GITHUB_STEP_SUMMARY"
+          rivet coverage --fail-under 60
       # Non-gating visibility: the open-defect punch-list + the V-gap
       # (non-draft requirements no test-spec verifies), emitted to the job
       # summary on every run via `rivet sql`. The gate is `validate` above;

@@ -769,6 +769,32 @@ artifacts:
       - type: verifies
         target: REQ-PIX-007
 
+  - id: TEST-PIX-024
+    type: test-spec
+    title: Compliance report + coverage-floor CI gate (FEATURE-012 leg) - jess publishes its own traceability/V&V report and gates coverage regression
+    status: valid
+    description: >
+      tools/compliance/gen.sh + the rivet-validate CI step. jess cuts no binary release, so its
+      "own compliance report" (FEATURE-012 EXIT) is a REGENERABLE markdown report published to
+      the CI job summary every push, plus a COVERAGE-FLOOR GATE. gen.sh renders the DO-178C/
+      DO-333 evidence from the rivet trace: `rivet coverage` (traceability coverage by rule),
+      the 5 CI verification gates + what each proves, and the verification-legs posture (scry
+      sound-analysis GREEN; witness MC/DC harness-bridge pending; STPA/sec safety-case layer at
+      100% decision/hazard/UCA coverage). The GATE = `rivet coverage --fail-under 60` in the
+      rivet-validate job: overall traceability coverage must stay >= 60% (currently 65.3%) or CI
+      fails - the right side of the V can't silently regress (e.g. an unlinked artifact).
+      CONFIRMED 2026-07-10: gen.sh is DETERMINISTIC (regen byte-identical); `rivet coverage
+      --fail-under 60` supported on the CI-pinned rivet v0.22.1 (65.3% >= 60%, exit 0). The
+      report notes honestly that requirement-verification is ~39% BY DESIGN - the on-target
+      v0.7.0 reqs are gated on the synth poles (#369/#275/#676) or the physical board, not a
+      process gap (FEATURE-010 accepted). Delivers the compliance-report leg of FEATURE-012; the
+      hermetic-Bazel-build leg (rules_wasm_component falcon chain) remains, so FEATURE-012 stays
+      draft.
+    tags: [phase-2, compliance, traceability, coverage, do-178c, do-333, ci-gate, oracle, feature-012]
+    links:
+      - type: verifies
+        target: FEATURE-012
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
