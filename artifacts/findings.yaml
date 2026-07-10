@@ -982,6 +982,19 @@ artifacts:
       NO platform binaries (only a compliance-report tarball) - blocks downstream bootstrap;
       filed synth#631, worked around by building from the v0.32.0 tag. Poles: #369 hard-float
       (24) THE one + #275 dispatch + i64 tail. Evidence: chain-measure on falcon-flight-v1.112 / synth 0.32.0.
+      UPDATE 2026-07-11 (#369 PHASE 1 shipped v0.39.0 - PARTIAL, falcon inventory UNMOVED):
+      GI-FPU-002 phase 1 lands f32 hard-float ARITH on thumb-2 (real VFP value stack + AAPCS-VFP
+      homing + CPACR enable, FPU-gated; 48/48 bit-exact vs wasmtime; f64 held for phase 2). #369
+      CLOSED as "shipped v0.39.0". BUT verified against the real build (falcon v1.114, meld 0.38.0/
+      loom 1.1.18/synth 0.39.0): falcon's float skips are STILL 24 (unchanged from v0.38.0) - phase 1
+      covers f32 arith/compare/convert/const/param but NOT f32 memory LOAD or reinterpret, which
+      dominate falcon's float functions: F32Load 13 + I32ReinterpretF32 7 + F64PromoteF32 3 +
+      F64Const 1. Minimal repros confirm the exact boundary on v0.39.0 -t cortex-m7dp: f32.add
+      COMPILES; f32.load + i32.reinterpret_f32 SKIP (unsupported operator ... #369). So #369-closed
+      does NOT yet move falcon. Filed synth#708 for the residual (f32.load -> VLDR Sd; reinterpret
+      -> VMOV Rd,Sn) with repros + the falcon breakdown; f64 is phase 2. The on-target blocker is now
+      f32-load/reinterpret (#708) + f64 (phase 2) + the ~5-func regalloc tail; DISPATCH is DONE
+      (AFD-033 resolved, #676 v0.38.0). Evidence: .scratch/f32-boundary/{f32_arith,f32_load,f32_reinterpret}.wat.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
