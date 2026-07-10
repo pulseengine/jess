@@ -795,6 +795,37 @@ artifacts:
       - type: verifies
         target: FEATURE-012
 
+  - id: TEST-PIX-025
+    type: test-spec
+    title: DD-018 TCB-link model - minimal demonstration that a --relocatable+native-pointer-abi wasm links against a thin native TCB shim into a complete ARM image (the falcon on-target linking mechanism, independent of #369)
+    status: valid
+    description: >
+      hardware/renode/tcb-link/ - proves the gale-maximal-wasm on-target LINKING MODEL (DD-018)
+      on a minimal example, INDEPENDENT of the falcon #369/#275 poles. The falcon on-target path
+      is --relocatable + TCB-link (native trusted base + fused wasm), NOT the self-contained
+      --cortex-m ELF. seam.wat = a minimal wasm compute()=tcb_seed()+1 importing the native
+      primitive env::tcb_seed (a stand-in for a gale/WASI TCB primitive); tcb.S = a thin native
+      TCB shim providing tcb_seed. RECIPE (the ABI gust uses): `synth compile seam.wasm -t
+      cortex-m7dp --relocatable --native-pointer-abi --shadow-stack-size 1024` - --native-pointer-abi
+      makes the module BASE-INDEPENDENT (host-pointer drop-in, linmem base=0), so it links against
+      a thin native shim, not a full wasm runtime. ORACLE (build.sh, exits non-zero on failure):
+      synth emits compute (defined) + tcb_seed (UNDEFINED = the TCB seam); the shim provides it;
+      they link (arm-none-eabi-ld) into a complete ARM ELF with ZERO undefined symbols. CONFIRMED
+      GREEN 2026-07-10 (jess local, synth v0.37.0); NEGATIVE-CONTROLLED: linking without the shim
+      errors on undefined tcb_seed (the seam is real - synth emits it as a relocation the native
+      trusted base must satisfy). Local oracle (needs synth), not a CI gate. Verifies the LINK
+      mechanism of REQ-PIX-002 (gale primitives as the M7 native base, maximal-wasm). NEXT RUNG
+      (not yet green, not shipped red): booting the linked image in Renode to assert compute()
+      RUNS on real ARM (0xCAFF @0x20010000) - a boot hang under investigation; the link is proven,
+      on-target EXECUTION of the minimal image is the follow-on. Minimal analogue of
+      tools/bench/falcon-reloc-spike.sh point 1.
+    tags: [phase-2, dd-018, relocatable, tcb-link, native-pointer-abi, on-target, gale-maximal-wasm, oracle]
+    links:
+      - type: verifies
+        target: REQ-PIX-002
+      - type: traces-to
+        target: DD-018
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
