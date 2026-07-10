@@ -1469,8 +1469,8 @@ artifacts:
 
   - id: AFD-033
     type: ai-found-defect
-    title: synth call_indirect on falcon's fused table-1 (20 funcs) - multi-table LINKING fixed v0.34.0 (synth#650); residual = null-funcref-slot lowering (synth#664)
-    status: open
+    title: synth call_indirect on falcon's fused table (20 funcs) - the full dispatch story #642->#650->#664->#676 RESOLVED v0.38.0 (0 declines verified); falcon on-target now #369-gated alone
+    status: resolved
     description: >
       Found 2026-07-08 (release-watch, synth v0.33.1). synth's thumb-2 backend links only
       TABLE 0 (at R11); any call_indirect whose table index is >=1 is refused:
@@ -1530,7 +1530,20 @@ artifacts:
       at 46/146 (24 #369 + 20 hetero-table [#676] + 1 #518 + 1 #503), all behind #369. Aside on
       #676: meld emits 31 type decls for 25 distinct signatures (6 structural dups) - harmless
       (synth compares structurally).
-    tags: [release-watch, synth, arm, call-indirect, multi-table, null-funcref-slot, heterogeneous-table, dispatch, on-target, correctness]
+      RESOLVED 2026-07-10 (synth v0.38.0): #676 FIXED + CLOSED - heterogeneous funcref tables now
+      dispatch via a runtime TYPE-ID SIDECAR (exactly the fix jess offered; it subsumes the #664
+      null-trap). The WHOLE dispatch story is shipped end-to-end: #642 (bounds) -> #650 (multi-
+      table) -> #664 (null-slot) -> #676 (heterogeneous). VERIFIED against the real build (falcon
+      v1.114.0, meld 0.38.0 -> loom 1.1.18 -> synth 0.38.0, -t cortex-m7dp): 0 call_indirect /
+      table / dispatch declines - falcon's whole 20-func dispatch cluster now lowers. Skip
+      inventory 46/146 -> 29/150 (falcon grew v1.112->v1.114); the remaining 29 = 24 #369 hard-
+      float + a ~5-func regalloc/i64 tail (2 #518 i64-param, 2 register-exhaustion, 1 #503). So
+      falcon's on-target STRUCTURAL blocker is now essentially #369 ALONE plus the small regalloc
+      tail - the dispatch path is DONE. Reported the numbers on synth#676 (maintainer requested).
+      NOTE the OTHER dispatch pole #275 (self-contained --cortex-m compiles only exports) stays
+      OPEN, but is moot for falcon's chosen path (--relocatable+TCB-link optimized path, DD-018);
+      TEST-PIX-021 stays RED for the self-contained path falcon does not use.
+    tags: [release-watch, synth, arm, call-indirect, multi-table, null-funcref-slot, heterogeneous-table, dispatch, on-target, correctness, resolved]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.33.1 (meld 0.33.0/loom 1.1.18, falcon v1.112); root-caused to 20 table-1 call_indirect declines + a minimal 2-table .wat repro; filed synth#650
       severity: major
