@@ -1107,7 +1107,7 @@ artifacts:
            byte-link parsing the TF02 frame, exposed as a RangefinderIn(distance-cm, quality)
            reading (terrain/AGL altitude + landing). relay LACKS this driver -> THE net-new relay
            request (REQ-PIX-020). gale TCB: 1x LPUART primitive.
-        3. Holybro 433MHz Telemetry V3 - SiK radio, transparent LPUART carrying MAVLink to the
+        3. Holybro 433MHz Telemetry V3 (PM-5418) - SiK radio, transparent LPUART carrying MAVLink to the
            GCS. SEAM: embedded-io-async byte-link -> relay-mavlink (off-board). relay HAS
            relay-mavlink; this is the concrete off-board transport (real-vehicle side of the
            REQ-PIX-010 MAVLink bench). gale TCB: 1x LPUART primitive.
@@ -1168,6 +1168,13 @@ artifacts:
       IDENTICAL either way - the delta is FRAME-ONLY (geometry/mass/motor-KV/prop -> the dynamics
       & mixer tuning). Do NOT carry S500 mechanicals into the SIL/failsafe model; X500 V2 mass/arm/
       inertia/KV are to be sourced from relay/Holybro spec, not assumed from the S500.
+      ROOT CAUSE of the "S500" mislabel (user-identified, invoice 2026-07-11): the FRAME kit is
+      **PM-5935 "Holybro X500 V2 ARF Set"** (frame + 4 motors + 4 ESCs + props + PDB) - unambiguously
+      X500. The "S500" string came only from the SELLER LABELS on the **battery (PM-5902, "…XT90
+      S500")** and the **XT90->XT60 adapter cable (PM-5517, "…S500 Holybro")** - generic accessories
+      cross-listed for the S500 line. Do NOT re-infer the airframe from those accessory part names.
+      NOTE: PM-5902/5517 are the battery + adapter, NOT a power module; the power module is PM02D
+      (TI INA228 / I2C), which ships with the Pixhawk 6X-RT Standard v2A Set (REQ-PIX-001), not the ARF.
     release: v0.7.0
     tags: [phase-2, vehicle, bom, x500, pixhawk-6xrt, relay-hal, gale-tcb, gnss, lidar, telemetry, power, esc, jess-144]
     fields:
