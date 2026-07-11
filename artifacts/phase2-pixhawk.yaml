@@ -1025,11 +1025,11 @@ artifacts:
 
   - id: REQ-PIX-021
     type: requirement
-    title: Integrated flash-ready 3-core S500 vehicle - gust on all cores, per-core peripherals, inter-core IPC, relay partitioned + compiled per-core, whole thing running in the 3-core Renode model with the goal of being flashed
+    title: Integrated flash-ready 3-core X500 V2 vehicle - gust on all cores, per-core peripherals, inter-core IPC, relay partitioned + compiled per-core, whole thing running in the 3-core Renode model with the goal of being flashed
     status: draft
     description: >
       THE NORTH-STAR INTEGRATION (DD-023): bring every strand together into one
-      flash-ready image for the physical S500 (DD-022). jess shall demonstrate, in the
+      flash-ready image for the physical X500 V2 (DD-022). jess shall demonstrate, in the
       3-core RT1176 Renode model (hardware/pixhawk6x-rt.aadl -> spar instance), the
       COMPLETE partitioned vehicle and produce a flashable artifact set:
         1. GUST ON ALL CORES: the gale-nano/gust maximal-wasm runtime hosts on each of the
