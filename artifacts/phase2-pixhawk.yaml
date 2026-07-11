@@ -119,13 +119,41 @@ artifacts:
         target: relay:FV-FALCON-IMUDRV-001
   - id: REQ-PIX-004
     type: requirement
-    title: Multi-processor binding realized - falcon on M7, failsafe on the STM32F100 I/O MCU; M4 reserved
+    title: Multi-processor binding realized - falcon on M7, estimator on M4, failsafe on the STM32F100 I/O MCU (the 3-core partition, relay-confirmed)
     status: draft
     release: v0.7.0
+    description: >
+      The RT1176 3-core partition: M7 (fpv5-d16) = falcon flight cascade; M4 (fpv4-sp) =
+      relay-iekf estimator; F100 (M3 soft-float) = gust failsafe. Two-level scheduling per
+      DD-025 (ARINC 653 outer + kiln-async inner; F100 = cross-core Health Monitor).
+      PARTITION CONFIRMED 2026-07-11 by relay (jess#144, relay SWREQ-FALCON-PART-P01/P02,
+      v1.123.0, PR #263 3b285f6): the stack separates cleanly at the estimator->cascade
+      boundary - relay-iekf is its own no_std crate, the ONLY crossing datum is NavState
+      (16xf32 = 64 B), a clean MU/SHMEM message (typed into REQ-PIX-007). Ownership: relay
+      decides component->partition mapping + WIT boundaries; jess owns per-core ISA compile
+      + binding. relay's estimator ships as its own meld-fused component; the WIT zero-diff
+      drift gate (relay PART-P01 acceptance) reconciles against jess's spar-generated
+      wit/{estimator,falcon,failsafe}.wit - which TEST-PIX-023 already gates jess-side.
+      PART-P02 (relay safety MUSTs on the F100/gust failsafe, mirrored to gale#65 + DD-025):
+        (a) PASS-THROUGH FIDELITY - gust forwards the M7 per-motor commands byte-exact, NO
+            re-mixing / no per-motor floors (the rank-3 rotor-out asymmetric sets incl. zeros
+            must survive; any downstream re-allocation reintroduces the v1.114 parasitic-moment
+            failure). relay ships a conformance fixture -> jess wires it as a gust byte-exact
+            oracle in the 3-core Renode model. Aligns with DD-011 (gust = failsafe mixer, not
+            nominal allocator) + DD-024.
+        (b) SILENCE SAFE-STATE - on loss of the M7 actuator-command stream, F100/gust drives
+            motors-off <=100 ms (the hardware backstop for relay's Kani-proven FSM Terminate);
+            rides the MU-heartbeat-loss trip (TEST-PIX-019/gale#65).
+      M4 stays a heartbeat stub until relay lands PART-P01 (the split + a delay-robustness
+      campaign: NavState delayed 1-2 ticks / jittered +-1 must keep hover + rotor-out passing).
+      Per-core compiles gated on the synth float poles (#719 f32 + f64 phase-2; note falcon-flight
+      has 4 f64-dense funcs so M7 double-FP is a real dependency - AFD-024).
     fields:
       category: functional
       priority: should
     links:
+      - type: traces-to
+        target: DD-025
       - type: traces-to
         target: FEATURE-002
 
@@ -185,7 +213,13 @@ artifacts:
       (no hand-edits/drift), wired into the spar-model CI job. This is feature-loop step 2 (WIT
       from spar, never hand-written) realized for the inter-core contracts; the RPC transport
       binding onto these (gale msgq + the MU/shared-SRAM) remains #369/gale#65-sequenced.
-    fields:
+      MESSAGE TYPE GROUNDED 2026-07-11 (relay partition confirmation, jess#144/REQ-PIX-004): the
+      estimator(M4)->falcon(M7) crossing datum is NavState = the IEKF state {q, v, p, b_g, b_a} =
+      16x f32 = 64 bytes - a single fixed-size MU/SHMEM message (the `vehicle-state` in the
+      spar-generated estimator/falcon.wit). relay-iekf is a separable no_std crate with no hidden
+      back-edges, so this is the whole inter-core estimator contract; the byte payload (list<u8>)
+      will gain this structure as the AADL feature types refine. falcon(M7)->failsafe(F100) carries
+      the per-motor actuator commands (byte-exact pass-through, REQ-PIX-004 PART-P02).
       category: functional
       priority: should
     links:
