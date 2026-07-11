@@ -33,11 +33,32 @@ SYNTH=/path/to/synth ./build.sh
 → LINK OK — DD-018 TCB seam fully resolved: wasm(compute) + native(tcb_seed) -> complete ARM image, 0 undefined.
 ```
 
+## Rung 2 — EXECUTION oracle (`run-oracle.sh` + `boot.resc`, GREEN)
+The linked image now **runs on emulated RT1176 Cortex-M7** and produces the
+correct value: `compute() = tcb_seed()+1 = 0xCAFF` observed in DTCM @0x20010000.
+
+```
+RENODE=/path/to/renode ./run-oracle.sh
+→ EXEC OK — DD-018 image runs on RT1176 Cortex-M7: wasm compute()=tcb_seed()+1=0xCAFF observed in DTCM.
+```
+
+- **Negative-controlled:** before execution the same DTCM word is `0x00000000`
+  (Renode zeroes RAM), so `0xCAFF` can *only* come from `compute()` actually
+  running — the value is produced on ARM, not preloaded.
+- **The earlier "boot hang" was a misread, not a bug.** After `compute` stores
+  its result, `_reset` idle-spins at `b .` (PC parks at 0x14). That stable PC was
+  mistaken for a hang; reading the observation word shows the compute already ran.
+  Note the disassembly: with `--native-pointer-abi` synth folds the shadow stack
+  into the **native ARM `sp`** (`push {r4-r8,lr}; sub sp,#24; … ; pop`), so
+  `compute` is self-contained — **no** `.data`/`.bss`/shadow-global init is needed
+  (the previously-banked "needs cortex-m-rt startup" hypothesis was wrong).
+
+This is the minimal analogue of `tools/bench/falcon-reloc-spike.sh` point 1
+("falcon dissolves --relocatable to a valid ELF relocatable object; TCB-link
+viable") — now carried one rung further, to actual on-target execution.
+
 ## Next rung (not yet green)
-Booting the linked image in Renode to assert `compute()` runs on real ARM (result
-0xCAFF at 0x20010000). The link is proven; the on-target **execution** of the
-minimal image under Renode is the next step (a boot hang under investigation —
-likely a startup/vector or native-pointer-abi runtime-init detail). Not shipped
-red; the link-model viability (above) is the green result. This is the minimal
-analogue of `tools/bench/falcon-reloc-spike.sh` point 1 ("falcon dissolves
---relocatable to a valid ELF relocatable object; TCB-link viable").
+Promote `run-oracle.sh` to a `renode-test` `.robot` so the execution assertion can
+join the CI `renode-smoke` gate (currently the local-oracle pattern, matching
+`build.sh`). Then scale the seam from the toy `tcb_seed` to a real gale/WASI TCB
+primitive.

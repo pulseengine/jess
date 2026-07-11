@@ -824,11 +824,18 @@ artifacts:
       GREEN 2026-07-10 (jess local, synth v0.37.0); NEGATIVE-CONTROLLED: linking without the shim
       errors on undefined tcb_seed (the seam is real - synth emits it as a relocation the native
       trusted base must satisfy). Local oracle (needs synth), not a CI gate. Verifies the LINK
-      mechanism of REQ-PIX-002 (gale primitives as the M7 native base, maximal-wasm). NEXT RUNG
-      (not yet green, not shipped red): booting the linked image in Renode to assert compute()
-      RUNS on real ARM (0xCAFF @0x20010000) - a boot hang under investigation; the link is proven,
-      on-target EXECUTION of the minimal image is the follow-on. Minimal analogue of
-      tools/bench/falcon-reloc-spike.sh point 1.
+      mechanism of REQ-PIX-002 (gale primitives as the M7 native base, maximal-wasm).
+      RUNG 2 - EXECUTION oracle now GREEN (2026-07-11, jess local, Renode 1.16.1 RT1176 Cortex-M7):
+      run-oracle.sh + boot.resc boot the fused image; compute()=tcb_seed()+1=0xCAFF is observed in
+      DTCM @0x20010000. NEGATIVE-CONTROLLED: the same word reads 0x00000000 before execution (Renode
+      zeroes RAM), so 0xCAFF can only come from compute() actually running on ARM. The earlier
+      "boot hang" was a MISREAD: after storing the result _reset idle-spins at `b .` (PC parks at
+      0x14) - a stable PC mistaken for a hang. Disassembly confirms --native-pointer-abi folds the
+      shadow stack into the native ARM sp, so compute is self-contained: NO .data/.bss/cortex-m-rt
+      startup init is needed (the previously-banked "needs startup init" hypothesis was wrong).
+      Local oracle (needs renode), not yet a CI gate; next rung = promote to a renode-test .robot for
+      the renode-smoke gate. Minimal analogue of tools/bench/falcon-reloc-spike.sh point 1, now
+      carried to actual on-target execution.
     tags: [phase-2, dd-018, relocatable, tcb-link, native-pointer-abi, on-target, gale-maximal-wasm, oracle]
     links:
       - type: verifies

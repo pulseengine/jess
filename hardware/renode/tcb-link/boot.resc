@@ -1,0 +1,17 @@
+:name: DD-018 TCB-link execution boot (RT1176 Cortex-M7)
+:description: Boots the fused wasm(compute)+native(tcb_seed) image and lets it run;
+:description: the reset shim stores compute()=tcb_seed()+1 to DTCM @0x20010000.
+
+using sysbus
+mach create "tcb"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+sysbus LoadELF @hardware/renode/tcb-link/tcb-link.elf
+
+# Run briefly: _reset sets SP, calls compute (the synth --relocatable wasm export),
+# stores the result to DTCM, then idle-spins at `b .`. 0.5ms is ample for a few insns.
+emulation RunFor "0.0005"
+pause
+
+echo "TCB_EXEC_WORD_BEGIN"
+sysbus ReadDoubleWord 0x20010000
+echo "TCB_EXEC_WORD_END"
