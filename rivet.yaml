@@ -12,11 +12,24 @@ project:
     - supply-chain
 
 externals:
-  # Only gale is referenced by jess artifacts (gale:L-1, gale:H-2 hazard
-  # traceability in stpa.yaml). loom/rivet externals were from the original
-  # AFD-001 cross-repo experiment and are unused — dropped so `rivet validate`
-  # needs only the gale sibling (CI checks it out at the rivet.lock SHA).
-  gale: { path: ../gale, prefix: gale }
+  # gale — jess's stpa hazards trace to gale's losses/hazards (gale:L-1, gale:H-2).
+  # relay — jess's silicon-binding requirements cross-link to the relay artifacts
+  #   they bind/validate (the joint on-target trace, jess#62<->relay#214 split):
+  #     REQ-PIX-012 -> relay:FV-FALCON-HAL-001 (HAL seam), -003 -> IMUDRV-001,
+  #     -010 -> MAVLINK-001, -014 -> SIM-007 (gz-sim) + HITL-002.
+  # Declared as git-links (NO `path:` — rivet resolves an external from `path:`
+  # when present, so keeping it would require a manual sibling checkout; without it
+  # rivet loads from `rivet sync`'s git fetch into .rivet/repos/<prefix>, which is
+  # what CI needs). Pins mirrored in rivet.lock. For local co-dev of a sibling,
+  # temporarily add `path: ../<repo>` back (or `rivet sync --local`).
+  gale:
+    git: https://github.com/pulseengine/gale.git
+    ref: 9c872cc68f3ef40bd1e02b38632877d74cafc1d1
+    prefix: gale
+  relay:
+    git: https://github.com/pulseengine/relay.git
+    ref: f102918af7c3b51a8efaf944442f638a450c9a82
+    prefix: relay
 
 sources:
   - path: artifacts

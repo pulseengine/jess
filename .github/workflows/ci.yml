@@ -13,14 +13,13 @@ permissions:
   contents: read
 
 env:
-  # Pinned PulseEngine tool releases — bumped explicitly via PR. rivet 0.22.0
-  # ("Release planning, complete", REQ-232/233/234, #516) carries the first-class
-  # top-level `release:` dimension + `rivet release status/move` and `list --release`,
-  # on top of the per-schema status enums (AFD-012) and the `rivet sql` surface the
-  # snapshot step uses. The jess store validates clean on it (DD-021). v0.22.1
-  # adds the #613 fix (set-release no longer corrupts a folded scalar) — relevant
-  # to the release-handling workflow jess now uses; existing artifacts verified clean.
-  RIVET_VERSION: v0.22.1
+  # Pinned PulseEngine tool releases — bumped explicitly via PR. Bumped v0.22.1 ->
+  # v0.25.0: needed for GIT-LINK external resolution — `rivet sync` git-fetches the
+  # gale + relay externals into .rivet/repos/ and validate resolves them from there
+  # (v0.22.1 resolved externals only via `path:`, requiring manual sibling checkouts).
+  # Verified: jess store validates clean + `coverage --fail-under 60` still gates
+  # (64.8% >= 60) on v0.25.0.
+  RIVET_VERSION: v0.25.0
   # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
@@ -30,10 +29,11 @@ env:
   # (0.33.0 and 0.37.0 both give 771 pts / 71 edges / 0 unsound-fallback), so a
   # meld bump is safe; pinned only for a reproducible fetch.
   MELD_VERSION: v0.37.0
-  # Pinned gale external (rivet.lock) — jess's stpa hazards trace to gale's
-  # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.
-  # fetch-depth: 0 because gale is force-pushed by the architect.
-  GALE_REF: 9c872cc68f3ef40bd1e02b38632877d74cafc1d1
+  # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
+  # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
+  # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
+  # REQ-PIX-012->HAL, -003->IMU, -010->MAVLink, -014->gz-sim+HITL). No manual
+  # sibling checkout — see the rivet-validate job.
 
 jobs:
   # The rivet artifact spine is jess's substance — this is the core gate.
@@ -44,13 +44,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: jess
-      - name: Check out the pinned gale external (sibling for ../gale)
-        uses: actions/checkout@v4
-        with:
-          repository: pulseengine/gale
-          ref: ${{ env.GALE_REF }}
-          path: gale
-          fetch-depth: 0
+      # gale + relay externals are declared as git-links in rivet.yaml (pinned in
+      # rivet.lock); `rivet sync` below git-fetches each at its pin into
+      # jess/.rivet/repos/ — no manual sibling checkout needed.
       - name: Fetch pinned rivet release
         run: |
           set -euo pipefail
@@ -71,6 +67,8 @@ jobs:
           rivet --version
           rivet sync
           rivet validate
+        env:
+          GH_TOKEN: ${{ github.token }}
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so

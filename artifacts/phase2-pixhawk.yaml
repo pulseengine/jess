@@ -115,6 +115,8 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+      - type: traces-to
+        target: relay:FV-FALCON-IMUDRV-001
   - id: REQ-PIX-004
     type: requirement
     title: Multi-processor binding realized - falcon on M7, failsafe on the STM32F100 I/O MCU; M4 reserved
@@ -269,6 +271,8 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+      - type: traces-to
+        target: relay:FV-FALCON-MAVLINK-001
   - id: REQ-PIX-011
     type: requirement
     title: Cross-validate the Renode i.MX RT1176 platform against the real 6X-RT board (emulation == silicon ground truth)
@@ -318,6 +322,8 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+      - type: traces-to
+        target: relay:FV-FALCON-HAL-001
   - id: REQ-PIX-015
     type: requirement
     title: Firmware-update + non-volatile persistence architecture for the RT1176 target (must be modeled before finalizing the storage/ROM route)
@@ -385,6 +391,10 @@ artifacts:
       - type: traces-to
         target: FEATURE-002
 
+      - type: traces-to
+        target: relay:FV-FALCON-SIM-007
+      - type: traces-to
+        target: relay:FV-FALCON-HITL-002
   - id: TEST-PIX-010
     type: test-spec
     title: mav_bench decodes a real 6X-RT MAVLink sample (CRC-valid), identifies PX4, extracts attitude

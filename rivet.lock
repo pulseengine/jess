@@ -2,3 +2,6 @@ pins:
   gale:
     commit: 9c872cc68f3ef40bd1e02b38632877d74cafc1d1
     prefix: gale
+  relay:
+    commit: f102918af7c3b51a8efaf944442f638a450c9a82
+    prefix: relay
