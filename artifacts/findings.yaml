@@ -1591,3 +1591,40 @@ artifacts:
         target: EXTERNALANCHOR-002
       - type: traces-to
         target: REQ-PIX-001
+
+  - id: AFD-034
+    type: ai-found-defect
+    title: meld fuse --reproducible output depends on the input file PATH (identical bytes at different paths -> different sha) - residual after the meld#325 UUID/timestamp fix
+    status: open
+    description: >
+      Found 2026-07-11 (release-watch, meld v0.39.0). CONTEXT: meld#325 (fused output
+      byte-nondeterministic) was CLOSED by `meld fuse --reproducible` (v0.38.0) - id from output
+      content + timestamp from SOURCE_DATE_EPOCH instead of a random UUID + wall clock. VERIFIED
+      the fix against the real falcon core: WITH --reproducible, two fusions of the same component
+      at the SAME PATH are byte-identical (falcon-v1.112 -> 20bb33bc...); WITHOUT the flag they
+      differ run-to-run. So the dominant nondeterminism (UUID/timestamp) IS gone. RESIDUAL found
+      while verifying: --reproducible output still depends on the input file's full PATH - copy the
+      byte-identical component to /tmp/pa/falcon.wasm and /tmp/pb/falcon.wasm and the two fusions
+      produce DIFFERENT sha256 (f0cf6a82 vs 1cc0f5c2); same path -> identical; even same filename in
+      a different directory differs. So something path-derived is embedded (a producers/source
+      section, or the content hash seeding the attestation id is computed over a buffer that includes
+      the source path). jess IMPACT: a PORTABLE / cross-machine attestation sha for the FIRST-FLASH
+      fused core (REQ-PIX-018 re-verifiable attestation + sigil-signable image set + deterministic
+      replay REQ-PIX-022) is not yet achievable - the scry gate therefore keeps keying on scry
+      soundness invariants (version- and path-independent), not the fused sha. NOT URGENT (invariant
+      gate is unaffected). Fix offered upstream: derive the id purely from module CONTENT (+
+      SOURCE_DATE_EPOCH) and strip/normalize any embedded input path, so identical bytes -> identical
+      output regardless of location. Filed meld#341 (follow-up to #325) with the exact repro; offered
+      to test a fix against the real falcon core. jess side: tools/repro/fuse-repro-oracle.sh asserts
+      the fixed-path guarantee (green) and reports the cross-path dependence as a diagnostic
+      (TEST-PIX-026); scry-gate + chain-measure now fuse --reproducible to remove the random-UUID churn.
+    tags: [release-watch, meld, reproducibility, fused-core, determinism, attestation, on-target, partial-resolved]
+    fields:
+      detected-by: jess release-watch (meld v0.39.0) verifying the #325 --reproducible fix against the real falcon-v1.112 core; found residual input-path dependence; filed meld#341
+      severity: minor
+      triage-status: filed-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-003
+      - type: traces-to
+        target: REQ-PIX-018

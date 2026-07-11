@@ -775,11 +775,18 @@ artifacts:
       to 771 program points / 175 functions / 95 reachable-from-exports / 71 call-edges (12
       of them call_indirect) with 0 unsound-fallback edges AND 0 unsound-fallback diagnostics
       - i.e. scry carries a fully SOUND analysis over the whole fused core, resolving every
-      indirect call soundly. Robust across meld versions (0.33.0 and 0.37.0 both give the
-      identical invariant result; the fused BYTES differ - meld fusion is nondeterministic,
-      meld#325 - so the gate keys on the soundness invariants, not the fused sha; baseline.json
-      records the invariants as evidence). WIRED into .github/workflows/ci.yml as the
-      `scry-gate` job (pinned meld v0.37.0, SHA-verified). COMPLEMENTS relay's source-level
+      indirect call soundly. Robust across meld versions (0.33.0 / 0.37.0 / 0.39.0 all give the
+      identical invariant result). UPDATE 2026-07-11: meld#325 PARTIALLY resolved - meld v0.38.0
+      added `meld fuse --reproducible` (attestation id from content + SOURCE_DATE_EPOCH instead of a
+      random UUID + wall clock), removing the UUID/timestamp nondeterminism: identical input at a
+      FIXED PATH now yields an identical fused sha256 (falcon-v1.112 -> 20bb33bc..., verified against
+      the real build: byte-identical WITH the flag at a fixed path, differs WITHOUT). RESIDUAL (filed
+      upstream): the output still depends on the input PATH (identical bytes at different paths ->
+      different sha), so a portable cross-machine attestation sha is not yet achievable - the gate
+      therefore STILL keys on the soundness INVARIANTS (version- and path-independent), not the fused
+      sha. The scry gate now fuses `--reproducible` (removes the random-UUID churn) and the new
+      TEST-PIX-026 characterizes the reproducibility directly. WIRED into .github/workflows/ci.yml as
+      the `scry-gate` job (pinned meld v0.39.0, SHA-verified). COMPLEMENTS relay's source-level
       DWARF MC/DC (jess cannot run it on the stripped release) - the deviation recorded at hub
       pulseengine.eu#98. This is leg b of REQ-PIX-018; leg a (witness branch-coverage) remains
       the pinned follow-on (needs a counter-snapshot harness bridge OR an upstream single-core
@@ -876,6 +883,38 @@ artifacts:
         target: REQ-PIX-002
       - type: traces-to
         target: DD-018
+
+  - id: TEST-PIX-026
+    type: test-spec
+    title: Fused-core byte-reproducibility oracle - `meld fuse --reproducible` is byte-stable for a fixed input path (meld#325 UUID/timestamp nondeterminism resolved; cross-path residual filed upstream)
+    status: valid
+    release: v0.9.0
+    description: >
+      tools/repro/fuse-repro-oracle.sh - characterizes how far the meld-fused falcon core is a
+      BYTE-STABLE artifact, the prerequisite for a re-verifiable REQ-PIX-018 attestation, a
+      sigil-signable FIRST-FLASH image set (DD-023/REQ-PIX-021), and deterministic replay
+      (REQ-PIX-022). BACKGROUND: meld#325 - default fusion embedded a random UUID attestation-id +
+      a wall-clock timestamp, so identical input produced a different sha256 every run (the reason
+      the scry gate keyed on soundness invariants, not the fused sha). meld v0.38.0 added
+      `meld fuse --reproducible` (id from output content, timestamp from SOURCE_DATE_EPOCH default 0),
+      which REMOVES that UUID/timestamp nondeterminism. ORACLE (exits non-zero on failure): two
+      --reproducible fusions of the same component at the SAME PATH yield an IDENTICAL sha256.
+      NEGATIVE-CONTROLLED: two DEFAULT (no-flag) fusions differ run-to-run. VERIFIED AGAINST THE REAL
+      BUILD 2026-07-11 (jess local, meld v0.39.0, falcon-flight-v1.112 at a fixed path -> 20bb33bc...
+      stable across runs; scry re-analyzes it to the identical sound invariants 771 pts / 71 edges /
+      0 unsound-fallback). RESIDUAL (verified, filed upstream as meld friction): --reproducible output
+      still depends on the input file PATH - identical bytes at two different paths fuse to DIFFERENT
+      shas - so a PORTABLE / cross-machine attestation sha is NOT yet achievable; the oracle reports
+      this cross-path dependence as a diagnostic (not asserted). WIRED into .github/workflows/ci.yml
+      as a step of the `scry-gate` job (meld v0.39.0). The scry gate + chain-measure now fuse
+      `--reproducible` (removes the random-UUID churn). NEXT RUNG: upstream path-independence -> then
+      promote the reproducible fused sha to a sigil-signed portable attestation key on the FIRST-FLASH set.
+    tags: [phase-2, reproducibility, meld-325, fused-core, determinism, ci-gate, oracle, verification, sigil]
+    links:
+      - type: verifies
+        target: REQ-PIX-018
+      - type: traces-to
+        target: REQ-PIX-021
 
   - id: REQ-PIX-018
     type: requirement
