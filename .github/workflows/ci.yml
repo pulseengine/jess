@@ -34,6 +34,11 @@ env:
   # losses/hazards (gale:L-1, gale:H-2), so validate needs the gale sibling.
   # fetch-depth: 0 because gale is force-pushed by the architect.
   GALE_REF: 9c872cc68f3ef40bd1e02b38632877d74cafc1d1
+  # Pinned relay external (rivet.lock) — jess's silicon-binding requirements
+  # cross-link to the relay artifacts they bind/validate (REQ-PIX-012 -> relay HAL
+  # seam, -003 -> IMU driver, -010 -> MAVLink, -014 -> gz-sim + HITL), so the joint
+  # trace resolves. validate needs the relay sibling at this pin.
+  RELAY_REF: f102918af7c3b51a8efaf944442f638a450c9a82
 
 jobs:
   # The rivet artifact spine is jess's substance — this is the core gate.
@@ -50,6 +55,13 @@ jobs:
           repository: pulseengine/gale
           ref: ${{ env.GALE_REF }}
           path: gale
+      - name: Check out the pinned relay external (sibling for ../relay)
+        uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          ref: ${{ env.RELAY_REF }}
+          path: relay
+          fetch-depth: 0
           fetch-depth: 0
       - name: Fetch pinned rivet release
         run: |
