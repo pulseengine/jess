@@ -27,12 +27,14 @@ mkdir -p "$WORK"
 note() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 fail() { printf '\033[31mGATE FAIL: %s\033[0m\n' "$*" >&2; exit 1; }
 
-# --- resolve meld (sibling build or pinned release) ----------------------
+# --- resolve meld (env override > PATH > sibling build) ------------------
+# needs meld >= v0.38 for `fuse --reproducible`; CI installs the pinned v0.39.0.
 resolve_meld() {
+  [ -n "${MELD:-}" ] && { echo "$MELD"; return; }
   command -v meld >/dev/null 2>&1 && { echo meld; return; }
   local b="$SIB/meld/target/release/meld"
   [ -x "$b" ] && { echo "$b"; return; }
-  fail "no meld on PATH and no sibling build ($b) — CI fetches the pinned release"
+  fail "no meld (set MELD=, put meld on PATH, or build ../meld) — CI fetches the pinned release"
 }
 MELD="$(resolve_meld)"
 
@@ -50,9 +52,9 @@ else
      || fail "could not download $ARG"
   echo "  sha256: $(shasum -a 256 "$COMP" | awk '{print $1}')"
   FUSED="$WORK/falcon.fused.wasm"
-  note "meld fuse (component -> Core module)"
-  "$MELD" fuse "$COMP" -o "$FUSED" >/dev/null
-  echo "  fused: $(wc -c <"$COMP") -> $(wc -c <"$FUSED") bytes"
+  note "meld fuse (component -> Core module, --reproducible: byte-stable, meld#325)"
+  "$MELD" fuse "$COMP" -o "$FUSED" --reproducible >/dev/null
+  echo "  fused: $(wc -c <"$COMP") -> $(wc -c <"$FUSED") bytes (sha $(shasum -a 256 "$FUSED" | awk '{print $1}'))"
 fi
 
 # --- run scry ------------------------------------------------------------

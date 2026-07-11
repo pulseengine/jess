@@ -24,11 +24,12 @@ env:
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
   SPAR_VERSION: v0.24.0
-  # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b). The gate
-  # keys on scry's soundness invariants, which are stable across meld versions
-  # (0.33.0 and 0.37.0 both give 771 pts / 71 edges / 0 unsound-fallback), so a
-  # meld bump is safe; pinned only for a reproducible fetch.
-  MELD_VERSION: v0.37.0
+  # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the
+  # fused-core reproducibility gate (TEST-PIX-026, meld#325). The scry gate keys
+  # on scry's soundness invariants, stable across meld versions (0.33.0/0.37.0/0.39.0
+  # all give 771 pts / 71 edges / 0 unsound-fallback), so the bump is safe. v0.39.0
+  # is the floor for `meld fuse --reproducible` (added v0.38.0) — byte-stable fusion.
+  MELD_VERSION: v0.39.0
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
@@ -177,6 +178,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: scry gate (fuse + sound-analysis assert)
         run: tools/scry-gate/run.sh | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # TEST-PIX-026 — fused-core byte-reproducibility (meld#325): two --reproducible
+      # fusions of the same falcon component must be byte-identical (negative-controlled
+      # against default no-flag fusion). Prerequisite for a re-verifiable REQ-PIX-018
+      # attestation + sigil-signable FIRST-FLASH set. Reuses the meld installed above.
+      - name: fused-core reproducibility gate (TEST-PIX-026)
+        run: tools/repro/fuse-repro-oracle.sh | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           GH_TOKEN: ${{ github.token }}
 

@@ -34,8 +34,9 @@ echo "input: $SRC ($(wc -c <"$SRC") bytes)"
 echo "tools: meld=$("$MELD" --version 2>/dev/null | head -1 | tr -d '\n'); loom=$("$LOOM" --version 2>&1 | head -1 | tr -d '\n'); synth=$("$SYNTH" --version 2>/dev/null)"
 echo
 
-# stage 1+2: meld fuse, loom optimize
-"$MELD" fuse "$SRC" -o "$OUT/fused.wasm"  >/dev/null 2>&1
+# stage 1+2: meld fuse (--reproducible = byte-stable output, meld#325), loom optimize
+"$MELD" fuse "$SRC" -o "$OUT/fused.wasm" --reproducible >/dev/null 2>&1 \
+  || "$MELD" fuse "$SRC" -o "$OUT/fused.wasm" >/dev/null 2>&1  # fallback: meld < v0.38 lacks the flag
 "$LOOM" optimize "$OUT/fused.wasm" -o "$OUT/loom.wasm" >/dev/null 2>&1
 
 echo "### chain sizes (code section, bytes)"
