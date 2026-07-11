@@ -1026,3 +1026,32 @@ artifacts:
         target: REQ-PIX-009
       - type: depends-on
         target: REQ-PIX-017
+
+  - id: REQ-PIX-022
+    type: requirement
+    title: Bulk-storage seam - blackbox log streaming + power-loss truncation semantics on the 6X-RT (the relay v1.118 LOG-P02/P03 seam)
+    status: draft
+    description: >
+      Inbound jess#144 (relay's first-flight infrastructure ladder, v1.117-v1.122): relay's
+      v1.118 blackbox logging (LOG-P02) + replay (LOG-P03) need a jess-side BULK-STORAGE seam
+      distinct from the param NVM seam (REQ-PIX-015/DD-016 = FRAM, byte-writable, small). Bulk
+      logging is high-rate append to SD or the octal-NOR: jess shall bind a block/streaming
+      storage device (embedded-storage-async block seam) with EXPLICIT power-loss semantics -
+      atomic append + torn-record detection so an interrupted write is DETECTABLE, never
+      corrupts the log or the FS. relay owns the record CODEC + replay above the seam; jess
+      owns the physical binding (SD over uSDHC/SPI, or a NOR partition over FlexSPI) AND the
+      flush/commit ordering that makes the power-loss guarantee hold - i.e. the safety property
+      (a torn log record is detectable, not silently corrupt) lives on the jess binding side.
+      Sequenced AFTER the param NVM seam (REQ-PIX-015, relay v1.117) per the bring-up order;
+      on-silicon binding is gated on the synth float poles (#708/#369) like REQ-PIX-012. Mocks/
+      Renode until the board arrives (board WRITE = greenlight-gated).
+    release: v0.8.0
+    tags: [phase-2, storage, blackbox, logging, sd, nor, seam, relay-hal, on-target, jess-144]
+    fields:
+      category: functional
+      priority: should
+    links:
+      - type: traces-to
+        target: REQ-PIX-015
+      - type: traces-to
+        target: REQ-PIX-012
