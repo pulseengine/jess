@@ -13,14 +13,13 @@ permissions:
   contents: read
 
 env:
-  # Pinned PulseEngine tool releases — bumped explicitly via PR. rivet 0.22.0
-  # ("Release planning, complete", REQ-232/233/234, #516) carries the first-class
-  # top-level `release:` dimension + `rivet release status/move` and `list --release`,
-  # on top of the per-schema status enums (AFD-012) and the `rivet sql` surface the
-  # snapshot step uses. The jess store validates clean on it (DD-021). v0.22.1
-  # adds the #613 fix (set-release no longer corrupts a folded scalar) — relevant
-  # to the release-handling workflow jess now uses; existing artifacts verified clean.
-  RIVET_VERSION: v0.22.1
+  # Pinned PulseEngine tool releases — bumped explicitly via PR. Bumped v0.22.1 ->
+  # v0.25.0: needed for GIT-LINK external resolution — `rivet sync` git-fetches the
+  # gale + relay externals into .rivet/repos/ and validate resolves them from there
+  # (v0.22.1 resolved externals only via `path:`, requiring manual sibling checkouts).
+  # Verified: jess store validates clean + `coverage --fail-under 60` still gates
+  # (64.8% >= 60) on v0.25.0.
+  RIVET_VERSION: v0.25.0
   # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
