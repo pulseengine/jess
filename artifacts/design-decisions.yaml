@@ -1302,3 +1302,59 @@ artifacts:
         target: REQ-PIX-012
       - type: traces-to
         target: DD-022
+
+  - id: DD-025
+    type: design-decision
+    title: Two-level scheduling - outer fixed-priority TIME-PARTITIONED preemptive (ARINC 653/IMA), inner cooperative kiln-async per partition window; the F100 is the cross-core Health Monitor
+    status: accepted
+    description: >
+      Answers the scheduling/supervision design axis gale raised on gale#63 (2026-07-11):
+      the north-star's "one fused async component per thread across cores" gives SPATIAL
+      composition but is silent on TEMPORAL guarantees + fault supervision - the load-bearing
+      part for a target you actually land. DECISION (jess's call, the OS/scheduler is jess-owned
+      per jess#62<->relay#214): a TWO-LEVEL scheduler -
+        - OUTER: fixed-priority TIME-PARTITIONED PREEMPTIVE (canonical ARINC 653 / IMA) - the
+          non-maskable window-end preemption gives bounded latency + freedom-from-interference;
+          a non-yielding cooperative task is contained BY CONSTRUCTION. SAFETY LIVES HERE (the
+          outer timer + Health Monitor), NOT in inner good behaviour.
+        - INNER: cooperative kiln-async (poll_round) INSIDE a bounded partition window - the
+          partition is a temporal black box the assessor treats as one unit; this is an
+          explicitly-accepted composable-scheduling pattern, so the "superior inner async
+          experience" (P3-async-everywhere, the jess north-star) is safe to keep.
+      3-CORE RT1176 MAPPING: M7 = flight-control partition window (falcon cascade, fused async);
+      M4 = estimator window (IEKF, fused async); F100 = the gust failsafe. KEY: the F100 is a
+      PHYSICALLY INDEPENDENT core, so it is the CROSS-CORE Health Monitor - the ultimate
+      non-maskable containment for the two FMU cores (it consumes the M7<->M4 MU heartbeat,
+      gale#65/TEST-PIX-019, and trips the 4x failsafe-PWM on FMU loss / window overrun). So the
+      outer-timer+HM has TWO tiers: (1) per-core 653 window-end preemption on M7/M4; (2)
+      cross-core the independent F100 (DD-011 gust) as the spatial+temporal isolation backstop -
+      stronger than a single-core HM.
+      NEXT (jess, feature-loop step 1): model the ARINC 653 partitioning in the AADL
+      (hardware/pixhawk6x-rt.aadl - partition windows + Health-Monitor) + run spar's ARINC 653
+      partitioning + modal-scheduling analysis; the partition->core binding already exists
+      (Actual_Processor_Binding), this adds the temporal layer. Inter-partition interfaces stay
+      the spar-generated WIT (REQ-PIX-007). DEPENDENCY on gale (gale#63): the no_std async
+      executor (#3, Embassy-class, Verus no-lost-wakeups/bounded-poll/fair-ready-queue) that the
+      inner layer drives, + AMP/MU (#5). Not float-pole-gated - co-designed now, bound when clear.
+    tags: [phase-2, scheduling, arinc-653, ima, time-partition, health-monitor, kiln-async, failsafe, multi-core, gale-63, coordination]
+    fields:
+      rationale: >-
+        A landed flight target needs temporal guarantees + fault containment, which pure
+        cooperative async cannot give; the ARINC 653 outer/inner structure is the canonical IMA
+        answer, and on the 6X-RT the independent F100 makes the Health-Monitor tier physically
+        isolated - the safety property is enforced by hardware core separation, not software
+        good behaviour.
+      alternatives: >-
+        Pure cooperative async everywhere (no outer preemption) - rejected: cannot bound latency
+        or contain a faulting/non-yielding task, unshippable for flight. A single-core Health
+        Monitor - rejected: the 6X-RT already has an independent F100 (gust), so the cross-core
+        HM tier is free and stronger. Fully preemptive threads inside partitions (no async) -
+        rejected: loses the P3-async-everywhere north-star with no safety gain (the window
+        already contains the partition).
+    links:
+      - type: satisfies
+        target: REQ-PIX-004
+      - type: traces-to
+        target: DD-023
+      - type: traces-to
+        target: DD-011

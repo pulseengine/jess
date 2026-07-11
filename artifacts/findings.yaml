@@ -1009,6 +1009,17 @@ artifacts:
       #719) + f64 phase 2 + regalloc tail. Filed synth#719 with minimal repros (f32.store, f32.abs
       skip; f32.load compiles) + the falcon breakdown. Changelog's "f32.store not in falcon's
       inventory" is wrong (10 funcs). Repros: .scratch/f32-residual/.
+      f64 CORRECTION 2026-07-11 (from the relay partition sync jess#144): relay stated "falcon-core
+      is zero-f64", but the SHIPPED falcon-flight-v1.115 fused core has 4 of 150 functions using
+      f64 - and they are f64-DENSE (480 f64 ops total: f64.mul 184, f64.add 107, f64.const 144,
+      + sub/neg/load/store/convert/promote/reinterpret). Verified f64.mul/add/promote ALL DECLINE
+      on synth v0.40.0 (phase 2 not started). So my earlier "4 f64 SKIPS" were 4 f64-DENSE
+      FUNCTIONS (the count is functions-skipping-on-their-first-float-op; f64 is masked behind f32
+      in mixed functions). NET on-target float completion for falcon = synth#719 (f32 residual,
+      ~18 funcs) + f64 PHASE 2 (those 4 f64-dense funcs - the M7 fpv5-d16 DOUBLE-FP is a genuine
+      dependency for them, not headroom). The ESTIMATOR (relay-iekf) being f64-free is consistent
+      (the 4 are cascade-math / a fused dep, not the estimator) -> M4 fpv4-sp suffices. Flagged on
+      jess#144 for relay to confirm the f64 source. Repros: .scratch/f64-test/.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
