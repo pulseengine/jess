@@ -60,6 +60,22 @@ for tgt in cortex-m3 cortex-m7dp; do
   echo
 done
 
+# stage 3b: the TRUE on-target inventory — falcon's DD-018 path is --relocatable
+# (native-pointer-abi + TCB-link), NOT the self-contained --cortex-m above. Since
+# synth v0.40.0 the self-contained path correctly DECLINES call_indirect (#275 ->
+# --relocatable), so --cortex-m over-reports ~20 dispatch path-artifacts; the
+# --relocatable count is falcon's real skip inventory (dispatch lowers here).
+"$SYNTH" compile "$OUT/loom.wasm" -t cortex-m7dp --relocatable --native-pointer-abi \
+    --shadow-stack-size 4096 -o "$OUT/reloc.o" >/dev/null 2>"$OUT/reloc.err" || true
+echo "### synth -t cortex-m7dp --relocatable (DD-018 on-target path — the REAL inventory)"
+rskip=$(grep -oE '[0-9]+ of [0-9]+ functions were skipped' "$OUT/reloc.err" | tail -1)
+echo "  skipped: ${rskip:-none}"
+printf "    %-24s %s\n" "call_indirect dispatch" "$(grep -c 'call_indirect' "$OUT/reloc.err")  (0 = dispatch complete on --relocatable)"
+printf "    %-24s %s\n" "f32 (GI-FPU #719)"      "$(grep -cE 'F32Store|F32Abs|F32Copysign|mixed f32|f32 in a function|f32 local' "$OUT/reloc.err")"
+printf "    %-24s %s\n" "f64 (GI-FPU phase 2)"   "$(grep -cE 'F64Promote|F64Const|F64Load' "$OUT/reloc.err")"
+printf "    %-24s %s\n" "regalloc tail"          "$(grep -cE '#518|#503|register exhaustion|spill-slot' "$OUT/reloc.err")"
+echo
+
 # the #369 "FPU never used" tell: M3 == M7dp byte-for-byte
 if [ -f "$OUT/cortex-m3.elf" ] && [ -f "$OUT/cortex-m7dp.elf" ]; then
   if cmp -s "$OUT/cortex-m3.elf" "$OUT/cortex-m7dp.elf"; then

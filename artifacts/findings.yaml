@@ -995,6 +995,20 @@ artifacts:
       -> VMOV Rd,Sn) with repros + the falcon breakdown; f64 is phase 2. The on-target blocker is now
       f32-load/reinterpret (#708) + f64 (phase 2) + the ~5-func regalloc tail; DISPATCH is DONE
       (AFD-033 resolved, #676 v0.38.0). Evidence: .scratch/f32-boundary/{f32_arith,f32_load,f32_reinterpret}.wat.
+      UPDATE 2026-07-11 (synth v0.40.0; #708 FIXED, but the f32 path is NOT complete for falcon):
+      #708 (f32.load + reinterpret) shipped + verified - f32.load COMPILES on the real build, and
+      hard-float genuinely reaches M7 now (M3 vs M7dp ELFs first DIVERGE: m7dp #369 18 vs m3 24).
+      BUT clearing loads REVEALED ~20 more f32 ops falcon's functions were masking. MEASUREMENT-PATH
+      NOTE: chain-measure uses -t cortex-m7dp = self-contained --cortex-m, and v0.40.0's #275 fix now
+      correctly DECLINES call_indirect there (-> --relocatable) = 20 path-artifact declines; falcon's
+      REAL DD-018 path is --relocatable, where dispatch works (0 CI declines). On --relocatable
+      --native-pointer-abi (falcon v1.115): 31 skips = F32Store 10 + mixed-f32/int-params 3 + F32Abs 3
+      + f32-across-call 2 (S0-S15 caller-saved) + F32Copysign 1 + f32-local.set 1 [all f32, synth#719]
+      + F64Promote 3 + F64Const 1 [f64 phase 2] + #518 2 + #503 1 [regalloc tail]. So the on-target
+      float blocker is now the f32 RESIDUAL (store/abs/copysign/mixed-params/f32-with-call/local.set,
+      #719) + f64 phase 2 + regalloc tail. Filed synth#719 with minimal repros (f32.store, f32.abs
+      skip; f32.load compiles) + the falcon breakdown. Changelog's "f32.store not in falcon's
+      inventory" is wrong (10 funcs). Repros: .scratch/f32-residual/.
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
