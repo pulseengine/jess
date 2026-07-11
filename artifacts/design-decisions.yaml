@@ -1141,8 +1141,32 @@ artifacts:
       REQ-PIX-020).
       FALLBACK MINI (deferred, user "not yet"): a smaller fallback quad as a lower-risk
       first-flight / bring-up platform before the S500 - to be specced later; placeholder only.
+      RELAY LADDER SYNC 2026-07-11 (inbound jess#144 - relay's first-flight infra ladder
+      v1.117-v1.122, PR #263 / SYSREQ-FALCON-021): scope-synced the relay releases to the
+      jess-side seams so the joint trace closes (jess#62<->relay#214 split: relay owns above
+      the seam, jess owns OS+silicon):
+        - relay v1.117 PARAM-P03 param persistence -> jess NVM seam = REQ-PIX-015 / DD-016
+          (params on FRAM FM25V02A, byte-writable, own FlexSPI driver - NO wear-leveling
+          needed on FRAM, flagged to relay: the "wear-aware commit" is only needed IF params
+          move to NOR).
+        - relay v1.118 LOG-P02/P03 blackbox -> jess BULK-STORAGE seam = NEW REQ-PIX-022
+          (SD/NOR streaming append + power-loss torn-record detection, the jess safety side).
+        - relay v1.119 MAVLINK-P06 (SiK 433MHz) -> REQ-PIX-012 SerialBus->LPUART + REQ-PIX-010.
+        - relay v1.120 BATTERY-P02 (PM02D) -> REQ-PIX-012 AdcIn->LPADC + LPI2C.
+        - relay v1.121 GNSS-P02 dual-M9N + RANGEDRV-P01 TF02 -> REQ-PIX-012 (2x LPUART GPS) +
+          REQ-PIX-020 (TF02).
+        - relay v1.122 NOTCH-P01 ESC telemetry -> DD-024 (bidir-DShot eRPM primary).
+        - jess-owned outright: RTOS/scheduler, watchdog, bootloader/update (REQ-PIX-015),
+          board bring-up (REQ-PIX-005/011).
+      All bindings stay #708/#369-gated (falcon float path incomplete) + board-WRITE
+      greenlight-gated; relay builds ahead against mocks per its ladder, jess mirrors the seam
+      plan now (this note + REQ-PIX-022 + DD-024) and binds when ready.
+      FRAME RECONCILE: relay#144 states the ordered airframe is a **Holybro X500 V2 ARF**;
+      this DD said "S500". The peripheral BOM (dual M9N, TF02, SiK, PM02D, 4S, 4x DShot ESC) is
+      IDENTICAL either way, so the seam work is unaffected - flagged on jess#144 for user
+      confirmation; treat X500 V2 as the frame designation pending that.
     release: v0.7.0
-    tags: [phase-2, vehicle, bom, s500, pixhawk-6xrt, relay-hal, gale-tcb, gnss, lidar, telemetry, power, esc]
+    tags: [phase-2, vehicle, bom, s500, x500, pixhawk-6xrt, relay-hal, gale-tcb, gnss, lidar, telemetry, power, esc, jess-144]
     fields:
       rationale: >-
         Grounding the peripheral requirements in the actual purchased hardware (dual M9N,
@@ -1237,5 +1261,44 @@ artifacts:
         target: DD-018
       - type: traces-to
         target: DD-021
+      - type: traces-to
+        target: DD-022
+
+  - id: DD-024
+    type: design-decision
+    title: ESC telemetry path = bidirectional-DShot eRPM PRIMARY (the X500's stock ESCs), DroneCAN esc.Status as the alternate - the RPM source for NOTCH-P01 + rotor-out FDI
+    status: accepted
+    description: >
+      Answers relay jess#144 Q3 (the ESC-telemetry decision that drives relay's v1.122
+      NOTCH-P01 RPM-notch + strengthens the rotor-out FDI). The Holybro X500 V2 ARF ships
+      stock BLHeli/DShot PWM ESCs, NOT DroneCAN smart-ESCs, so:
+      DECISION: bidirectional-DShot (eRPM read-back) is the PRIMARY ESC telemetry path.
+        - Lowest-latency per-motor RPM source (read on the same DShot frame turnaround),
+          exactly what the RPM-notch (NOTCH-P01) and the rotor-out FDI want.
+        - No extra bus wiring (rides the existing 4x ESC signal lines), vs DroneCAN which
+          needs the CAN bus + smart-ESCs the X500 does not carry.
+        - jess binds it via REQ-PIX-012 PwmOut -> FlexIO+eDMA (DShot, frame-based); bidir-
+          DShot adds eRPM capture on the same FlexIO timer (input-capture on line turnaround).
+          relay's falcon-esc-dshot decode already exists above the seam.
+      DroneCAN esc.Status stays the ALTERNATE decode path (REQ-PIX-006 CanBus/FlexCAN) for a
+      future smart-ESC / larger-actuator vehicle - relay has the decode, jess keeps the FlexCAN
+      binding, so switching is a config change, not a re-architecture. jess-owned call per the
+      jess#62<->relay#214 split (jess owns the silicon binding + actuator topology; relay
+      supports both decode paths). Sequenced with REQ-PIX-012 (on-silicon, #708/#369-gated).
+    tags: [phase-2, esc, dshot, dronecan, telemetry, rpm-notch, fdi, relay-hal, jess-144, coordination]
+    fields:
+      rationale: >-
+        The airframe's stock ESCs are DShot PWM, not DroneCAN, so bidir-DShot eRPM is the
+        native, lowest-latency, no-extra-wiring RPM source for the notch filter and FDI -
+        matching the actual hardware rather than adding a CAN smart-ESC dependency the X500
+        does not carry.
+      alternatives: >-
+        DroneCAN esc.Status as primary - rejected for THIS vehicle: the X500 V2 has no
+        DroneCAN ESCs, so it would require replacing them; kept as the alternate for smart-ESC
+        vehicles. No ESC telemetry (open-loop notch) - rejected: NOTCH-P01 + the rotor-out FDI
+        both need a real per-motor RPM source; bidir-DShot provides it for free.
+    links:
+      - type: satisfies
+        target: REQ-PIX-012
       - type: traces-to
         target: DD-022
