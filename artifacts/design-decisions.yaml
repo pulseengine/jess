@@ -1022,7 +1022,7 @@ artifacts:
         - v0.7.0  on-target bring-up REQ-PIX-001/002/003/004/006/007/008/011/012
         - v0.8.0  PX4 HITL + persistence + root-of-trust  REQ-PIX-014/015/019
         - v0.9.0  gust/F100 + combined vehicle + witness/scry gates  REQ-PIX-009/017/018
-        - v1.0.0  FIRST-FLASH: integrated 3-core flash-ready S500  REQ-PIX-021 (DD-023 north-star)
+        - v1.0.0  FIRST-FLASH: integrated 3-core flash-ready X500 V2  REQ-PIX-021 (DD-023 north-star)
       SCOPE DECISION logged here: REQ-PIX-001 ("compiles+links for Cortex-M7, fpv5-d16
       hard-float") MOVED v0.6.0 -> v0.7.0. Its "hard-float" claim cannot reach `verified`
       until synth#369 (GI-FPU-002 VFP lowering) + #275 (dispatch) land - both external -
@@ -1062,7 +1062,7 @@ artifacts:
       instead of 40. RULE: release: belongs on the DELIVERABLE layer (requirements, per-release
       feature markers, DDs, meta) - NOT the analysis layer (stpa/sec/safety-goals).
       TERMINAL MILESTONE ADDED 2026-07-08: v1.0.0 FIRST-FLASH = the north-star integration
-      (DD-023 / REQ-PIX-021) - the flash-ready 3-core S500 (gust on all cores, per-core
+      (DD-023 / REQ-PIX-021) - the flash-ready 3-core X500 V2 (gust on all cores, per-core
       peripherals, inter-core IPC, relay partitioned + compiled per-core, proven together in
       the 3-core Renode model). It is the CAPSTONE that composes the v0.7.0-v0.9.0 line, so it
       is planned-not-cuttable until they land; it gives the feature loop a single terminal
@@ -1087,12 +1087,12 @@ artifacts:
 
   - id: DD-022
     type: design-decision
-    title: The Phase-2 PHYSICAL vehicle is a Holybro S500 quad on Pixhawk 6X-RT - concrete BOM -> relay-hal seam + relay driver + gale TCB-primitive mapping, and the request list for relay and gale
+    title: The Phase-2 PHYSICAL vehicle is a Holybro X500 V2 quad on Pixhawk 6X-RT - concrete BOM -> relay-hal seam + relay driver + gale TCB-primitive mapping, and the request list for relay and gale
     status: accepted
     description: >
       The real airframe is now bought (user BOM 2026-07-07), so the peripheral layer of
-      the model is grounded in hardware instead of placeholders. VEHICLE = Holybro S500
-      quad-X (~480mm, 4x motor+ESC) on the Pixhawk 6X-RT (i.MX RT1176: M7 falcon / M4
+      the model is grounded in hardware instead of placeholders. VEHICLE = Holybro X500 V2
+      quad-X (~500mm, 4x motor+ESC) on the Pixhawk 6X-RT (i.MX RT1176: M7 falcon / M4
       sensor-offload / STM32F100 gust failsafe; onboard ICM-42688-P IMU + baro + mag).
       PURCHASED PERIPHERALS + their mapping to the DD-018 all-wasm seam / the relay driver
       body / the gale native TCB primitive:
@@ -1107,7 +1107,7 @@ artifacts:
            byte-link parsing the TF02 frame, exposed as a RangefinderIn(distance-cm, quality)
            reading (terrain/AGL altitude + landing). relay LACKS this driver -> THE net-new relay
            request (REQ-PIX-020). gale TCB: 1x LPUART primitive.
-        3. Holybro 433MHz Telemetry V3 - SiK radio, transparent LPUART carrying MAVLink to the
+        3. Holybro 433MHz Telemetry V3 (PM-5418) - SiK radio, transparent LPUART carrying MAVLink to the
            GCS. SEAM: embedded-io-async byte-link -> relay-mavlink (off-board). relay HAS
            relay-mavlink; this is the concrete off-board transport (real-vehicle side of the
            REQ-PIX-010 MAVLink bench). gale TCB: 1x LPUART primitive.
@@ -1117,7 +1117,7 @@ artifacts:
            hardware-OR). relay's AdcIn/INA228 seam exists in DD-018; NEW = the 4S thresholds +
            the gust LOW-BATTERY failsafe trip (battery-V -> fatal on the F100). gale TCB: LPI2C
            (or ADC) primitive + gust reads the battery rail.
-        5. S500 airframe - quad-X, 4 ESCs (PWM/DShot). SEAM: relay-hal PwmOut (DShot frame; the
+        5. X500 V2 airframe - quad-X, 4 ESCs (PWM/DShot). SEAM: relay-hal PwmOut (DShot frame; the
            degenerate duty-PWM is the gust failsafe case, DD-018). relay HAS ESC PwmOut; NEW =
            the quad-X mixer + the 4-channel map. gale TCB: 4x FlexPWM/eFlexPWM channels; gust
            drives the 4 failsafe-PWM outs.
@@ -1133,14 +1133,14 @@ artifacts:
           (DD-018); PLUS gust's failsafe I/O on the F100: RC-in (SBUS/PPM), 4x failsafe-PWM out,
           and the 4S low-battery trip. Extends the open gale#65 (MU-map + gust ipc-rx) thread.
       MODELED IN THE AADL 2026-07-08 (feature-loop step 1 - architecture starts in spar, not
-      just rivet prose): hardware/pixhawk6x-rt.aadl now carries the S500 externals as devices +
+      just rivet prose): hardware/pixhawk6x-rt.aadl now carries the X500 V2 externals as devices +
       buses + connections - GPS_M9N_1/2 (GPS1/2_SER UBX + I2C_BUS ext mag), LIDAR_TF02
       (LIDAR_SER), TELEM_SIK (TELEM_SER), ESC_MOTOR x4 (ESC_PWM + VBAT), RC_RX (RC_LINK),
       BATTERY_4S (VBAT) - wired into Pixhawk6XRT.v2a. spar parse + instance GREEN (the spar-model
       CI gate). The vehicle is now consistent across the model (AADL) and the trace (this DD +
       REQ-PIX-020).
       FALLBACK MINI (deferred, user "not yet"): a smaller fallback quad as a lower-risk
-      first-flight / bring-up platform before the S500 - to be specced later; placeholder only.
+      first-flight / bring-up platform before the X500 V2 - to be specced later; placeholder only.
       RELAY LADDER SYNC 2026-07-11 (inbound jess#144 - relay's first-flight infra ladder
       v1.117-v1.122, PR #263 / SYSREQ-FALCON-021): scope-synced the relay releases to the
       jess-side seams so the joint trace closes (jess#62<->relay#214 split: relay owns above
@@ -1161,16 +1161,26 @@ artifacts:
       All bindings stay #708/#369-gated (falcon float path incomplete) + board-WRITE
       greenlight-gated; relay builds ahead against mocks per its ladder, jess mirrors the seam
       plan now (this note + REQ-PIX-022 + DD-024) and binds when ready.
-      FRAME RECONCILE: relay#144 states the ordered airframe is a **Holybro X500 V2 ARF**;
-      this DD said "S500". The peripheral BOM (dual M9N, TF02, SiK, PM02D, 4S, 4x DShot ESC) is
-      IDENTICAL either way, so the seam work is unaffected - flagged on jess#144 for user
-      confirmation; treat X500 V2 as the frame designation pending that.
+      FRAME CONFIRMED (user, 2026-07-11): the airframe is a **Holybro X500 V2 ARF**, NOT the
+      S500 - matching relay#144. Earlier drafts of this DD said "S500"; corrected throughout.
+      The peripheral BOM (dual M9N, TF02, SiK, PM02D, 4S, 4x DShot ESC), the Pixhawk 6X-RT FC, and
+      the storage/flight-recorder seam (REQ-PIX-022: microSD/uSDHC + NOR ring; FRAM=params) are
+      IDENTICAL either way - the delta is FRAME-ONLY (geometry/mass/motor-KV/prop -> the dynamics
+      & mixer tuning). Do NOT carry S500 mechanicals into the SIL/failsafe model; X500 V2 mass/arm/
+      inertia/KV are to be sourced from relay/Holybro spec, not assumed from the S500.
+      ROOT CAUSE of the "S500" mislabel (user-identified, invoice 2026-07-11): the FRAME kit is
+      **PM-5935 "Holybro X500 V2 ARF Set"** (frame + 4 motors + 4 ESCs + props + PDB) - unambiguously
+      X500. The "S500" string came only from the SELLER LABELS on the **battery (PM-5902, "…XT90
+      S500")** and the **XT90->XT60 adapter cable (PM-5517, "…S500 Holybro")** - generic accessories
+      cross-listed for the S500 line. Do NOT re-infer the airframe from those accessory part names.
+      NOTE: PM-5902/5517 are the battery + adapter, NOT a power module; the power module is PM02D
+      (TI INA228 / I2C), which ships with the Pixhawk 6X-RT Standard v2A Set (REQ-PIX-001), not the ARF.
     release: v0.7.0
-    tags: [phase-2, vehicle, bom, s500, x500, pixhawk-6xrt, relay-hal, gale-tcb, gnss, lidar, telemetry, power, esc, jess-144]
+    tags: [phase-2, vehicle, bom, x500, pixhawk-6xrt, relay-hal, gale-tcb, gnss, lidar, telemetry, power, esc, jess-144]
     fields:
       rationale: >-
         Grounding the peripheral requirements in the actual purchased hardware (dual M9N,
-        TF02 Pro LiDAR, 433MHz SiK, 4S power, S500 quad) turns REQ-PIX-003/006/012 from
+        TF02 Pro LiDAR, 433MHz SiK, 4S power, X500 V2 quad) turns REQ-PIX-003/006/012 from
         placeholders into a concrete seam+driver+primitive matrix, and makes the relay/gale
         ask-list explicit and correctly SEQUENCED (recorded now, filed when the synth poles
         clear and jess can actually bind) rather than prompting suppliers to build ahead.
@@ -1188,14 +1198,14 @@ artifacts:
 
   - id: DD-023
     type: design-decision
-    title: North-star integration + multi-agent coordination map - the flash-ready 3-core S500 vehicle (gust on all cores, per-core peripherals, inter-core IPC, relay partitioned + compiled per-core, Renode-integrated) and who supplies what
+    title: North-star integration + multi-agent coordination map - the flash-ready 3-core X500 V2 vehicle (gust on all cores, per-core peripherals, inter-core IPC, relay partitioned + compiled per-core, Renode-integrated) and who supplies what
     status: accepted
     release: v1.0.0
     description: >
       Names the END STATE the whole jess programme drives toward and the coordination map
       to the supplier agents, so the roadmap has a terminal milestone (v1.0.0 FIRST-FLASH)
       and every open thread has an owner. NORTH-STAR (= REQ-PIX-021): one flash-ready image
-      set for the physical S500 (DD-022), proven in the 3-core RT1176 Renode model, where -
+      set for the physical X500 V2 (DD-022), proven in the 3-core RT1176 Renode model, where -
         (1) GUST/gale-nano hosts on ALL THREE cores at its right scale (M7 falcon full-FPU,
             M4 estimator, STM32F100 8KB failsafe) - P3-async-everywhere, AOT via synth, no
             on-chip runtime (the jess-p3-async-everywhere pitch made concrete);

@@ -88,7 +88,7 @@ public
   bus SHMEM    end SHMEM;      -- M7<->M4 shared-memory ring + MU mailbox IRQ (RPMsg/ICMsg-class)
   bus IO_LINK  end IO_LINK;    -- FMU<->IO MCU: LPUART6 @ 1.5 Mbaud (px4io-class register protocol)
 
-  --  S500 AIRFRAME I/O — the bought external peripherals (BOM: DD-022 / REQ-PIX-020).
+  --  X500 V2 AIRFRAME I/O — the bought external peripherals (BOM: DD-022 / REQ-PIX-020).
   --  These are the FMU serial/PWM/RC lines and the main battery rail on the physical
   --  vehicle. gale provides the native TCB primitives (LPUART/FlexPWM); relay owns the
   --  driver bodies (u-blox UBX, TF02, SiK/MAVLink) behind the DD-018 embedded-io-async seam.
@@ -96,7 +96,7 @@ public
   bus GPS2_SER  end GPS2_SER;   -- LPUART: Holybro M9N #2 (dual-GNSS redundancy / blend)
   bus LIDAR_SER end LIDAR_SER;  -- LPUART: Benewake TF02 Pro 40 m rangefinder (REQ-PIX-020)
   bus TELEM_SER end TELEM_SER;  -- LPUART: Holybro 433 MHz SiK telemetry (off-board MAVLink)
-  bus ESC_PWM   end ESC_PWM;    -- FlexPWM x4 -> S500 ESCs (DShot/PWM), driven by the IO mixer
+  bus ESC_PWM   end ESC_PWM;    -- FlexPWM x4 -> X500 V2 ESCs (DShot/PWM), driven by the IO mixer
   bus RC_LINK   end RC_LINK;    -- RC/SBUS in -> IO_MCU failsafe (independent manual path)
   bus VBAT      end VBAT;       -- Gens Ace 4S 5000 mAh main rail (ESC power + monitored)
 
@@ -186,7 +186,7 @@ public
   end LDO;
 
   --------------------------------------------------------------------------
-  -- S500 EXTERNAL PERIPHERALS (the bought vehicle: DD-022 / REQ-PIX-020)
+  -- X500 V2 EXTERNAL PERIPHERALS (the bought vehicle: DD-022 / REQ-PIX-020)
   --------------------------------------------------------------------------
   --  Dual Holybro M9N: u-blox M9N GNSS over LPUART (UBX) + an IST8310 compass over
   --  I2C on the same combo module -> dual GNSS + dual external mag, blended under the
@@ -219,7 +219,7 @@ public
     pwr : requires bus access VSYS;
   end TELEM_SIK;
 
-  --  S500 ESC + motor (x4, quad-X). PWM/DShot in from the IO_MCU mixer; power off the 4S rail.
+  --  X500 V2 ESC + motor (x4, quad-X). PWM/DShot in from the IO_MCU mixer; power off the 4S rail.
   device ESC_MOTOR
   features
     pwm : requires bus access ESC_PWM;
@@ -296,7 +296,7 @@ public
     shmem : bus SHMEM;
     io_link : bus IO_LINK;
 
-    gps1_ser : bus GPS1_SER;   -- S500 airframe I/O buses (DD-022)
+    gps1_ser : bus GPS1_SER;   -- X500 V2 airframe I/O buses (DD-022)
     gps2_ser : bus GPS2_SER;
     lidar_ser : bus LIDAR_SER;
     telem_ser : bus TELEM_SER;
@@ -324,7 +324,7 @@ public
     ldo2 : device LDO;
     ldo3 : device LDO;
 
-    gps1 : device GPS_M9N_1;    -- S500 externals: dual GNSS + ext mag (DD-022)
+    gps1 : device GPS_M9N_1;    -- X500 V2 externals: dual GNSS + ext mag (DD-022)
     gps2 : device GPS_M9N_2;
     lidar : device LIDAR_TF02;  -- TF02 Pro rangefinder (REQ-PIX-020)
     telem : device TELEM_SIK;   -- 433 MHz SiK
@@ -365,7 +365,7 @@ public
     imu2_pwr : bus access vsys <-> imu2.pwr;
     imu3_pwr : bus access vsys <-> imu3.pwr;
 
-    --  S500 externals (DD-022): dual GPS (UBX serial + I2C ext mag), LiDAR, telemetry,
+    --  X500 V2 externals (DD-022): dual GPS (UBX serial + I2C ext mag), LiDAR, telemetry,
     --  quad-X ESCs off the 4S rail, RC input to the IO failsafe, battery -> VBAT.
     gps1_s : bus access gps1_ser <-> gps1.ser;
     gps2_s : bus access gps2_ser <-> gps2.ser;
