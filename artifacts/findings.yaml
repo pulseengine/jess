@@ -592,7 +592,13 @@ artifacts:
     type: ai-found-defect
     title: synth arm backend SILENTLY MISCOMPILES every scalar f32/f64 op to wrong value (decoder drops them) - correctness hazard, not soft-float
     status: resolved
-    description: RESOLVED 2026-07-14 - re-verified on synth 0.41.0. No silent miscompile - synth explicitly declines unsupported ops (GI-FPU-001, synth#369 closed) emitting no code rather than wrong code. Hardware FPU path landed.
+    description: >
+      RESOLVED 2026-07-14 - re-verified on synth 0.41.0. No silent miscompile - synth explicitly
+      declines unsupported ops (GI-FPU-001, synth#369 closed) emitting no code rather than wrong code.
+      Hardware FPU path landed. SCOPE NOTE (2026-07-16) - this finding's resolution covers ONLY the
+      silent-miscompile hazard. The falcon on-target float LOWERING is NOT complete; see AFD-035
+      (synth#782) - the real falcon-flight-v1.123 fused core still skips 26/156 on synth v0.45.1 incl.
+      run-stabilization. Do not read "hardware FPU path landed" as "falcon lowers on the M7".
     fields:
       detected-by: jess REQ-PIX-001 value-level oracle - silent miscompile resolved in v0.11.46 (GI-FPU-001, verified loud-skip exit 1); OPEN remainder is GI-FPU-002 hard-float
       severity: major
@@ -1158,3 +1164,40 @@ artifacts:
         target: EXTERNALANCHOR-003
       - type: traces-to
         target: REQ-PIX-018
+
+  - id: AFD-035
+    type: ai-found-defect
+    title: synth#369 marked closed but the real falcon-flight-v1.123 fused core still skips 26/156 on --relocatable cortex-m7dp (incl. run-stabilization) - the falcon float story is NOT complete against the real op-mix
+    status: open
+    description: >
+      Found 2026-07-16 (release-watch). synth's v0.41-v0.45 float-completion work marked #369/#708/#719
+      closed and relay's readiness note (jess#144) echoed "synth unblock confirmed", both on synth's
+      SYNTHETIC differentials (156/156 f32, 126/126 f64 bit-exact vs wasmtime). VERIFIED AGAINST THE REAL
+      BUILD (relay invited it): falcon-flight-v1.123.wasm (sha e4622a12...) -> meld v0.41.1 fuse
+      --reproducible -> synth v0.45.1 compile -t cortex-m7dp --relocatable --native-pointer-abi
+      --shadow-stack-size 4096 STILL SKIPS 26 of 156 functions (24/183 without --native-pointer-abi).
+      Identical on the pre-loom fused module, so NOT a loom/meld artifact. Breakdown: 12x GI-FPU-002
+      "an integer operation popped an f32 (VFP) stack value" (pressure/pattern-dependent - the obvious
+      candidate i32.reinterpret_f32 (97 uses) lowers FINE in isolation, so not one operator; INCLUDES
+      run-stabilization, the flight-control step), 3x GI-FPU-001 unsupported (i32.trunc_sat_f32_s /
+      i32.trunc_sat_f64_s / f64.reinterpret_i64 - CONFIRMED minimal repro: the saturating trunc_sat
+      variants are unlowered while the trapping trunc_f32_s ones lower; Rust `as`-casts emit trunc_sat,
+      8 in v1.123), 3x VFP register-file exhaustion (S0-S15 / D0-D7 all live, no VFP spilling), 2x #503
+      (i64/f64 stack arg), 2x #518 (i64/f64 frame-backing param), 2x #345 (LdrSym literal pool out of
+      range for __synth_globals), 2x i64-regalloc. jess IMPACT: run-stabilization does not lower ->
+      falcon CANNOT reach the M7 on-target (REQ-PIX-001 / DD-018 --relocatable+TCB-link) despite #369
+      being closed. Filed synth#782 with the measurement + the confirmed trunc_sat minimal repro + an
+      offer to bisect the pressure-dependent class. THE ON-TARGET FLOAT GATE IS STILL OPEN - do NOT
+      treat falcon as ready-to-bind on the M7 until this lowers (suppliers must not build ahead).
+      Supersedes the premature "resolved" framing on AFD-024 (that finding's scope - the SILENT
+      MISCOMPILE hazard - is genuinely closed; this is the distinct LOWERING-COMPLETENESS residual).
+    tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
+    fields:
+      detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
+      severity: major
+      triage-status: filed-upstream
+    links:
+      - type: defect-against
+        target: EXTERNALANCHOR-002
+      - type: traces-to
+        target: REQ-PIX-001
