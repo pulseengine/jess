@@ -25,11 +25,12 @@ env:
   # (parse + instance green). Bumped from v0.17.0.
   SPAR_VERSION: v0.24.0
   # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the
-  # fused-core reproducibility gate (TEST-PIX-026, meld#325). The scry gate keys
-  # on scry's soundness invariants, stable across meld versions (0.33.0/0.37.0/0.39.0
-  # all give 771 pts / 71 edges / 0 unsound-fallback), so the bump is safe. v0.39.0
-  # is the floor for `meld fuse --reproducible` (added v0.38.0) — byte-stable fusion.
-  MELD_VERSION: v0.39.0
+  # fused-core reproducibility gate (TEST-PIX-026, meld#325/#341). The scry gate keys
+  # on scry's soundness invariants, stable across meld versions (0.33.0..0.41.3 all give
+  # 771 pts / 71 edges / 0 unsound-fallback — re-verified on 0.41.3), so the bump is safe.
+  # v0.41.3 carries the meld#341 fix (path-INDEPENDENT --reproducible), so TEST-PIX-026 now
+  # ASSERTS cross-path reproducibility (portable attestation key), not just fixed-path.
+  MELD_VERSION: v0.41.3
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
