@@ -902,13 +902,14 @@ artifacts:
       NEGATIVE-CONTROLLED: two DEFAULT (no-flag) fusions differ run-to-run. VERIFIED AGAINST THE REAL
       BUILD 2026-07-11 (jess local, meld v0.39.0, falcon-flight-v1.112 at a fixed path -> 20bb33bc...
       stable across runs; scry re-analyzes it to the identical sound invariants 771 pts / 71 edges /
-      0 unsound-fallback). RESIDUAL (verified, filed upstream as meld friction): --reproducible output
-      still depends on the input file PATH - identical bytes at two different paths fuse to DIFFERENT
-      shas - so a PORTABLE / cross-machine attestation sha is NOT yet achievable; the oracle reports
-      this cross-path dependence as a diagnostic (not asserted). WIRED into .github/workflows/ci.yml
-      as a step of the `scry-gate` job (meld v0.39.0). The scry gate + chain-measure now fuse
-      `--reproducible` (removes the random-UUID churn). NEXT RUNG: upstream path-independence -> then
-      promote the reproducible fused sha to a sigil-signed portable attestation key on the FIRST-FLASH set.
+      0 unsound-fallback). RESIDUAL RESOLVED 2026-07-21 (meld#341 fixed in meld v0.41.3, AFD-034):
+      --reproducible is now PATH-INDEPENDENT - the same falcon-v1.124 bytes at two different paths fuse
+      to the IDENTICAL sha256 (615c8b49...), re-verified against the real build. So a PORTABLE /
+      cross-machine attestation sha for the FIRST-FLASH fused core IS now achievable (was: path-dependent,
+      diagnostic-only). WIRED into .github/workflows/ci.yml as a step of the `scry-gate` job; the scry
+      gate + chain-measure fuse `--reproducible`. NEXT RUNG (banked): bump the CI meld pin v0.39.0 -> a
+      meld#341-fixed pin, upgrade the oracle's cross-path check from diagnostic to ASSERTION, and promote
+      the reproducible fused sha to a sigil-signed portable attestation key on the FIRST-FLASH set.
     tags: [phase-2, reproducibility, meld-325, fused-core, determinism, ci-gate, oracle, verification, sigil]
     links:
       - type: verifies
