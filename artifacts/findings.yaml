@@ -1159,9 +1159,11 @@ artifacts:
       --reproducible to the IDENTICAL sha256 (615c8b49...). So `--reproducible` is now fully
       path-INDEPENDENT: identical CONTENT -> identical fused artifact regardless of location. This
       unblocks a PORTABLE / cross-machine attestation sha for the FIRST-FLASH fused core (the sigil
-      rung of REQ-PIX-018 / DD-023). NEXT (banked, not this tick): bump CI MELD_VERSION v0.39.0 ->
-      a meld#341-fixed pin and upgrade tools/repro/fuse-repro-oracle.sh's cross-path check from a
-      diagnostic to an ASSERTION (path-independence is now a real, gate-able property).
+      rung of REQ-PIX-018 / DD-023). DONE 2026-07-22 (PR#156, f533ce4): CI MELD_VERSION bumped
+      v0.39.0 -> v0.41.3 (meld#341-fixed) and tools/repro/fuse-repro-oracle.sh's cross-path check
+      upgraded from a diagnostic to a hard ASSERTION - path-independence is now CI-gated (verified
+      teeth: passes on v0.41.3, fails on v0.39.0). Remaining next rung: promote the path-independent
+      reproducible fused sha to a sigil-signed portable attestation key on the FIRST-FLASH set.
     tags: [release-watch, meld, reproducibility, fused-core, determinism, attestation, on-target, resolved]
     fields:
       detected-by: jess release-watch (meld v0.39.0) verifying the #325 --reproducible fix against the real falcon-v1.112 core; found residual input-path dependence; filed meld#341; RESOLVED on meld v0.41.3 (path-independent, verified)
