@@ -1131,7 +1131,7 @@ artifacts:
   - id: AFD-034
     type: ai-found-defect
     title: meld fuse --reproducible output depends on the input file PATH (identical bytes at different paths -> different sha) - residual after the meld#325 UUID/timestamp fix
-    status: open
+    status: resolved
     description: >
       Found 2026-07-11 (release-watch, meld v0.39.0). CONTEXT: meld#325 (fused output
       byte-nondeterministic) was CLOSED by `meld fuse --reproducible` (v0.38.0) - id from output
@@ -1154,11 +1154,19 @@ artifacts:
       to test a fix against the real falcon core. jess side: tools/repro/fuse-repro-oracle.sh asserts
       the fixed-path guarantee (green) and reports the cross-path dependence as a diagnostic
       (TEST-PIX-026); scry-gate + chain-measure now fuse --reproducible to remove the random-UUID churn.
-    tags: [release-watch, meld, reproducibility, fused-core, determinism, attestation, on-target, partial-resolved]
+      RESOLVED 2026-07-21 (meld v0.41.3): meld#341 FIXED - re-verified against the real build, the
+      SAME falcon-flight-v1.124 bytes at two different paths (/tmp/mp/a vs /tmp/mp/b) now fuse
+      --reproducible to the IDENTICAL sha256 (615c8b49...). So `--reproducible` is now fully
+      path-INDEPENDENT: identical CONTENT -> identical fused artifact regardless of location. This
+      unblocks a PORTABLE / cross-machine attestation sha for the FIRST-FLASH fused core (the sigil
+      rung of REQ-PIX-018 / DD-023). NEXT (banked, not this tick): bump CI MELD_VERSION v0.39.0 ->
+      a meld#341-fixed pin and upgrade tools/repro/fuse-repro-oracle.sh's cross-path check from a
+      diagnostic to an ASSERTION (path-independence is now a real, gate-able property).
+    tags: [release-watch, meld, reproducibility, fused-core, determinism, attestation, on-target, resolved]
     fields:
-      detected-by: jess release-watch (meld v0.39.0) verifying the #325 --reproducible fix against the real falcon-v1.112 core; found residual input-path dependence; filed meld#341
+      detected-by: jess release-watch (meld v0.39.0) verifying the #325 --reproducible fix against the real falcon-v1.112 core; found residual input-path dependence; filed meld#341; RESOLVED on meld v0.41.3 (path-independent, verified)
       severity: minor
-      triage-status: filed-upstream
+      triage-status: resolved-upstream
     links:
       - type: defect-against
         target: EXTERNALANCHOR-003
