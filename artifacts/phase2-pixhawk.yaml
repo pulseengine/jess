@@ -886,7 +886,7 @@ artifacts:
 
   - id: TEST-PIX-026
     type: test-spec
-    title: Fused-core byte-reproducibility oracle - `meld fuse --reproducible` is byte-stable for a fixed input path (meld#325 UUID/timestamp nondeterminism resolved; cross-path residual filed upstream)
+    title: Fused-core byte-reproducibility oracle - `meld fuse --reproducible` is byte-stable AND path-independent (meld#325 UUID/timestamp + meld#341 path-dependence both resolved; CI-gated on meld v0.41.3)
     status: valid
     release: v0.9.0
     description: >
@@ -939,7 +939,8 @@ artifacts:
       all 23 asymmetric-zero rows, so a re-mix regression cannot pass. CONFIRMED GREEN 2026-07-21 (jess
       local, wasmtime 42.0.1). ON-TARGET: passthrough.wat is FPU-free (i32 bit copy) and lowers with 0
       skips on ALL THREE core ISAs - cortex-m3 (F100, 466 B), cortex-m4, cortex-m7dp - via synth v0.49.0
-      --relocatable --native-pointer-abi (contrast the falcon flight core, still 16 skips on M7,
+      --relocatable --native-pointer-abi (contrast the falcon flight core, still 14 skips on M7 at
+      falcon-v1.125/synth v0.49.0,
       AFD-035). So the gust failsafe pass-through is on-target-ready NOW. Local oracle (needs wasmtime),
       not yet a CI gate. NEXT RUNGS: (1) run passthrough on the F100/M3 in Renode per-row (execution
       oracle above this host-level property check); (2) swap in relay's real gust image when it ships,
