@@ -916,6 +916,37 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-021
 
+  - id: TEST-PIX-027
+    type: test-spec
+    title: Gust F100 byte-exact pass-through oracle - the failsafe forwards per-motor commands un-re-mixed, verified against relay's real PART-P02 conformance fixture (incl. asymmetric-zero rotor-out rows)
+    status: valid
+    release: v0.9.0
+    description: >
+      tools/gust/passthrough-oracle.sh - closes the PART-P02 (a) MUST of REQ-PIX-004: the F100 gust
+      failsafe forwards the M7's per-motor commands BYTE-EXACT (no re-mix, no per-motor floors), so a
+      rank-3 rotor-out set with motors asymmetrically ZEROED survives un-re-mixed (else the re-mix
+      reintroduces the parasitic moment that caused relay v1.114). FIXTURE (vendored, not authored):
+      hardware/gust/fixtures/f100-passthrough-v1.csv from relay @ tag falcon-v1.124.0
+      (bench-evidence/fixtures/f100-passthrough-v1.csv, sha 2306d046...; relay drift-gates it against
+      the real mixer, regen coordinated on jess#144) - 46 rows (10 hover / 24 rotor_out / 12 saturated),
+      phase,m0..m3_bits f32 hex, expected F100 output == input. ORACLE (exits non-zero on failure):
+      POSITIVE - hardware/gust/passthrough.wat reproduces every row byte-exact (184/184 = 46x4);
+      NEGATIVE CONTROL - hardware/gust/remix-negative.wat (a symmetric averaging re-mix) DIVERGES on
+      all 23 asymmetric-zero rows, so a re-mix regression cannot pass. CONFIRMED GREEN 2026-07-21 (jess
+      local, wasmtime 42.0.1). ON-TARGET: passthrough.wat is FPU-free (i32 bit copy) and lowers with 0
+      skips on ALL THREE core ISAs - cortex-m3 (F100, 466 B), cortex-m4, cortex-m7dp - via synth v0.49.0
+      --relocatable --native-pointer-abi (contrast the falcon flight core, still 16 skips on M7,
+      AFD-035). So the gust failsafe pass-through is on-target-ready NOW. Local oracle (needs wasmtime),
+      not yet a CI gate. NEXT RUNGS: (1) run passthrough on the F100/M3 in Renode per-row (execution
+      oracle above this host-level property check); (2) swap in relay's real gust image when it ships,
+      keeping this fixture as the conformance gate.
+    tags: [phase-2, gust, f100, failsafe, part-p02, byte-exact, pass-through, rotor-out, oracle, relay-fixture, on-target, verification]
+    links:
+      - type: verifies
+        target: REQ-PIX-004
+      - type: traces-to
+        target: DD-025
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core

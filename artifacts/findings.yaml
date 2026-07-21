@@ -1191,6 +1191,18 @@ artifacts:
       treat falcon as ready-to-bind on the M7 until this lowers (suppliers must not build ahead).
       Supersedes the premature "resolved" framing on AFD-024 (that finding's scope - the SILENT
       MISCOMPILE hazard - is genuinely closed; this is the distinct LOWERING-COMPLETENESS residual).
+      UPDATE 2026-07-21 (synth v0.49.0, meld v0.41.3, falcon-flight-v1.124 sha c8db2dfd): synth#782
+      shipped in v0.48.0 - re-verified against the real build, skips 26 -> 16 and run-stabilization NOW
+      LOWERS. The whole "integer popped f32" class (12) is GONE - it was NOT register pressure but two
+      missing lowerings (untyped f32 select + explicit float return), and getting synth the real bytes
+      also caught two SOUNDNESS bugs red-first (i64-select hi-half silent miscompile on every target; a
+      hard-float signature ABI hole) + the trunc_sat family. Remaining 16 (reported on synth#782 for the
+      v0.49 L1 "falcon-skip-to-zero" lane): 4x VFP register-file exhaustion (no VFP spilling; 2 f32 +
+      2 f64), 2x f64<->i64 reinterpret unsupported, 2x #518, 2x #503, 3x #345 literal-pool, 1x VCR-RA-003
+      RA-validation bug (JoinValueNotAvailable R8 - synth's own gate caught it), 2x i64-regalloc. The
+      residual is now mostly regalloc/spilling/addressing + a small i64/f64 ABI tail, NOT float-op
+      completeness. Trajectory is strong and the maintainer is driving to zero, but the gate is STILL
+      OPEN (16>0) - falcon still not ready-to-bind on M7. status stays open.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
