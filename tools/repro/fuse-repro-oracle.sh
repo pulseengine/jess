@@ -72,15 +72,17 @@ else
   echo "negative control OK: default fusion differs run-to-run ($D1 != $D2)"
 fi
 
-# --- characterize the residual cross-path dependence (diagnostic, NOT asserted) ------
+# --- cross-path PATH-INDEPENDENCE (ASSERTED — meld#341 fixed in meld v0.41.3) --------
+# Identical CONTENT at two different paths must fuse to the IDENTICAL sha, so the fused
+# artifact is a PORTABLE attestation key (not just stable for one fixed path). This was a
+# diagnostic while meld#341 was open; it is now a hard assertion. If it regresses (or the
+# meld in use predates the fix), the gate fails loudly rather than silently under-checking.
 CPA="$WORK/pa/in.wasm"; CPB="$WORK/pb/in.wasm"; mkdir -p "$WORK/pa" "$WORK/pb"
 cp "$COMP" "$CPA"; cp "$COMP" "$CPB"
-"$MELD" fuse "$CPA" -o "$WORK/cpa.wasm" --reproducible >/dev/null 2>&1
-"$MELD" fuse "$CPB" -o "$WORK/cpb.wasm" --reproducible >/dev/null 2>&1
-if [ "$(sha "$WORK/cpa.wasm")" = "$(sha "$WORK/cpb.wasm")" ]; then
-  echo "cross-path: PATH-INDEPENDENT (identical bytes at different paths fuse identically) — residual CLOSED"
-else
-  echo "cross-path: still PATH-DEPENDENT (identical bytes at 2 paths -> different sha) — upstream residual, gate keys on scry invariants not the sha"
-fi
+"$MELD" fuse "$CPA" -o "$WORK/cpa.wasm" --reproducible >/dev/null 2>&1 || fail "cross-path fuse #1 errored"
+"$MELD" fuse "$CPB" -o "$WORK/cpb.wasm" --reproducible >/dev/null 2>&1 || fail "cross-path fuse #2 errored"
+CPA_SHA="$(sha "$WORK/cpa.wasm")"; CPB_SHA="$(sha "$WORK/cpb.wasm")"
+[ "$CPA_SHA" = "$CPB_SHA" ] || fail "PATH-DEPENDENT: identical bytes at 2 paths fuse to different sha ($CPA_SHA != $CPB_SHA) — meld#341 regressed, or this meld predates v0.41.3"
+echo "cross-path: PATH-INDEPENDENT (asserted) — identical bytes at different paths fuse identically ($CPA_SHA)"
 
-echo "REPRO OK — meld#325 UUID/timestamp nondeterminism resolved: --reproducible is byte-stable for a fixed input path ($R1)."
+echo "REPRO OK — meld#325 + meld#341 resolved: --reproducible is byte-stable AND path-independent (portable attestation key $R1)."

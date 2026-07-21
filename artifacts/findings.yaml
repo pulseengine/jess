@@ -1211,6 +1211,13 @@ artifacts:
       residual is now mostly regalloc/spilling/addressing + a small i64/f64 ABI tail, NOT float-op
       completeness. Trajectory is strong and the maintainer is driving to zero, but the gate is STILL
       OPEN (16>0) - falcon still not ready-to-bind on M7. status stays open.
+      UPDATE 2026-07-22 (falcon-flight-v1.125, synth v0.49.0, meld v0.41.3): 16 -> 14 skips. falcon
+      v1.125 shipped relay-math f32-only sin/cos kernels (MATHF32-P01), removing libm's internal-f64
+      trig - which cleared the f64 VFP-D-register-exhaustion pair (the M4 soft-float f64 also goes; the
+      jess#144 point-2 WCET item). run-stabilization still lowers. Remaining 14 are the same classes
+      already on synth#782 (no new pole): ~#345 literal-pool x3, #518 x2, #503 x2, f64<->i64 reinterpret,
+      1 f32 VFP-exhaustion, VCR-RA-003, i64-regalloc/#331 tail. Progression 26(v1.123)->16(v1.124)->
+      14(v1.125). Not re-reported to synth (shapes unchanged, only counts). Gate STILL OPEN (14>0).
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782

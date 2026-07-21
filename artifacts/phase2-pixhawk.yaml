@@ -907,9 +907,12 @@ artifacts:
       to the IDENTICAL sha256 (615c8b49...), re-verified against the real build. So a PORTABLE /
       cross-machine attestation sha for the FIRST-FLASH fused core IS now achievable (was: path-dependent,
       diagnostic-only). WIRED into .github/workflows/ci.yml as a step of the `scry-gate` job; the scry
-      gate + chain-measure fuse `--reproducible`. NEXT RUNG (banked): bump the CI meld pin v0.39.0 -> a
-      meld#341-fixed pin, upgrade the oracle's cross-path check from diagnostic to ASSERTION, and promote
-      the reproducible fused sha to a sigil-signed portable attestation key on the FIRST-FLASH set.
+      gate + chain-measure fuse `--reproducible`. DONE 2026-07-22: CI meld pin bumped v0.39.0 -> v0.41.3
+      (the meld#341-fixed release; scry invariants re-verified stable on 0.41.3), and the oracle's
+      cross-path check is UPGRADED from a diagnostic to a hard ASSERTION - path-independence
+      (identical content -> identical fused sha regardless of location) is now CI-GATED. NEXT RUNG
+      (banked): promote the path-independent reproducible fused sha to a sigil-signed portable
+      attestation key on the FIRST-FLASH set.
     tags: [phase-2, reproducibility, meld-325, fused-core, determinism, ci-gate, oracle, verification, sigil]
     links:
       - type: verifies
