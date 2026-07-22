@@ -191,6 +191,14 @@ jobs:
         run: tools/repro/fuse-repro-oracle.sh | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           GH_TOKEN: ${{ github.token }}
+      # TEST-PIX-029 — sigil attestation (DD-023 terminal rung): keygen -> sign the
+      # path-independent reproducible fused core -> verify==true; a 1-byte tamper must
+      # verify==false. Builds sigil-run (wasmtime host over sigil's wsc signing component);
+      # reuses the meld installed above.
+      - name: sigil attestation gate (TEST-PIX-029)
+        run: tools/sigil-gate/run.sh | tee -a "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   # NOTE: a third job building the hermetic falcon firmware chain
   # (bazel build //:falcon-validate //:falcon-optimized //:falcon-fused

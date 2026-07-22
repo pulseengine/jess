@@ -981,6 +981,33 @@ artifacts:
       - type: traces-to
         target: TEST-PIX-027
 
+  - id: TEST-PIX-029
+    type: test-spec
+    title: Sigil attestation gate - the reproducible meld-fused falcon core is sigil-signed + verified, and a 1-byte tamper is detected (DD-023 terminal FIRST-FLASH rung)
+    status: valid
+    release: v0.9.0
+    description: >
+      tools/sigil-gate/ - closes DD-023 / REQ-PIX-021's terminal "sigil-signed flashable set" step
+      at the fused-core level. run.sh fetches a pinned falcon component -> meld fuse --reproducible
+      (a PATH-INDEPENDENT digest, meld#341/AFD-034) -> sigil-run drives sigil's wsc-component.wasm
+      (exports wasm-signatures:wasmsign/signing@0.2.6) via a wasmtime component host + WASI to:
+      keygen -> sign(fused core, detached) -> verify == true. ORACLE (exits non-zero on failure):
+      the genuine core verifies true AND a NEGATIVE CONTROL (one byte flipped at len/2) verifies FALSE
+      -> the signature actually binds the bytes. CONFIRMED GREEN 2026-07-22 (jess local, sigil/wsc
+      v0.9.3, wasmtime 42, falcon-flight-v1.127 fused sha c0386671...; 33-byte pubkey, 108-byte detached
+      sig; tamper detected). WIRED into .github/workflows/ci.yml as a step of the scry-gate job (builds
+      sigil-run, reuses the pinned meld). WHY IT'S NOW POSSIBLE: sigil#164 (wsc couldn't sign its own
+      wasip2 output) is CLOSED, and the fused core is path-independent-reproducible (the prerequisite for
+      a portable attestation). sigil's `wsc` native binary is linux-only, so jess drives the
+      wsc-component.wasm through a wasmtime host (like scry-run, but component-model). NEXT RUNG: sign
+      the full 3-image FIRST-FLASH set (M7+M4+F100) once falcon lowers on-target (AFD-035, 14 skips).
+    tags: [phase-2, sigil, attestation, signing, fused-core, reproducible, first-flash, ci-gate, oracle, verification, dd-023]
+    links:
+      - type: verifies
+        target: REQ-PIX-018
+      - type: traces-to
+        target: REQ-PIX-021
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
