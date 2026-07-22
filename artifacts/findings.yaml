@@ -1220,6 +1220,13 @@ artifacts:
       already on synth#782 (no new pole): ~#345 literal-pool x3, #518 x2, #503 x2, f64<->i64 reinterpret,
       1 f32 VFP-exhaustion, VCR-RA-003, i64-regalloc/#331 tail. Progression 26(v1.123)->16(v1.124)->
       14(v1.125). Not re-reported to synth (shapes unchanged, only counts). Gate STILL OPEN (14>0).
+      UPDATE 2026-07-22b: falcon-v1.126 + v1.127 are PROOF-ONLY releases (MATHF32-P02/P03 = exhaustive
+      + machine-checked f32-kernel accuracy/rounding bounds), and their flight wasm is BYTE-IDENTICAL to
+      v1.125 (sha 54020c5ea03b9ecda57c66fed0b4f872a3b80fc94c89682ef610076b6f2f346f) - verified. So the
+      14-skip measurement HOLDS for the current falcon (v1.127); no re-chain needed until relay ships a
+      codegen-affecting flight change or synth moves. Also handed synth a minimal #345 repro (large fn ->
+      literal pool >4095 B from the ldr; a function-SIZE effect, not global-count) on synth#782 for the
+      falcon-skip-to-zero lane; 2 concrete fixes offered (movw/movt pair, or constant-island pool flush).
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
