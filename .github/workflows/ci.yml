@@ -151,6 +151,8 @@ jobs:
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
         run: /tmp/renode/renode-test hardware/renode/synth507-brtable/brtable-507.robot
+      - name: gust F100/M3 byte-exact pass-through oracle (REQ-PIX-004 PART-P02, TEST-PIX-028)
+        run: /tmp/renode/renode-test hardware/renode/gust-m3/passthrough-m3.robot
 
   # REQ-PIX-018 leg b (TEST-PIX-022) — the DO-333 sound-static-analysis leg of
   # the V, on the CONSUMED (stripped) falcon wasm: fetch a pinned falcon

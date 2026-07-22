@@ -952,6 +952,35 @@ artifacts:
       - type: traces-to
         target: DD-025
 
+  - id: TEST-PIX-028
+    type: test-spec
+    title: Gust F100 byte-exact pass-through EXECUTES on the emulated Cortex-M3 (F100) in Renode - asymmetric rotor-out zeros survive un-re-mixed on real M3 semantics
+    status: valid
+    release: v0.9.0
+    description: >
+      hardware/renode/gust-m3/passthrough-m3.robot - the ON-TARGET execution rung above the
+      host-level property oracle (TEST-PIX-027) for REQ-PIX-004 PART-P02 (a). The gust pass-through
+      (passthrough_mem.wat) is compiled self-contained + bootable via `synth compile --cortex-m -t
+      cortex-m3` (passthrough_mem.elf) and RUN on the emulated STM32F100-class Cortex-M3 (the F100
+      failsafe core) in Renode: the robot writes the 4 per-motor command words into linear memory,
+      runs, and asserts the 4 output words == the inputs BYTE-EXACT. Three real rows from relay's
+      fixture (hardware/gust/fixtures/f100-passthrough-v1.csv): the SAFETY-CRITICAL rank-3 rotor-out
+      row with motors 0 AND 2 zeroed (the zeros must survive un-re-mixed, else the relay v1.114
+      parasitic moment), a hover row, and a saturated row. CONFIRMED GREEN 2026-07-22 (jess local,
+      Renode 1.16.1, synth v0.49.0; 3/3 cases OK incl. asymmetric zeros preserved bit-for-bit).
+      WIRED into .github/workflows/ci.yml renode-smoke job. ABI note: synth v0.49 self-contained
+      linmem base = 0x20000100 (0x100 reserved prefix); the ELF + the robot's base are a matched pair,
+      regenerate both via hardware/renode/gust-m3/build.sh on a newer synth. This closes the gust
+      pass-through V at the on-target level; the falcon flight core still cannot self-host on the M7
+      (AFD-035), but the FPU-free failsafe pass-through runs on all 3 core ISAs now. NEXT RUNG: swap
+      the reference pass-through for relay's real gust image when it ships, keeping this gate.
+    tags: [phase-2, gust, f100, cortex-m3, renode, part-p02, byte-exact, on-target, execution, ci-gate, oracle, verification]
+    links:
+      - type: verifies
+        target: REQ-PIX-004
+      - type: traces-to
+        target: TEST-PIX-027
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
