@@ -9,3 +9,9 @@ bazel-out
 bazel-jess
 bazel-testlogs
 MODULE.bazel.lock
+
+# renode-test / robot framework outputs
+robot_output.xml
+log.html
+report.html
+snapshots/
