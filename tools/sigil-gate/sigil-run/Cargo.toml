@@ -1,0 +1,15 @@
+[package]
+name = "sigil-run"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "jess sigil attestation gate driver: drive sigil's wsc-component.wasm (wasm-signatures:wasmsign/signing) to keygen -> sign -> verify the reproducible meld-fused falcon core; negative-controlled (tampered bytes fail verify). Closes DD-023's sigil-signed FIRST-FLASH rung."
+
+[dependencies]
+wasmtime = { version = "42", features = ["component-model"] }
+wasmtime-wasi = "42"
+anyhow = "1"
+
+[[bin]]
+name = "sigil-run"
+path = "src/main.rs"
