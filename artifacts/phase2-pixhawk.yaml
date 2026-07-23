@@ -190,7 +190,7 @@ artifacts:
   - id: REQ-PIX-007
     type: requirement
     title: Inter-core/inter-component comms - WIT-typed contracts, fused same-core / RPC cross-core over a shared-memory transport
-    status: draft
+    status: implemented
     release: v0.7.0
     description: >
       Same-core components are meld-fused (WIT seams -> direct calls); cross-core (M4<->M7,
@@ -217,10 +217,22 @@ artifacts:
       estimator(M4)->falcon(M7) crossing datum is NavState = the IEKF state {q, v, p, b_g, b_a} =
       16x f32 = 64 bytes - a single fixed-size MU/SHMEM message (the `vehicle-state` in the
       spar-generated estimator/falcon.wit). relay-iekf is a separable no_std crate with no hidden
-      back-edges, so this is the whole inter-core estimator contract; the byte payload (list<u8>)
-      will gain this structure as the AADL feature types refine. falcon(M7)->failsafe(F100) carries
+      back-edges, so this is the whole inter-core estimator contract. falcon(M7)->failsafe(F100) carries
       the per-motor actuator commands (byte-exact pass-through, REQ-PIX-004 PART-P02).
-      category: functional
+      STATUS draft->IMPLEMENTED 2026-07-24: both halves of the requirement now have green CI-gated
+      evidence. (1) WIT-TYPED CONTRACTS - the AADL data types are now STRUCTURED (VehicleState.nav =
+      record of 16 f32; ActuatorCmd.pwm = record of 4 f32), spar codegen emits `record vehicle-state-nav`
+      / `record actuator-cmd-pwm` (not opaque list<u8>), gated by TEST-PIX-023 (the "will gain structure"
+      note above is DONE; AFD-036 resolved). (2) RPC CROSS-CORE over the shared-SRAM transport - the 16xf32
+      NavState crosses M4->SHMEM->M7 BYTE-EXACT on the dual-core RT1176 Renode model, gated by TEST-PIX-030.
+      Fused same-core (meld -> direct calls) is exercised by the scry gate on the fused core. REMAINING TO
+      `verified`: ground the transport on gale's VERIFIED k_msgq (gale v0.4.0 gale-wasm-msgq, DD-023)
+      instead of the current hand-rolled SHMEM flag handshake - BLOCKED this tick: the msgq .o needs the
+      gale scheduler seam (gale_w_msgq_pend/ready_thread/reschedule/thread_swap_data/unpend_first_thread/
+      spin_lock/memcpy = 9 undefined syms) which the v0.4.0 release does NOT ship as standalone objects.
+      RECORD (not file, per DD-022/023 sequencing - jess is #369/float-gated, not ready-to-bind): to
+      consume k_msgq jess needs gale to also expose the kernel-seam objects (or link the fused gale-nano
+      core); tracked on the DD-023 GALE row + gale#65. category: functional
       priority: should
     links:
       - type: traces-to

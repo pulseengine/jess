@@ -1227,6 +1227,12 @@ artifacts:
       codegen-affecting flight change or synth moves. Also handed synth a minimal #345 repro (large fn ->
       literal pool >4095 B from the ldr; a function-SIZE effect, not global-count) on synth#782 for the
       falcon-skip-to-zero lane; 2 concrete fixes offered (movw/movt pair, or constant-island pool flush).
+      UPDATE 2026-07-24 (synth v0.50.0, falcon-v1.127): 14 -> 13 skips. v0.50 is mostly deps + verified-
+      codegen infra (VCR-WASM-001 i64 add/sub/mul/and/or/xor exec wiring; RV32 RA validator) - NOT
+      falcon-lane float fixes; the incidental -1 is likely an i64 op cleared by the i64-exec wiring.
+      run-stabilization still lowers. #345 (my minimal repro) NOT yet actioned (3x #345 remain); no new
+      pole. Remaining 13 = 3x #345 literal-pool + 2x #503 + #518 + VFP-f32-exhaustion + VCR-RA-003 +
+      no-free-callee + i64-spill + #331. Progression 26->16->14->13. Gate STILL OPEN (13>0).
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
