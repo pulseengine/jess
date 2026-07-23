@@ -1456,8 +1456,16 @@ artifacts:
            So jess's per-core meld_fuse composes relay-flight(imports gust:os) + gale gust:os-providers
            (both OCI) -> one image whose residual is gust:hal (jess native). Delivery invariant is two-part:
            (a) the app-composition seam is the STABLE gust:os capability world (gale-owned), (b) the native
-           residual stays exactly gust:hal (no leaking scheduler/heap). Cross-linked DD-026 <-> the forthcoming
-           gale DD; F100-failsafe=VER-OS-HM-001 half already consistent (v0.5.0). RECORD not build-ahead (both
+           residual stays exactly gust:hal (no leaking scheduler/heap). BILATERALLY PINNED 2026-07-24: gale
+           landed its side as `DD-OS-DELIVERY-001` (gale#225, rivet PASS, refines SAC-BYOOS-LIBOS) - the
+           gust:os correction baked in (component EXPORTS gust:os; scheduler resolved below it; residual =
+           gust:hal) - with the build target `gale#224` (the fused gale-nano component) bound to the gale v0.6
+           cut. ACCEPTANCE INVARIANT (gale's, matches jess's ask): wasm-tools confirms a *component* exporting
+           gust:os, and after `wac plug (+) meld fuse --memory shared -> loom -> synth` the ONLY undefined
+           symbols are the gust:hal mmio seam (no scheduler/heap leak) - already demonstrated at the tl/ts node
+           level (VER-OS-SYSCALL-001: residual = exactly the gust:hal seam + typed taskdisp), gale#224
+           generalizes it to a published self-contained component. DD-026 <-> DD-OS-DELIVERY-001 cross-linked.
+           F100-failsafe=VER-OS-HM-001 half already consistent (v0.5.0). RECORD not build-ahead (both
            float-gated), aligned now while the contract shape is fresh.
       SEQUENCING HONESTY (stated on jess#167): the contract can be designed+prototyped now, but the M7
       CASCADE cannot lower on-target yet (AFD-035/synth#782, 13 skips). The F100 failsafe is lowerable NOW
