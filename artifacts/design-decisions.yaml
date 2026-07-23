@@ -583,6 +583,22 @@ artifacts:
       device SEMANTICS. Consistent with DD-011 (the gust TCB is the same tiny
       host-import shape) and DD-012 (relay abstracts / jess binds). Detailed per-seam
       spec posted to relay on jess#62.
+      REFINED AGAIN 2026-07-24 (gale v0.5.0 verified DRIVER SUITE - the driver-path half of the
+      DD-026 consumption contract): gale now ships VERIFIED thin-seam bus drivers (spi/i2c/adc/can/pwm/
+      gpio/dac/wdg) - Kani-proven + SILICON-VALIDATED (adc read Vrefint on a real STM32F100; wdg fired on
+      a G474) - each a dissolved wasm FSM touching silicon ONLY over gust:hal (the raw mmio seam). This
+      pushes the BUS TRANSPORT that this DD put in jess's NATIVE host DOWN into gale-verified WASM, so
+      jess's native TCB SHRINKS to just gust:hal (the RT1176 mmio addresses / thin native shim) - MORE
+      gale-maximal-wasm, the exact principle this DD cited. NEW LAYERING (bottom-up): gust:hal [JESS
+      native] -> gale verified thin-seam bus driver [GALE, implements the embedded-hal-async transport
+      SpiDevice/I2c/AdcIn] -> relay protocol/decode/voting [RELAY, imu reg-map, UBX, DroneCAN, EKF
+      voting] -> sensor-sample [the data seam, JESS AADL/spar] -> relay flight app. OPEN RECONCILIATION
+      (raised on jess#167): the gale-bus-driver <-> relay-protocol-driver boundary must be a named seam -
+      cleanest = the embedded-hal-async transport traits (gale IMPLEMENTS verified; relay CONSUMES for
+      reg-map/decode), so the register-level bus is owned once (gale), not double-claimed vs DD-015's
+      "relay owns drivers". Also: gale's gust-target-gen AADL device model overlaps jess's
+      hardware/pixhawk6x-rt.aadl - the RT1176 target model needs ONE owner (jess owns it; gale generates
+      per-target constants FROM it). To pin in the DD-026 driver-path extension once gale/relay confirm.
       REFINED by DD-018: the transport trait SHAPE named here (bespoke RegBus/SerialBus,
       read-reg) is SUPERSEDED - the seam now anchors on embedded-hal-async SpiDevice/I2c
       + embedded-io-async at TRANSACTION granularity (register helpers move relay-side).
