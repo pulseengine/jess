@@ -1246,6 +1246,16 @@ artifacts:
           the next rung grounds it on gale's k_msgq (over the shmem vring + the MU doorbell already in
           rt1176-dualcore.repl), closing gale#65's gust ipc-rx on jess's side. The gust:os seam +
           executor are the gale-nano substrate for REQ-PIX-002 (M7 native base) / REQ-PIX-009 (F100).
+          TRACK DISCIPLINE (do NOT treat proposed-as-delivered): the above are on gale's CUT v0.4.0
+          FUNCTIONAL line (SHA-verified assets on the release). gale's SAFETY line is a SEPARATE
+          "0.5 track" - a rivet backbone numbered v0.5.0->v0.8.0 that is IN-PROGRESS ON MAIN (branches
+          feat/gust-close-{adc,can,dac,dma,i2c,pwm}, feat/gust-mini-os), with every VER staying
+          `proposed` until its full oracle passes; there is NO cut v0.5.0 release yet (latest tag =
+          v0.4.0). The safety-critical pieces jess's failsafe + partition actually need - the I-ISO MPU
+          region-program core, the PARTITION-SWITCH FSM (REQ-PIX-004 / DD-025 ARINC-653), the value-
+          domain HM/FAILSAFE FSM (REQ-PIX-009) - live on that 0.5 safety track and are NOT yet released.
+          jess consumes the v0.4.0 msgq/gust:os now; the safety FSMs are a WATCH item (consume when gale
+          cuts v0.5.0+ with the VERs verified), NOT a current dependency to build against.
         - RELAY (falcon + relay-hal): PARTITION the stack along the core boundaries (flight
           / estimator / failsafe) so each is separately fuse+compilable; plus the DD-022
           driver asks (TF02 rangefinder REQ-PIX-020, dual-M9N blend, 4S AdcIn). Sequenced
