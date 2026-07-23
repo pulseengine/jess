@@ -1008,6 +1008,35 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-021
 
+  - id: TEST-PIX-030
+    type: test-spec
+    title: Inter-core NavState crossing - the 16xf32 NavState message crosses M4 -> shared SRAM -> M7 byte-exact on the dual-core RT1176 Renode model (REQ-PIX-007)
+    status: valid
+    release: v0.9.0
+    description: >
+      hardware/renode/navstate-xcore/ - proves the payload-fidelity half of REQ-PIX-007: the 3-core
+      partition's sole M7<->M4 crossing is the NavState message (16 x f32 = 64 B, DD-025/PART), and it
+      must cross the shared-SRAM ring BYTE-EXACT (no corruption, no partial read) or the M7 flight core
+      acts on a torn estimator state. Built on the proven dual-core RT1176 model
+      (hardware/renode/vehicle/rt1176-dualcore.repl: cpu_m7 + cpu_m4 on the shared sysbus, SHMEM ring
+      @0x20400000, full NXP MU doorbell). cpu_m4 (estimator core) writes the 16-word NavState to SHMEM
+      then publishes a READY flag @0x20400040 LAST (flag-last release order); cpu_m7 (flight core) spins
+      on the flag (acquire), copies the 16 words to its DTCM @0x20010000. ORACLE (navstate-crossing.robot,
+      renode-test): asserts ALL 16 DTCM output words == the producer pattern 0x4E560000+i - so the
+      NavState survived M4 -> shared-SRAM -> M7 bit-for-bit. CONFIRMED GREEN 2026-07-23 (jess local,
+      Renode 1.16.1; 16/16 words byte-exact). WIRED into .github/workflows/ci.yml renode-smoke job.
+      Hermetic: committed producer/consumer ELFs (arm-none-eabi, build.sh regenerates; ELF addresses +
+      the robot are a matched pair). This is the inter-core IPC foundation the FIRST-FLASH 3-core model
+      needs; the MU doorbell datapath (M4->M7 RR0) is separately exercised by the vehicle multinode demo
+      (TEST-PIX-019). NEXT RUNG: WIT-type the NavState record (REQ-PIX-007 / spar codegen) + swap the
+      fixed pattern for relay's real estimator NavState when the M4 estimator lowers on-target.
+    tags: [phase-2, inter-core, ipc, navstate, shmem, dual-core, rt1176, byte-exact, on-target, ci-gate, oracle, verification, req-pix-007]
+    links:
+      - type: verifies
+        target: REQ-PIX-007
+      - type: traces-to
+        target: DD-025
+
   - id: REQ-PIX-018
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
