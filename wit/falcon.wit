@@ -2,11 +2,33 @@
 package pixhawk6-x-r-t:falcon;
 
 interface falcon-ports {
-    type actuator-cmd = list<u8>;
-    type vehicle-state = list<u8>;
+    record actuator-cmd-pwm {
+        m0: f32,
+        m1: f32,
+        m2: f32,
+        m3: f32,
+    }
+    record vehicle-state-nav {
+        qw: f32,
+        qx: f32,
+        qy: f32,
+        qz: f32,
+        px: f32,
+        py: f32,
+        pz: f32,
+        vx: f32,
+        vy: f32,
+        vz: f32,
+        bgx: f32,
+        bgy: f32,
+        bgz: f32,
+        bax: f32,
+        bay: f32,
+        baz: f32,
+    }
 
-    state-in: func() -> vehicle-state;
-    set-cmd-out: func(val: actuator-cmd);
+    state-in: func() -> vehicle-state-nav;
+    set-cmd-out: func(val: actuator-cmd-pwm);
 }
 
 world falcon-world {

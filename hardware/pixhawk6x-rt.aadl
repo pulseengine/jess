@@ -101,10 +101,32 @@ public
   bus VBAT      end VBAT;       -- Gens Ace 4S 5000 mAh main rail (ESC power + monitored)
 
   --------------------------------------------------------------------------
-  -- Data carried across cores (sized so spar emits WIT type aliases)
+  -- Data carried across cores. Ports bind the data IMPLEMENTATIONS (.nav / .pwm) so
+  -- spar codegen emits STRUCTURED WIT records (not opaque list<u8>) - the typed inter-
+  -- core contract of REQ-PIX-007. Field width comes from F32's Data_Size (4 B) +
+  -- Data_Representation (Float) -> f32 (spar REQ-CODEGEN-WIT-RECORDS-001).
   --------------------------------------------------------------------------
-  data VehicleState end VehicleState;   -- estimator -> controller (pose/rates)
-  data ActuatorCmd  end ActuatorCmd;    -- controller -> failsafe/mixer (PWM setpoints)
+  data F32
+    properties
+      Data_Model::Data_Representation => Float;
+      Data_Size => 4 Bytes;
+  end F32;
+
+  data VehicleState end VehicleState;   -- estimator -> controller (the M4->M7 NavState)
+  data implementation VehicleState.nav  -- 16 x f32 IEKF state (quat, pos, vel, gyro-bias, accel-bias) = 64 B
+  subcomponents
+    qw : data F32;  qx : data F32;  qy : data F32;  qz : data F32;
+    px : data F32;  py : data F32;  pz : data F32;
+    vx : data F32;  vy : data F32;  vz : data F32;
+    bgx : data F32; bgy : data F32; bgz : data F32;
+    bax : data F32; bay : data F32; baz : data F32;
+  end VehicleState.nav;
+
+  data ActuatorCmd end ActuatorCmd;     -- controller -> failsafe/mixer (per-motor setpoints)
+  data implementation ActuatorCmd.pwm   -- 4 x f32 per-motor commands (the M7->F100 gust crossing)
+  subcomponents
+    m0 : data F32;  m1 : data F32;  m2 : data F32;  m3 : data F32;
+  end ActuatorCmd.pwm;
 
   --------------------------------------------------------------------------
   -- Sensor + power devices
@@ -247,8 +269,8 @@ public
   --  to the I/O MCU over IO_LINK. Same WIT contract whether fused or RPC'd.
   process Falcon_Flight
   features
-    state_in : in data port VehicleState;     -- <- estimator (cross-core RPC)
-    cmd_out  : out data port ActuatorCmd;     -- -> failsafe (cross-MCU RPC)
+    state_in : in data port VehicleState.nav;     -- <- estimator (cross-core RPC)
+    cmd_out  : out data port ActuatorCmd.pwm;     -- -> failsafe (cross-MCU RPC)
   end Falcon_Flight;
   process implementation Falcon_Flight.cascade
   end Falcon_Flight.cascade;
@@ -257,7 +279,7 @@ public
   --  M4 core as its own fused component. Emits VehicleState to the M7.
   process Estimator
   features
-    state_out : out data port VehicleState;
+    state_out : out data port VehicleState.nav;
   end Estimator;
   process implementation Estimator.iekf
   end Estimator.iekf;
@@ -266,7 +288,7 @@ public
   --  from the FMU over the LPUART link.
   process IO_Failsafe
   features
-    cmd_in : in data port ActuatorCmd;
+    cmd_in : in data port ActuatorCmd.pwm;
   end IO_Failsafe;
   process implementation IO_Failsafe.pwm
   end IO_Failsafe.pwm;
