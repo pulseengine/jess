@@ -1260,9 +1260,24 @@ artifacts:
           `proposed` until its full oracle passes; there is NO cut v0.5.0 release yet (latest tag =
           v0.4.0). The safety-critical pieces jess's failsafe + partition actually need - the I-ISO MPU
           region-program core, the PARTITION-SWITCH FSM (REQ-PIX-004 / DD-025 ARINC-653), the value-
-          domain HM/FAILSAFE FSM (REQ-PIX-009) - live on that 0.5 safety track and are NOT yet released.
-          jess consumes the v0.4.0 msgq/gust:os now; the safety FSMs are a WATCH item (consume when gale
-          cuts v0.5.0+ with the VERs verified), NOT a current dependency to build against.
+          domain HM/FAILSAFE FSM (REQ-PIX-009) - live on that 0.5 safety track.
+          UPDATE 2026-07-24 - GALE v0.5.0 CUT: the 0.5 safety track is now RELEASED with its VERs
+          VERIFIED (no longer proposed): VER-OS-ISO-001 (I-ISO MPU region-swap hardware-isolation
+          boundary), VER-OS-SWITCH-001 (two-level partition switch = verified Switcher x verified MPU,
+          end-to-end qemu + multi-core Renode placement demo -> REQ-PIX-004/DD-025 ARINC-653),
+          VER-OS-HM-001 (Health-Monitor cross-sensor voting + per-cause failsafe demonstrator ->
+          REQ-PIX-009 F100 failsafe), VER-OS-TIMER-001 (tickless component sleep over the verified
+          executor), VER-OS-SYSCALL-001 (gust:os seam). Plus a spar/AADL board.SoC.device model +
+          `gust-target-gen` (emits per-target constants / memory.x / WIT worlds), SILICON-VALIDATED on
+          STM32F100 (jess's F100 gust core!) + STM32G474. So the safety FSMs jess's failsafe+partition
+          need are now DELIVERED+verified, not a watch item. STILL NOT SHIPPED as standalone assets: the
+          v0.5.0 release ships only msgq/mutex/sem .o (msgq still needs the ~9-symbol scheduler seam:
+          k_spin_lock/unlock, z_ready_thread, z_reschedule, z_unpend_first_thread, gale_w_msgq_pend/
+          thread_swap_data/memcpy, arch_thread_return_value_set) + the gust:os probes - the verified
+          FSMs/executor themselves aren't standalone linkable .o. So to CONSUME them jess still links the
+          fused gale-nano core (or asks gale to expose the seam) - the concrete gale ask to FILE when
+          jess can bind (#369/float-gated, not yet). gust-target-gen may reconcile with jess's own
+          hardware/pixhawk6x-rt.aadl (both model the F100) - a coordination item to check.
         - RELAY (falcon + relay-hal): PARTITION the stack along the core boundaries (flight
           / estimator / failsafe) so each is separately fuse+compilable; plus the DD-022
           driver asks (TF02 rangefinder REQ-PIX-020, dual-M9N blend, 4S AdcIn). Sequenced

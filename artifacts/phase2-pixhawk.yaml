@@ -148,6 +148,12 @@ artifacts:
       campaign: NavState delayed 1-2 ticks / jittered +-1 must keep hover + rotor-out passing).
       Per-core compiles gated on the synth float poles (#719 f32 + f64 phase-2; note falcon-flight
       has 4 f64-dense funcs so M7 double-FP is a real dependency - AFD-024).
+      GALE v0.5.0 GROUNDING 2026-07-24 (DD-023): the ARINC-653 two-level partition (DD-025) now has a
+      VERIFIED gale substrate - VER-OS-SWITCH-001 (two-level partition switch = verified Switcher x
+      verified MPU, proven end-to-end on qemu + a multi-core Renode placement demo) + VER-OS-ISO-001
+      (I-ISO MPU region-swap as the hardware isolation boundary). So the partition-switch + memory-
+      isolation mechanism jess's 3-core partition needs is verified upstream; jess consumes it by
+      linking the fused gale-nano core per DD-023.
     fields:
       category: functional
       priority: should
@@ -298,6 +304,14 @@ artifacts:
       default); the Renode stm32f103 confirmation runs hermetically with no board write.
       Offered on gale#65. Caveat: F100 = Cortex-M3 = thumbv7m (no DSP/FPU) - confirm synth
       M3 path + recalibrate fuel->cycles (kiln R4).
+      GALE v0.5.0 GROUNDING 2026-07-24 (the 0.5 safety track CUT, DD-023): gale now ships the
+      VERIFIED failsafe substrate this requirement needs - VER-OS-HM-001 (Health-Monitor cross-sensor
+      voting + per-cause failsafe demonstrator) + VER-OS-TIMER-001 (tickless component sleep over the
+      verified executor) + VER-OS-SYSCALL-001 (gust:os seam), and a gust-target-gen spar/AADL model
+      SILICON-VALIDATED on the STM32F100 (VER-TARGET-IWDG-001, + ADC/Vrefint). So the F100 gale-nano
+      failsafe FSM is verified upstream; jess's rung is to fuse+run it on the F100/M3 (extends the gust
+      pass-through TEST-PIX-028) - consumed by linking the fused gale-nano core (the standalone
+      kernel-seam .o is not a release asset; see DD-023).
     fields:
       category: functional
       priority: could
