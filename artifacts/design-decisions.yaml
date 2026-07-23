@@ -1438,15 +1438,27 @@ artifacts:
            (k_spin_lock/unlock, z_ready_thread, z_reschedule, z_unpend_first_thread, gale_w_msgq_pend/
            thread_swap_data/memcpy, arch_thread_return_value_set) - NEITHER is the consumable unit.
            RESOLUTION (gale to record its own DD, mirroring this one, tracked for the gale v0.6 cut): gale's
-           consumable delivery = a cosign-signed OCI wasm COMPONENT = the FUSED gale-nano runtime subset
-           (msgq/mutex/sem + gust:os + executor) that resolves the scheduler seam INTERNALLY, leaving only a
-           thin documented host contract. DELIVERY INVARIANT jess asked gale to hold: that residual host
-           surface = `gust:hal` (bus/MMIO/PWM/time = DD-018's thin native seam jess provides per core) and
-           stays that thin (no leaking scheduler/heap imports). Then jess's per-core meld_fuse pulls relay's
-           Level-1 flight components + gale's fused gale-nano component (both OCI) and fuses+lowers them - the
-           gale component is the SUBSTRATE INPUT, not competing with jess's fusion. Cross-linked DD-026 <-> the
-           forthcoming gale DD; F100-failsafe=VER-OS-HM-001 half already consistent (v0.5.0). RECORD not
-           build-ahead (both float-gated), aligned now while the contract shape is fresh.
+           consumable delivery = a cosign-signed OCI wasm COMPONENT = the `gust:os` PROVIDERS (executor +
+           the capability world), NOT a monolithic runtime blob. THREE WIT LAYERS, each owned by the right
+           party (corrected 2026-07-24 - the composition seam is gust:os, gale's component-model abstraction,
+           not gust:hal):
+             (i)   `gust:os` = the CAPABILITY abstraction (app<->runtime, the component-model seam): a typed
+                   capability world (log/channel/io/spawn/taskdisp) = "the OS surface an app sees". relay's
+                   flight components IMPORT gust:os; gale's OCI component EXPORTS gust:os. Composition happens
+                   ALONG gust:os (gale's wac plug + meld fuse --memory shared pipeline). GALE OWNS its shape.
+             (ii)  the DATA seams (`sensor-sample`/`actuator-cmd`/NavState = the step() dataflow) = app<->app,
+                   JESS-AADL-DEFINED (spar codegen, REQ-PIX-007).
+             (iii) `gust:hal` = the NATIVE residual (runtime<->silicon, mmio): after the gust:os composition
+                   dissolves, the ONLY undefined symbols are gust:hal (bus/MMIO/PWM/time = DD-018's thin
+                   native base) - JESS provides it per core. The scheduler primitives (z_ready_thread/
+                   z_reschedule/gale_w_msgq_pend/...) live BELOW gust:os, resolved by the composed executor,
+                   never exposed to the flight app OR the native host.
+           So jess's per-core meld_fuse composes relay-flight(imports gust:os) + gale gust:os-providers
+           (both OCI) -> one image whose residual is gust:hal (jess native). Delivery invariant is two-part:
+           (a) the app-composition seam is the STABLE gust:os capability world (gale-owned), (b) the native
+           residual stays exactly gust:hal (no leaking scheduler/heap). Cross-linked DD-026 <-> the forthcoming
+           gale DD; F100-failsafe=VER-OS-HM-001 half already consistent (v0.5.0). RECORD not build-ahead (both
+           float-gated), aligned now while the contract shape is fresh.
       SEQUENCING HONESTY (stated on jess#167): the contract can be designed+prototyped now, but the M7
       CASCADE cannot lower on-target yet (AFD-035/synth#782, 13 skips). The F100 failsafe is lowerable NOW
       (the best end-to-end validation target this cycle); the M4 estimator is next (modulo f64); the M7
