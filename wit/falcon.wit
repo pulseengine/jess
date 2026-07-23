@@ -8,6 +8,14 @@ interface falcon-ports {
         m2: f32,
         m3: f32,
     }
+    record imu-sample-raw {
+        gx: f32,
+        gy: f32,
+        gz: f32,
+        ax: f32,
+        ay: f32,
+        az: f32,
+    }
     record vehicle-state-nav {
         qw: f32,
         qx: f32,
@@ -28,6 +36,7 @@ interface falcon-ports {
     }
 
     state-in: func() -> vehicle-state-nav;
+    imu-in: func() -> imu-sample-raw;
     set-cmd-out: func(val: actuator-cmd-pwm);
 }
 

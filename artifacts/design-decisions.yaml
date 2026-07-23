@@ -583,6 +583,22 @@ artifacts:
       device SEMANTICS. Consistent with DD-011 (the gust TCB is the same tiny
       host-import shape) and DD-012 (relay abstracts / jess binds). Detailed per-seam
       spec posted to relay on jess#62.
+      REFINED AGAIN 2026-07-24 (gale v0.5.0 verified DRIVER SUITE - the driver-path half of the
+      DD-026 consumption contract): gale now ships VERIFIED thin-seam bus drivers (spi/i2c/adc/can/pwm/
+      gpio/dac/wdg) - Kani-proven + SILICON-VALIDATED (adc read Vrefint on a real STM32F100; wdg fired on
+      a G474) - each a dissolved wasm FSM touching silicon ONLY over gust:hal (the raw mmio seam). This
+      pushes the BUS TRANSPORT that this DD put in jess's NATIVE host DOWN into gale-verified WASM, so
+      jess's native TCB SHRINKS to just gust:hal (the RT1176 mmio addresses / thin native shim) - MORE
+      gale-maximal-wasm, the exact principle this DD cited. NEW LAYERING (bottom-up): gust:hal [JESS
+      native] -> gale verified thin-seam bus driver [GALE, implements the embedded-hal-async transport
+      SpiDevice/I2c/AdcIn] -> relay protocol/decode/voting [RELAY, imu reg-map, UBX, DroneCAN, EKF
+      voting] -> sensor-sample [the data seam, JESS AADL/spar] -> relay flight app. OPEN RECONCILIATION
+      (raised on jess#167): the gale-bus-driver <-> relay-protocol-driver boundary must be a named seam -
+      cleanest = the embedded-hal-async transport traits (gale IMPLEMENTS verified; relay CONSUMES for
+      reg-map/decode), so the register-level bus is owned once (gale), not double-claimed vs DD-015's
+      "relay owns drivers". Also: gale's gust-target-gen AADL device model overlaps jess's
+      hardware/pixhawk6x-rt.aadl - the RT1176 target model needs ONE owner (jess owns it; gale generates
+      per-target constants FROM it). To pin in the DD-026 driver-path extension once gale/relay confirm.
       REFINED by DD-018: the transport trait SHAPE named here (bespoke RegBus/SerialBus,
       read-reg) is SUPERSEDED - the seam now anchors on embedded-hal-async SpiDevice/I2c
       + embedded-io-async at TRANSACTION granularity (register helpers move relay-side).
@@ -1411,3 +1427,112 @@ artifacts:
         target: DD-023
       - type: traces-to
         target: DD-011
+
+  - id: DD-026
+    type: design-decision
+    title: relay->jess flight-component consumption contract - Level-1 fine-grained streams delivered as OCI, jess owns per-core meld-fuse + on-target lowering + attestation; synchronous step() seam per ARINC-653 window; spar-generated seam types; F100 failsafe on gale's verified HM FSM
+    status: proposed
+    description: >
+      Answers relay's consumption-contract discussion (jess#167, 2026-07-23): with a WASM Component
+      Model runtime now on all three cores and falcon-flight published as a cosign-signed OCI component,
+      relay asked jess (the system-integration + on-target authority) to pin HOW jess consumes relay's
+      flight components before relay mints interfaces. jess's POSITION (proposed; to be validated by
+      relay's falcon-rate worked example before -> accepted):
+        1. GRANULARITY: relay delivers the FINE-GRAINED Level-1 verified stream components (falcon-iekf/
+           position/attitude/rate/mixer-stream, relay-fsafe) as cosign-signed OCI + a wiring/placement
+           manifest; JESS owns the per-core meld_fuse + lowering (loom -> synth per-target-ISA fpv5-d16/
+           fpv4-sp/soft-float -> gale-link) + the flashable-set attestation. NOT pre-fused per-core
+           bundles - DD-018 puts wasm->ARM on jess, and jess's pipeline signs its OWN fused output
+           (path-independent-reproducible TEST-PIX-026 + sigil TEST-PIX-029). relay's falcon-cascade-
+           stream-fused is a REFERENCE fusion to cross-check, not the delivery unit.
+        2. SEAM SHAPE: layered per DD-025's two levels. The per-core seam jess SCHEDULES is synchronous
+           `step(sensor-sample) -> actuator-cmd` = the ARINC-653 partition-window activation (bounded
+           per-tick -> WCET-analyzable via spar timing + kiln fuel). relay keeps `stream<T>` for Level-1
+           INTRA-bundle composition (the inner cooperative kiln-async). Streams compose intra-core; the
+           partition tick drives one step per window.
+        3. SEAM TYPES: spar-generated from jess's AADL, 1:1 with the HAL peripheral seams (jess#62/
+           relay#214). Already realized: actuator-cmd = ActuatorCmd.pwm, NavState = VehicleState.nav
+           (REQ-PIX-007/TEST-PIX-023). jess's AADL is the type source of truth; same records flow
+           driver->estimator->core->mixer->failsafe.
+        4. F100 FAILSAFE: maximal-WASM on the F100/M3 (confirmed all-cores-wasm; gust pass-through proven
+           TEST-PIX-027/028), but the safety FSM = gale's VERIFIED HM/failsafe (VER-OS-HM-001, gale v0.5.0),
+           NOT a parallel wasm-wrapped relay-fsafe. relay owns the value-domain policy above gale's verified
+           mechanism (REQ-PIX-009).
+        5. DELIVERY: OCI-per-Level-1-component per relay release (cosign), one ghcr repo each. jess's
+           right-side-of-V gates (scry TEST-PIX-022, witness jess#91, repro TEST-PIX-026, sigil TEST-PIX-029)
+           run on the FUSED flashable set jess produces - complementing relay's source-level DWARF MC/DC.
+           GALE ALIGNMENT (gale#223, 2026-07-24 - AGREED with the gale maintainer): gale is a co-supplier
+           of what jess fuses per core (F100 failsafe = gale VER-OS-HM-001 FSM; all cores = gust:os +
+           msgq/mutex/sem + the Verus-proven executor) but ships RELEASE-TARBALL assets, NOT OCI. ARTIFACT
+           SHAPES pinned: the v0.5.0 msgq `.o` is the self-contained DECISION FRAGMENT (gale_k_msgq_put_decide,
+           0 undef); the `.wasm` is the CORE MODULE carrying the 9-symbol env scheduler seam
+           (k_spin_lock/unlock, z_ready_thread, z_reschedule, z_unpend_first_thread, gale_w_msgq_pend/
+           thread_swap_data/memcpy, arch_thread_return_value_set) - NEITHER is the consumable unit.
+           RESOLUTION (gale to record its own DD, mirroring this one, tracked for the gale v0.6 cut): gale's
+           consumable delivery = a cosign-signed OCI wasm COMPONENT = the `gust:os` PROVIDERS (executor +
+           the capability world), NOT a monolithic runtime blob. THREE WIT LAYERS, each owned by the right
+           party (corrected 2026-07-24 - the composition seam is gust:os, gale's component-model abstraction,
+           not gust:hal):
+             (i)   `gust:os` = the CAPABILITY abstraction (app<->runtime, the component-model seam): a typed
+                   capability world (log/channel/io/spawn/taskdisp) = "the OS surface an app sees". relay's
+                   flight components IMPORT gust:os; gale's OCI component EXPORTS gust:os. Composition happens
+                   ALONG gust:os (gale's wac plug + meld fuse --memory shared pipeline). GALE OWNS its shape.
+             (ii)  the DATA seams (`sensor-sample`/`actuator-cmd`/NavState = the step() dataflow) = app<->app,
+                   JESS-AADL-DEFINED (spar codegen, REQ-PIX-007).
+             (iii) `gust:hal` = the NATIVE residual (runtime<->silicon, mmio): after the gust:os composition
+                   dissolves, the ONLY undefined symbols are gust:hal (bus/MMIO/PWM/time = DD-018's thin
+                   native base) - JESS provides it per core. The scheduler primitives (z_ready_thread/
+                   z_reschedule/gale_w_msgq_pend/...) live BELOW gust:os, resolved by the composed executor,
+                   never exposed to the flight app OR the native host.
+           So jess's per-core meld_fuse composes relay-flight(imports gust:os) + gale gust:os-providers
+           (both OCI) -> one image whose residual is gust:hal (jess native). Delivery invariant is two-part:
+           (a) the app-composition seam is the STABLE gust:os capability world (gale-owned), (b) the native
+           residual stays exactly gust:hal (no leaking scheduler/heap). BILATERALLY PINNED 2026-07-24: gale
+           landed its side as `DD-OS-DELIVERY-001` (gale#225, rivet PASS, refines SAC-BYOOS-LIBOS) - the
+           gust:os correction baked in (component EXPORTS gust:os; scheduler resolved below it; residual =
+           gust:hal) - with the build target `gale#224` (the fused gale-nano component) bound to the gale v0.6
+           cut. ACCEPTANCE INVARIANT (gale's, matches jess's ask): wasm-tools confirms a *component* exporting
+           gust:os, and after `wac plug (+) meld fuse --memory shared -> loom -> synth` the ONLY undefined
+           symbols are the gust:hal mmio seam (no scheduler/heap leak) - already demonstrated at the tl/ts node
+           level (VER-OS-SYSCALL-001: residual = exactly the gust:hal seam + typed taskdisp), gale#224
+           generalizes it to a published self-contained component. DD-026 <-> DD-OS-DELIVERY-001 cross-linked.
+           F100-failsafe=VER-OS-HM-001 half already consistent (v0.5.0). RECORD not build-ahead (both
+           float-gated), aligned now while the contract shape is fresh.
+      SEQUENCING HONESTY (stated on jess#167): the contract can be designed+prototyped now, but the M7
+      CASCADE cannot lower on-target yet (AFD-035/synth#782, 13 skips). The F100 failsafe is lowerable NOW
+      (the best end-to-end validation target this cycle); the M4 estimator is next (modulo f64); the M7
+      cascade lowering-validation waits on synth's falcon-skip-to-zero lane. relay's falcon-rate example is
+      endorsed for the SHAPE; on-target lowering validation runs first on the green-today F100/M3 path.
+      RELAY CONVERGED 2026-07-24 (jess#167) on option (a) + two principles jess accepted:
+        P1 - INTEGRATOR OWNS THE SEAM; relay stays airframe/target-agnostic. The cross-core seam
+             (VehicleState.nav, ActuatorCmd.pwm) is jess's, spar-generated from jess's AADL, fixed per
+             target at fuse-time INCLUDING the airframe-coupled actuator width. ActuatorCmd.pwm=4xf32 is
+             jess's X500-V2/quad specialization (DD-022); a later hex = a jess-side seam-WIDTH change +
+             the mix-matrix in the placement manifest, relay's mixer parameterized UNDERNEATH an unchanged
+             relay component (no relay fork). Confirms decision 3.
+        P2 - LOOP-COMPLETE minimality + CLOSED-LOOP-PROOF evidence. Seam floor: smallest that still CLOSES
+             the control loop, no smaller (can't shrink NavState below the 16-state or drop gyro from a
+             rate input). Every relay component ships a CLOSED-loop proof (torque->plant->gyro->back,
+             tracking over N ticks), not an open-loop step stub. PROOF DIVISION: relay proves the loop
+             closes IN-SOURCE (SIL); jess proves it STILL closes AFTER wasm->ARM lowering (the SIL-vs-Renode
+             differential jess already runs for gust + the fused falcon) = jess's on-target value-add; the
+             two stack into the full V per stage. BONUS: falcon-rate as its OWN OCI entity lets jess measure
+             the PER-STAGE synth skip inventory (vs the whole-fused 13, AFD-035) -> tells relay+synth which
+             cascade stage blocks first on the float gate (a falcon-skip-to-zero priority signal).
+    tags: [phase-2, consumption-contract, relay, oci, meld-fuse, on-target, wit, dd-018, dd-025, req-pix-007, jess-167, coordination]
+    fields:
+      rationale: >-
+        jess is the system-integration + on-target authority (jess#62<->relay#214); the lowering +
+        attestation pipeline (DD-018, TEST-PIX-026/029) must operate on jess's own fused output, so jess
+        owns the fusion and relay delivers verified Level-1 parts + a manifest. The seam shape falls out
+        of DD-025's two-level schedule (step at the partition boundary, streams inside). Proposed, not
+        accepted, pending relay's falcon-rate worked example validating the seam end-to-end.
+    links:
+      - type: satisfies
+        target: REQ-PIX-007
+      - type: traces-to
+        target: DD-018
+      - type: traces-to
+        target: DD-025
+      - type: traces-to
+        target: DD-023
