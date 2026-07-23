@@ -1235,6 +1235,17 @@ artifacts:
           (RC-in, 4x failsafe-PWM, 4S low-batt trip) + THE INTER-CORE IPC: gale#65 (MU-map +
           gust ipc-rx) is the open thread for (3). gale = the native trusted base under the
           all-wasm seam.
+          DELIVERED — gale v0.4.0 (verified 2026-07-16, jess SHA-verified the assets 2026-07-23):
+          ships (a) the `gust:os` typed capability seam (log.line + spawn on a Verus-proven
+          executor, 1081+ obligations, via a WIT-typed `gust:os/taskdisp` boundary; VER-OS-SYSCALL-001
+          verified, no-lost-wakeups tri-track Verus+Kani+Rocq) and (b) verified sync primitives
+          DISSOLVED to cortex-m4f objects: `gale-wasm-msgq` (Zephyr k_msgq: exports z_impl_k_msgq_put /
+          gale_k_msgq_put_decide; undefined syms = the gale_w_* kernel seam), `-mutex`, `-sem`.
+          jess CONSEQUENCE: the msgq is the VERIFIED inter-core IPC carrier for the NavState crossing
+          (REQ-PIX-007 / TEST-PIX-030) - jess's current oracle uses a hand-rolled SHMEM flag handshake;
+          the next rung grounds it on gale's k_msgq (over the shmem vring + the MU doorbell already in
+          rt1176-dualcore.repl), closing gale#65's gust ipc-rx on jess's side. The gust:os seam +
+          executor are the gale-nano substrate for REQ-PIX-002 (M7 native base) / REQ-PIX-009 (F100).
         - RELAY (falcon + relay-hal): PARTITION the stack along the core boundaries (flight
           / estimator / failsafe) so each is separately fuse+compilable; plus the DD-022
           driver asks (TF02 rangefinder REQ-PIX-020, dual-M9N blend, 4S AdcIn). Sequenced
