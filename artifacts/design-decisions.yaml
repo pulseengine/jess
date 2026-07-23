@@ -1464,6 +1464,22 @@ artifacts:
       (the best end-to-end validation target this cycle); the M4 estimator is next (modulo f64); the M7
       cascade lowering-validation waits on synth's falcon-skip-to-zero lane. relay's falcon-rate example is
       endorsed for the SHAPE; on-target lowering validation runs first on the green-today F100/M3 path.
+      RELAY CONVERGED 2026-07-24 (jess#167) on option (a) + two principles jess accepted:
+        P1 - INTEGRATOR OWNS THE SEAM; relay stays airframe/target-agnostic. The cross-core seam
+             (VehicleState.nav, ActuatorCmd.pwm) is jess's, spar-generated from jess's AADL, fixed per
+             target at fuse-time INCLUDING the airframe-coupled actuator width. ActuatorCmd.pwm=4xf32 is
+             jess's X500-V2/quad specialization (DD-022); a later hex = a jess-side seam-WIDTH change +
+             the mix-matrix in the placement manifest, relay's mixer parameterized UNDERNEATH an unchanged
+             relay component (no relay fork). Confirms decision 3.
+        P2 - LOOP-COMPLETE minimality + CLOSED-LOOP-PROOF evidence. Seam floor: smallest that still CLOSES
+             the control loop, no smaller (can't shrink NavState below the 16-state or drop gyro from a
+             rate input). Every relay component ships a CLOSED-loop proof (torque->plant->gyro->back,
+             tracking over N ticks), not an open-loop step stub. PROOF DIVISION: relay proves the loop
+             closes IN-SOURCE (SIL); jess proves it STILL closes AFTER wasm->ARM lowering (the SIL-vs-Renode
+             differential jess already runs for gust + the fused falcon) = jess's on-target value-add; the
+             two stack into the full V per stage. BONUS: falcon-rate as its OWN OCI entity lets jess measure
+             the PER-STAGE synth skip inventory (vs the whole-fused 13, AFD-035) -> tells relay+synth which
+             cascade stage blocks first on the float gate (a falcon-skip-to-zero priority signal).
     tags: [phase-2, consumption-contract, relay, oci, meld-fuse, on-target, wit, dd-018, dd-025, req-pix-007, jess-167, coordination]
     fields:
       rationale: >-
