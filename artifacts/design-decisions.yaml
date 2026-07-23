@@ -1244,7 +1244,14 @@ artifacts:
           jess CONSEQUENCE: the msgq is the VERIFIED inter-core IPC carrier for the NavState crossing
           (REQ-PIX-007 / TEST-PIX-030) - jess's current oracle uses a hand-rolled SHMEM flag handshake;
           the next rung grounds it on gale's k_msgq (over the shmem vring + the MU doorbell already in
-          rt1176-dualcore.repl), closing gale#65's gust ipc-rx on jess's side. The gust:os seam +
+          rt1176-dualcore.repl), closing gale#65's gust ipc-rx on jess's side. WHAT JESS NEEDS TO CONSUME
+          k_msgq (found 2026-07-24, RECORD not file - jess is float-gated, not ready-to-bind): the
+          gale-wasm-msgq-v0.4.0-cortex-m4f.o has 9 UNDEFINED scheduler-seam symbols (gale_w_msgq_pend /
+          ready_thread / reschedule / thread_swap_data / unpend_first_thread / spin_lock/unlock /
+          arch_thread_return_value_set / memcpy) - the gale kernel, which the v0.4.0 release does NOT
+          ship as standalone linkable objects. So to LINK+RUN k_msgq jess needs gale to also expose the
+          kernel-seam .o (or jess links the fused gale-nano core that already contains it) - the concrete
+          gale ask to FILE when jess can bind. The gust:os seam +
           executor are the gale-nano substrate for REQ-PIX-002 (M7 native base) / REQ-PIX-009 (F100).
           TRACK DISCIPLINE (do NOT treat proposed-as-delivered): the above are on gale's CUT v0.4.0
           FUNCTIONAL line (SHA-verified assets on the release). gale's SAFETY line is a SEPARATE
