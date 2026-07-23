@@ -2,6 +2,14 @@
 package pixhawk6-x-r-t:estimator;
 
 interface estimator-ports {
+    record imu-sample-raw {
+        gx: f32,
+        gy: f32,
+        gz: f32,
+        ax: f32,
+        ay: f32,
+        az: f32,
+    }
     record vehicle-state-nav {
         qw: f32,
         qx: f32,
@@ -21,6 +29,7 @@ interface estimator-ports {
         baz: f32,
     }
 
+    imu-in: func() -> imu-sample-raw;
     set-state-out: func(val: vehicle-state-nav);
 }
 
