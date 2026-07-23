@@ -1430,6 +1430,15 @@ artifacts:
         5. DELIVERY: OCI-per-Level-1-component per relay release (cosign), one ghcr repo each. jess's
            right-side-of-V gates (scry TEST-PIX-022, witness jess#91, repro TEST-PIX-026, sigil TEST-PIX-029)
            run on the FUSED flashable set jess produces - complementing relay's source-level DWARF MC/DC.
+           GALE ALIGNMENT (filed gale#223, 2026-07-24): gale is a co-supplier of what jess fuses per core
+           (F100 failsafe = gale VER-OS-HM-001 FSM; all cores = gust:os + msgq/mutex/sem + executor) but
+           ships RELEASE-TARBALL .o/.wasm assets, NOT OCI - so per-core meld-fuse would pull relay from
+           ghcr-OCI and gale from a tarball (two acquisition paths). Asked gale to publish its verified
+           consumable components (incl. the fused gale-nano subset) as cosign-signed OCI wasm components
+           like falcon-flight, so jess pulls all 3 cores' inputs uniformly (one OCI+cosign path) AND an
+           OCI-published *component* sidesteps the standalone-.o unshipped-scheduler-seam problem (jess
+           meld-fuses a component, not a bag of objects). RECORD not build-ahead (float-gated), but aligned
+           now while the contract shape is fresh.
       SEQUENCING HONESTY (stated on jess#167): the contract can be designed+prototyped now, but the M7
       CASCADE cannot lower on-target yet (AFD-035/synth#782, 13 skips). The F100 failsafe is lowerable NOW
       (the best end-to-end validation target this cycle); the M4 estimator is next (modulo f64); the M7
