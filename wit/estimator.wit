@@ -2,9 +2,26 @@
 package pixhawk6-x-r-t:estimator;
 
 interface estimator-ports {
-    type vehicle-state = list<u8>;
+    record vehicle-state-nav {
+        qw: f32,
+        qx: f32,
+        qy: f32,
+        qz: f32,
+        px: f32,
+        py: f32,
+        pz: f32,
+        vx: f32,
+        vy: f32,
+        vz: f32,
+        bgx: f32,
+        bgy: f32,
+        bgz: f32,
+        bax: f32,
+        bay: f32,
+        baz: f32,
+    }
 
-    set-state-out: func(val: vehicle-state);
+    set-state-out: func(val: vehicle-state-nav);
 }
 
 world estimator-world {

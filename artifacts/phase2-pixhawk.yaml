@@ -1028,11 +1028,13 @@ artifacts:
       Hermetic: committed producer/consumer ELFs (arm-none-eabi, build.sh regenerates; ELF addresses +
       the robot are a matched pair). This is the inter-core IPC foundation the FIRST-FLASH 3-core model
       needs; the MU doorbell datapath (M4->M7 RR0) is separately exercised by the vehicle multinode demo
-      (TEST-PIX-019). NEXT RUNG: WIT-type the NavState record (REQ-PIX-007) - currently spar-GATED
-      (AFD-036/spar#345: spar codegen emits opaque list<u8> for every AADL data type, not a structured
-      record/list<f32>), so the typed-contract half of REQ-PIX-007 waits on spar; the byte-exact
-      crossing (this test) is independent of it. Then swap the fixed pattern for gale's verified k_msgq
-      (gale v0.4.0, DD-023) + relay's real estimator NavState when the M4 estimator lowers on-target.
+      (TEST-PIX-019). WIT-TYPING DONE 2026-07-23 (AFD-036 resolved): the NavState is now a structured
+      WIT record - hardware/pixhawk6x-rt.aadl carries VehicleState.nav (16xf32) + ActuatorCmd.pwm (4xf32),
+      ports bound to the data implementations, and `spar codegen` emits `record vehicle-state-nav {qw:f32
+      ..baz:f32}` + `record actuator-cmd-pwm {m0..m3:f32}` (verified by the TEST-PIX-023 WIT-derivation
+      gate). So REQ-PIX-007 now has BOTH halves: the byte-exact crossing (this test) + the typed contract
+      (the record). NEXT RUNG: swap the fixed pattern for gale's verified k_msgq (gale v0.4.0, DD-023) +
+      relay's real estimator NavState when the M4 estimator lowers on-target.
     tags: [phase-2, inter-core, ipc, navstate, shmem, dual-core, rt1176, byte-exact, on-target, ci-gate, oracle, verification, req-pix-007]
     links:
       - type: verifies

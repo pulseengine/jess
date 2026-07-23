@@ -2,9 +2,14 @@
 package pixhawk6-x-r-t:failsafe;
 
 interface failsafe-ports {
-    type actuator-cmd = list<u8>;
+    record actuator-cmd-pwm {
+        m0: f32,
+        m1: f32,
+        m2: f32,
+        m3: f32,
+    }
 
-    cmd-in: func() -> actuator-cmd;
+    cmd-in: func() -> actuator-cmd-pwm;
 }
 
 world failsafe-world {
