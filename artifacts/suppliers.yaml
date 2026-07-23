@@ -103,3 +103,18 @@ artifacts:
     links:
       - type: traces-to
         target: REQ-001
+
+  - id: EXTERNALANCHOR-008
+    type: external-anchor
+    title: spar (AADL→WIT/analysis) — architecture-model supplier boundary
+    status: accepted
+    description: >
+      pulseengine/spar is the AADL modeling + analysis tool: jess's hardware/pixhawk6x-rt.aadl is the source of truth for the 3-core + peripheral architecture, and `spar codegen --format wit` DERIVES the inter-core WIT contracts from it (REQ-PIX-007 / TEST-PIX-023, the WIT-derivation CI gate). An external supplier; its internal implementation is not traced here. Defects affecting jess's model->WIT derivation (e.g. structured data types) are recorded as ai-found-defects against this boundary.
+    tags: [supplier, spar, aadl, wit, codegen]
+    fields:
+      expected-derived-types: ["ai-found-defect"]
+      received-status: not-received
+      source-of-truth: {"org": "pulseengine", "doc-id": "spar-codegen-wit"}
+    links:
+      - type: traces-to
+        target: REQ-PIX-007
