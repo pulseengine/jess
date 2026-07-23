@@ -1396,3 +1396,59 @@ artifacts:
         target: DD-023
       - type: traces-to
         target: DD-011
+
+  - id: DD-026
+    type: design-decision
+    title: relay->jess flight-component consumption contract - Level-1 fine-grained streams delivered as OCI, jess owns per-core meld-fuse + on-target lowering + attestation; synchronous step() seam per ARINC-653 window; spar-generated seam types; F100 failsafe on gale's verified HM FSM
+    status: proposed
+    description: >
+      Answers relay's consumption-contract discussion (jess#167, 2026-07-23): with a WASM Component
+      Model runtime now on all three cores and falcon-flight published as a cosign-signed OCI component,
+      relay asked jess (the system-integration + on-target authority) to pin HOW jess consumes relay's
+      flight components before relay mints interfaces. jess's POSITION (proposed; to be validated by
+      relay's falcon-rate worked example before -> accepted):
+        1. GRANULARITY: relay delivers the FINE-GRAINED Level-1 verified stream components (falcon-iekf/
+           position/attitude/rate/mixer-stream, relay-fsafe) as cosign-signed OCI + a wiring/placement
+           manifest; JESS owns the per-core meld_fuse + lowering (loom -> synth per-target-ISA fpv5-d16/
+           fpv4-sp/soft-float -> gale-link) + the flashable-set attestation. NOT pre-fused per-core
+           bundles - DD-018 puts wasm->ARM on jess, and jess's pipeline signs its OWN fused output
+           (path-independent-reproducible TEST-PIX-026 + sigil TEST-PIX-029). relay's falcon-cascade-
+           stream-fused is a REFERENCE fusion to cross-check, not the delivery unit.
+        2. SEAM SHAPE: layered per DD-025's two levels. The per-core seam jess SCHEDULES is synchronous
+           `step(sensor-sample) -> actuator-cmd` = the ARINC-653 partition-window activation (bounded
+           per-tick -> WCET-analyzable via spar timing + kiln fuel). relay keeps `stream<T>` for Level-1
+           INTRA-bundle composition (the inner cooperative kiln-async). Streams compose intra-core; the
+           partition tick drives one step per window.
+        3. SEAM TYPES: spar-generated from jess's AADL, 1:1 with the HAL peripheral seams (jess#62/
+           relay#214). Already realized: actuator-cmd = ActuatorCmd.pwm, NavState = VehicleState.nav
+           (REQ-PIX-007/TEST-PIX-023). jess's AADL is the type source of truth; same records flow
+           driver->estimator->core->mixer->failsafe.
+        4. F100 FAILSAFE: maximal-WASM on the F100/M3 (confirmed all-cores-wasm; gust pass-through proven
+           TEST-PIX-027/028), but the safety FSM = gale's VERIFIED HM/failsafe (VER-OS-HM-001, gale v0.5.0),
+           NOT a parallel wasm-wrapped relay-fsafe. relay owns the value-domain policy above gale's verified
+           mechanism (REQ-PIX-009).
+        5. DELIVERY: OCI-per-Level-1-component per relay release (cosign), one ghcr repo each. jess's
+           right-side-of-V gates (scry TEST-PIX-022, witness jess#91, repro TEST-PIX-026, sigil TEST-PIX-029)
+           run on the FUSED flashable set jess produces - complementing relay's source-level DWARF MC/DC.
+      SEQUENCING HONESTY (stated on jess#167): the contract can be designed+prototyped now, but the M7
+      CASCADE cannot lower on-target yet (AFD-035/synth#782, 13 skips). The F100 failsafe is lowerable NOW
+      (the best end-to-end validation target this cycle); the M4 estimator is next (modulo f64); the M7
+      cascade lowering-validation waits on synth's falcon-skip-to-zero lane. relay's falcon-rate example is
+      endorsed for the SHAPE; on-target lowering validation runs first on the green-today F100/M3 path.
+    tags: [phase-2, consumption-contract, relay, oci, meld-fuse, on-target, wit, dd-018, dd-025, req-pix-007, jess-167, coordination]
+    fields:
+      rationale: >-
+        jess is the system-integration + on-target authority (jess#62<->relay#214); the lowering +
+        attestation pipeline (DD-018, TEST-PIX-026/029) must operate on jess's own fused output, so jess
+        owns the fusion and relay delivers verified Level-1 parts + a manifest. The seam shape falls out
+        of DD-025's two-level schedule (step at the partition boundary, streams inside). Proposed, not
+        accepted, pending relay's falcon-rate worked example validating the seam end-to-end.
+    links:
+      - type: satisfies
+        target: REQ-PIX-007
+      - type: traces-to
+        target: DD-018
+      - type: traces-to
+        target: DD-025
+      - type: traces-to
+        target: DD-023
