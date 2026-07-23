@@ -1527,6 +1527,20 @@ artifacts:
         owns the fusion and relay delivers verified Level-1 parts + a manifest. The seam shape falls out
         of DD-025's two-level schedule (step at the partition boundary, streams inside). Proposed, not
         accepted, pending relay's falcon-rate worked example validating the seam end-to-end.
+        COORDINATION-MODEL CAVEAT (clean-room self-verify, 2026-07-24): the relay/jess/gale "agreements"
+        on jess#167 + gale#223/#225 are all authored by ONE maintainer (avrabe) wearing multiple supplier
+        hats - single-actor coordination, NOT independent-party sign-off. So "bilaterally pinned" means one
+        human's consistent design across repos, and jess MUST keep validating every supplier claim against
+        the REAL BUILD (the standing discipline - see AFD-035, the synth #369-closed-but-26-skips catch)
+        rather than treat the agreement as external validation. The mechanical acceptance gates (jess's
+        per-core fuse checking gale's gust:hal-only residual invariant; the falcon-rate consumption-path
+        run; the closed-loop-survives-lowering differential) are what make it real, not the thread consensus.
+        MELD WATCH (v0.42.0, 2026-07-24): meld's ADR-7 work landed multiply-instantiated module support
+        (RFC-46) + static-PIC data/element-offset fold + the canonical-mix-and-match-vs-symmetric/PIC
+        linking-strategy seam - directly relevant to this contract's per-core meld_fuse of relay's Level-1
+        components + gale's gust:os-provider component. CI stays pinned at meld v0.41.3; re-verify the
+        reproducibility gate (TEST-PIX-026) + the multi-component fuse when jess is un-floated and pulls the
+        real Level-1 set.
     links:
       - type: satisfies
         target: REQ-PIX-007
