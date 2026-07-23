@@ -1430,15 +1430,23 @@ artifacts:
         5. DELIVERY: OCI-per-Level-1-component per relay release (cosign), one ghcr repo each. jess's
            right-side-of-V gates (scry TEST-PIX-022, witness jess#91, repro TEST-PIX-026, sigil TEST-PIX-029)
            run on the FUSED flashable set jess produces - complementing relay's source-level DWARF MC/DC.
-           GALE ALIGNMENT (filed gale#223, 2026-07-24): gale is a co-supplier of what jess fuses per core
-           (F100 failsafe = gale VER-OS-HM-001 FSM; all cores = gust:os + msgq/mutex/sem + executor) but
-           ships RELEASE-TARBALL .o/.wasm assets, NOT OCI - so per-core meld-fuse would pull relay from
-           ghcr-OCI and gale from a tarball (two acquisition paths). Asked gale to publish its verified
-           consumable components (incl. the fused gale-nano subset) as cosign-signed OCI wasm components
-           like falcon-flight, so jess pulls all 3 cores' inputs uniformly (one OCI+cosign path) AND an
-           OCI-published *component* sidesteps the standalone-.o unshipped-scheduler-seam problem (jess
-           meld-fuses a component, not a bag of objects). RECORD not build-ahead (float-gated), but aligned
-           now while the contract shape is fresh.
+           GALE ALIGNMENT (gale#223, 2026-07-24 - AGREED with the gale maintainer): gale is a co-supplier
+           of what jess fuses per core (F100 failsafe = gale VER-OS-HM-001 FSM; all cores = gust:os +
+           msgq/mutex/sem + the Verus-proven executor) but ships RELEASE-TARBALL assets, NOT OCI. ARTIFACT
+           SHAPES pinned: the v0.5.0 msgq `.o` is the self-contained DECISION FRAGMENT (gale_k_msgq_put_decide,
+           0 undef); the `.wasm` is the CORE MODULE carrying the 9-symbol env scheduler seam
+           (k_spin_lock/unlock, z_ready_thread, z_reschedule, z_unpend_first_thread, gale_w_msgq_pend/
+           thread_swap_data/memcpy, arch_thread_return_value_set) - NEITHER is the consumable unit.
+           RESOLUTION (gale to record its own DD, mirroring this one, tracked for the gale v0.6 cut): gale's
+           consumable delivery = a cosign-signed OCI wasm COMPONENT = the FUSED gale-nano runtime subset
+           (msgq/mutex/sem + gust:os + executor) that resolves the scheduler seam INTERNALLY, leaving only a
+           thin documented host contract. DELIVERY INVARIANT jess asked gale to hold: that residual host
+           surface = `gust:hal` (bus/MMIO/PWM/time = DD-018's thin native seam jess provides per core) and
+           stays that thin (no leaking scheduler/heap imports). Then jess's per-core meld_fuse pulls relay's
+           Level-1 flight components + gale's fused gale-nano component (both OCI) and fuses+lowers them - the
+           gale component is the SUBSTRATE INPUT, not competing with jess's fusion. Cross-linked DD-026 <-> the
+           forthcoming gale DD; F100-failsafe=VER-OS-HM-001 half already consistent (v0.5.0). RECORD not
+           build-ahead (both float-gated), aligned now while the contract shape is fresh.
       SEQUENCING HONESTY (stated on jess#167): the contract can be designed+prototyped now, but the M7
       CASCADE cannot lower on-target yet (AFD-035/synth#782, 13 skips). The F100 failsafe is lowerable NOW
       (the best end-to-end validation target this cycle); the M4 estimator is next (modulo f64); the M7
