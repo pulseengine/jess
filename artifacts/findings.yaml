@@ -1245,6 +1245,16 @@ artifacts:
       loom clears ~4 skippable funcs. The dominant residual blocker family = F32ConvertI64S + RA-exhaustion.
       Gate STILL OPEN. No regression, no upstream issue (v0.51 did not target the gate). aarch64 maturation is
       noted but not a Pixhawk target (RT1176 = M7/M4/M3, all cortex-m).
+      PER-TARGET-ISA SKIP MATRIX (north-star per-core build-matrix rung, synth v0.51.0 on the same fused+loom'd
+      falcon-v1.128): cortex-m7dp[M7,fpv5-d16]=9, cortex-m7=9, cortex-m4f[M4-estimator,fpv4-sp]=9, cortex-m4=30,
+      cortex-m3[F100-class,soft-float]=30. THREE load-bearing reads: (1) F32ConvertI64S=3 on EVERY target -
+      target-INDEPENDENT, the irreducible float-gate core (i64->f32 conv the arm backend can't lower on any ISA);
+      (2) the VFP targets (M7 + M4-estimator) share the SAME 9-skip floor - the estimator partition lowers to the
+      same gate as the M7 falcon, no separate estimator pole; (3) soft-float (m3/m4) EXPLODES register-allocator
+      pressure 6->27 (30 total) because there is no VFP register file - which INDEPENDENTLY CONFIRMS the F100 must
+      run the SMALL gale-verified failsafe FSM (VER-OS-HM-001), NOT a lowered full falcon (validates DD-025 core
+      partitioning + DD-026 decision 4 - you would never soft-float-lower the full cascade onto the F100). So the
+      float gate's true blocker set is the VFP-path 9 (shared M7/M4), F32ConvertI64S being its irreducible 3.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
