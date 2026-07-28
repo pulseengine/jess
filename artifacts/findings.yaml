@@ -1233,6 +1233,18 @@ artifacts:
       run-stabilization still lowers. #345 (my minimal repro) NOT yet actioned (3x #345 remain); no new
       pole. Remaining 13 = 3x #345 literal-pool + 2x #503 + #518 + VFP-f32-exhaustion + VCR-RA-003 +
       no-free-callee + i64-spill + #331. Progression 26->16->14->13. Gate STILL OPEN (13>0).
+      UPDATE 2026-07-28 (synth v0.51.0, real fused falcon-v1.128 sha 54020c5e): float gate UNCHANGED - as
+      EXPECTED. v0.51 is an AARCH64 backend release (#851 aarch64 non-param locals + linmem load/store, "runs
+      real WASM modules"; #850/#853 differential-oracle hardening) - it does NOT touch the ARM/cortex-m float
+      lowering path that holds the falcon skips. CONTROLLED re-measure on the FULL DD-018 chain (meld v0.39 ->
+      loom v1.2 optimize -> synth --relocatable -t cortex-m7dp): synth v0.50.0 and v0.51.0 emit the
+      BYTE-IDENTICAL skip set - same 9 functions (func_29/31/42 F32ConvertI64S i64->f32 conv; func_36/78
+      spill-slot-pool exhausted; func_88 no-free-callee; func_69/75/172 arm-backend compilation-failed). So
+      v0.51 makes zero falcon-lane progress (none was on offer - aarch64 is orthogonal to the RT1176 cortex-m
+      cores). NOTE the count here (9) is the loom-optimized full chain; the "13" above was pre-loom-optimize -
+      loom clears ~4 skippable funcs. The dominant residual blocker family = F32ConvertI64S + RA-exhaustion.
+      Gate STILL OPEN. No regression, no upstream issue (v0.51 did not target the gate). aarch64 maturation is
+      noted but not a Pixhawk target (RT1176 = M7/M4/M3, all cortex-m).
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
