@@ -1255,6 +1255,32 @@ artifacts:
       run the SMALL gale-verified failsafe FSM (VER-OS-HM-001), NOT a lowered full falcon (validates DD-025 core
       partitioning + DD-026 decision 4 - you would never soft-float-lower the full cascade onto the F100). So the
       float gate's true blocker set is the VFP-path 9 (shared M7/M4), F32ConvertI64S being its irreducible 3.
+      PER-STAGE BREAKTHROUGH 2026-07-28 (the jess#167 per-stage skip report; falcon-components-v1.128.tar.gz
+      ships EVERY cascade stage separately - all 10 SHA-verified - so no need to wait on relay's OCI push):
+      lowering each stage through the real chain (meld 0.39 fuse -> loom 1.2 -> synth 0.51 --relocatable
+      -t cortex-m7dp) gives a FAR sharper picture than the fused core, because the per-stage components KEEP
+      THEIR NAMES (the fused core degrades them to func_N).
+      *** MIXER LOWERS 100% CLEAN, TODAY, WITH THE FLOAT GATE OPEN ***: falcon-mixer-v1.128 -> 0 skips,
+      14/14 functions compiled, `falcon:cascade/mixer@0.7.0#mix` a REAL DEFINED symbol (nm: T), 0 external
+      symbols, 0 WASI imports, 24.5KB ARM .o. This is the FIRST falcon flight-stack component proven to lower
+      to the M7 - and it is the airframe-coupled stage that emits ActuatorCmd.pwm (DD-026 P1). On-target-ready
+      NOW; a candidate first real-falcon rung ahead of the full cascade.
+      Per-stage skips (cortex-m7dp): mixer=0, rate=3, attitude=3, position=3, ekf=3, iekf=4, flight(whole)=9.
+      THE GATE IS NOW PRECISELY NAMED - for every non-mixer stage it is the PUBLIC ENTRY POINT ITSELF that is
+      skipped, from EXACTLY TWO synth defect families:
+        GI-FPU-001/synth#369 F32ConvertI64U/S -> rate@0.7.0#tick, position@0.7.0#tick, ekf@0.7.0#estimate
+        GI-FPU-002 VFP register file exhausted (S0..S15 live, "no VFP spilling yet") -> attitude#tick, iekf#estimate
+      (+ the same 2-helper RA tail per stage: spill-slot-pool exhausted, no-free-callee-saved.) Fix those two
+      families and the whole cascade lowers.
+      ACTIONABLE SOURCE-LEVEL DODGE (given to relay): the F32ConvertI64U in rate.loom.wasm is a hi/lo
+      fixed-point widening - `f32.convert_i32_u * 2^-32 + f32.convert_i64_u` with an f32.const 0.001 adjacent,
+      i.e. a time/duration -> f32-seconds conversion. `f32.convert_i32_u` LOWERS FINE in the same expression;
+      only the i64 form fails. So narrowing that u64 to u32 before the cast (or passing dt pre-converted)
+      would unblock rate+position+ekf WITHOUT waiting on synth. attitude/iekf still need the genuine synth
+      VFP-spilling fix. jess deliberately left a timestamp OUT of ImuSample.raw for this reason.
+      CAVEAT: v1.128 components predate relay#314 (rate's no_std/WASI-free conversion), so rate here still
+      carries 21 WASI imports; only mixer is WASI-free in this tag. Re-run the sweep on the next release for
+      the converted-vs-not delta.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
