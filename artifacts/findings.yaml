@@ -1329,6 +1329,38 @@ artifacts:
       against the REAL fused falcon + per-stage components reporting the skip delta BY SYMBOL NAME (standing
       jess gate). Gate agreed = all 8 exports reach nm->T + execution differential incl. traps + the named
       falcon symbols rate#tick/position#tick/ekf#estimate. GI-FPU-002 stays a separate issue, not folded in.
+      SYNTH v0.52.0 SHIPPED THE FIX - VERIFIED AGAINST THE REAL BUILD 2026-07-29 (the standing jess gate;
+      SHA-verified darwin release). TWO-PART RESULT:
+      (A) THE FIX IS REAL AND SOUND. All 8 ops lower (nm -> T), zero skips on the minimal repro. jess read the
+      GENERATED CODE rather than trusting the symbol table: the trap guards are CORRECT - widen f32->f64 first
+      (exact boundary compare), vcmp against 2^63 (0x43e0..) with `it mi` -> udf #0x0 unless less-than, vcmp
+      against -2^63 (0xc3e0..) with `it ge` -> udf unless >=; -2^63 exactly does NOT trap (GE includes equality),
+      >=2^63 traps, and NaN sets UNORDERED so it satisfies neither MI nor GE and falls to udf. 8 udf = 2 guards
+      x 4 trapping ops. Exact wasm semantics; synth's soundness constraint honored, no silent saturation.
+      (B) BUT REAL-FALCON IMPACT ~= NIL - the classic "green in isolation, no movement in the real op-mix".
+      Per-stage falcon v1.128 UNCHANGED (rate 3->3, position 3->3, ekf 3->3, attitude 3->3, iekf 4->4,
+      mixer 0->0); fused flight 9->8 (one function genuinely cleared). ConvertI64 IS gone from every stage -
+      the fix did what it said - but rate#tick / position#tick / ekf#estimate STILL do not lower; they moved
+      to the NEXT wall.
+      MECHANISM (jess evidence, reported on synth#869): the three GI-FPU-001 stages moved to GI-FPU-002, and
+      specifically to a NEW f64/D-REGISTER exhaustion. GI-FPU-002 per stage v0.51->v0.52: rate none->phase2
+      (D0..D7), ekf none->phase2, iekf phase1 -> phase1 PLUS a new phase2, position none->phase1, attitude
+      unchanged. THREE functions newly report D-register exhaustion that never reported it before. The new
+      lowering is entirely INLINE f64 (20 vmul.f64, 20 vcvt.f64, 16 vcvt.u32, 12 vsub.f64, 8 vcmp.f64,
+      4 vadd.f64, 4 vabs.f64; touching d0-d3,d6) with ZERO `bl __aeabi_*` - i.e. synth implemented it inline
+      rather than via the AEABI builtins the issue proposed and the acceptance comment described.
+      DECISIVE ARGUMENT: falcon is f32-ONLY BY POLICY (relay CI check-float-discipline.sh; the only f64 was
+      libm trig internals, jess#144) - so falcon control code had essentially NO D-register pressure of its
+      own, and the f64/D pressure now exhausting rate/ekf/iekf is introduced by this lowering. (Honest
+      alternative reading acknowledged upstream: a latent GI-FPU-002 merely revealed once GI-FPU-001 cleared -
+      but that would not explain iekf gaining an ADDITIONAL separate phase-2 D-reg failure on top of its
+      existing phase-1, nor D-exhaustion in code carrying no f64.)
+      RECOMMENDATION GIVEN: route these through --builtins (__aeabi_ul2f/l2f/ul2d/l2d are CORE-register based,
+      r0-r3, ZERO VFP pressure) unconditionally or heuristically (builtin when VFP pressure high). Inline f64
+      competes for exactly the resource these functions have already exhausted.
+      NET: the on-target gate is now ONE synth item - GI-FPU-002 VFP/D-register pressure (+ the RA tail) -
+      since synth#869 is genuinely closed as an op-class. mixer STILL the only clean stage (0 skips) and
+      remains jess's next unblocked rung.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
