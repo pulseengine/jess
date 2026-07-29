@@ -1309,6 +1309,26 @@ artifacts:
       RELAY SIDE: relay#319 (integer-domain differencing) lands anyway on PRECISION grounds - differencing two
       absolute f32 epoch times catastrophically cancels (at t~1e6 s an f32 ULP is ~0.06 s = 60x a 1ms control
       period), so it is the correct implementation independent of lowering.
+      synth#869 ACCEPTED FOR v0.52 (2026-07-29) with two synth-side corrections jess confirmed by re-probe:
+      (a) COMPLETENESS - the family is EIGHT not six; i64.trunc_f64_s/_u also skip (synth#756 had recorded
+      i64.trunc_f64 as a separate selector gap). Verified skipped set: f32/f64.convert_i64_u/s +
+      i64.trunc_f32_s/u + i64.trunc_f64_s/u.
+      (b) SOUNDNESS (synth's catch, important) - the trunc ops are MORE-TOTAL on ARM than in wasm:
+      __aeabi_f2lz/f2ulz do NOT trap (they saturate / return garbage on NaN + out-of-range) whereas wasm
+      REQUIRES a trap, so a bare `bl __aeabi_f2lz` would be a SILENT MISCOMPILE - strictly worse than today's
+      honest skip. synth will emit domain guards + execute the trap cases against wasmtime as part of the gate
+      (the #709 f32-trunc guard shape; the class that bit #633/#666/#709/#665/#642).
+      JESS RE-PROBE FINDING that shrinks the job (given to synth): the FOUR SATURATING variants
+      i64.trunc_sat_f32_s/u + i64.trunc_sat_f64_s/u ALREADY LOWER TODAY (nm: T) on cortex-m7dp. So the
+      float->i64 half needs NO builtin at all - the trapping variants = the existing working trunc_sat
+      lowering + a trap guard, which also means synth never imports the more-total AEABI totality it would
+      then have to fence. Job splits: i64->float (4 convert ops) genuinely needs AEABI __aeabi_ul2f/l2f/ul2d/
+      l2d (no existing lowering to reuse); float->i64 (4 trunc ops) reuses trunc_sat + guard.
+      jess supplied the exact trap vectors for the gate (NaN, +/-inf, >=2^63 / <-2^63 for _s with -2^63 itself
+      NON-trapping, <=-1.0 and >=2^64 for _u with -0.0 and (-1,0) -> 0), and committed to running any branch
+      against the REAL fused falcon + per-stage components reporting the skip delta BY SYMBOL NAME (standing
+      jess gate). Gate agreed = all 8 exports reach nm->T + execution differential incl. traps + the named
+      falcon symbols rate#tick/position#tick/ekf#estimate. GI-FPU-002 stays a separate issue, not folded in.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
