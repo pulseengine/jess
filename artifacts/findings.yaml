@@ -1281,6 +1281,34 @@ artifacts:
       CAVEAT: v1.128 components predate relay#314 (rate's no_std/WASI-free conversion), so rate here still
       carries 21 WASI imports; only mixer is WASI-free in this tag. Re-run the sweep on the next release for
       the converted-vs-not delta.
+      ROOT-CAUSED + FILED AS synth#869 (2026-07-29). The GI-FPU-001 source-side dodge jess proposed is
+      EXHAUSTED - relay chased it and reported the negative result: the call site is `Timestamp::as_secs_f32()`
+      (seconds:u64 + fraction:u32), and the CRATE CORRELATION CONFIRMS the diagnosis from both ends (relay-rate/
+      relay-ekf/relay-pos CALL it = exactly the 3 GI-FPU-001 stages; relay-att only DEFINES Timestamp and is
+      blocked by GI-FPU-002 instead). relay tried 4 narrowings (integer-domain differencing, u64::min cap,
+      mask-truncate, small-cap early-narrow), disassembling after each: LLVM clamps in the integer domain
+      correctly but WILL NOT narrow to i32 before the convert (on wasm both widths cost the same), and the op
+      persisted even after deleting the helper outright. So there is NO producer-side form relay can write to.
+      jess then PROBED synth 0.51.0 directly with a minimal WAT over the whole conversion family - the result
+      is a single coherent gap: ALL SIX 64-bit integer<->float ops are unlowered (f32.convert_i64_u/s,
+      f64.convert_i64_u/s, i64.trunc_f32_u/s) while EVERY 32-bit form lowers, INCLUDING `i32.wrap_i64 +
+      f32.convert_i32_u`. So the canonical lowering shape EXISTS in wasm but is unreachable from Rust.
+      ROOT CAUSE (why it is an implementation task, not a wiring bug): ARMv7E-M VFP has NO 64-bit-integer<->float
+      instruction - VCVT on FPv4-SP/FPv5-D16 encodes only S32/U32 <-> F32/F64; the 64-bit integer forms arrive
+      only with AArch64 SCVTF/UCVTF. Every C toolchain on Cortex-M therefore routes these through AEABI builtins
+      (__aeabi_ul2f/__aeabi_l2f/__aeabi_ul2d/__aeabi_l2d/__aeabi_f2ulz/__aeabi_f2lz) - and synth already has a
+      `--builtins` linking path, so the fix needs no new machinery. Filed synth#869 with the minimal repro, the
+      AEABI mapping, the per-stage impact (entry symbols named) and relay's exhausted-workaround result credited.
+      NOTE both prior anchors (#369, #782) are CLOSED - this family had NO open upstream issue until #869.
+      THE ON-TARGET GATE IS NOW EXACTLY TWO SYNTH ITEMS, neither needing anything from relay:
+        (1) synth#869 i64<->float family -> unblocks rate / position / ekf
+        (2) GI-FPU-002 VFP-regfile exhaustion (no VFP spilling) -> unblocks attitude / iekf
+        (3) mixer is ALREADY THROUGH (0 skips) -> the next jess rung is lowering mixer + running it in the
+            RT1176 Renode model vs a SIL differential: the first REAL relay flight component executing on the
+            M7, exercising the whole consumption path (fuse->lower->link->Renode->sigil) with the gate open.
+      RELAY SIDE: relay#319 (integer-domain differencing) lands anyway on PRECISION grounds - differencing two
+      absolute f32 epoch times catastrophically cancels (at t~1e6 s an f32 ULP is ~0.06 s = 60x a 1ms control
+      period), so it is the correct implementation independent of lowering.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
