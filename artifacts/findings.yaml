@@ -1361,6 +1361,28 @@ artifacts:
       NET: the on-target gate is now ONE synth item - GI-FPU-002 VFP/D-register pressure (+ the RA tail) -
       since synth#869 is genuinely closed as an op-class. mixer STILL the only clean stage (0 skips) and
       remains jess's next unblocked rung.
+      FILED synth#881 (2026-07-29) - the remaining gate now has its own tracker (it had NONE; the only open
+      related issue was the #242 verified-codegen epic, same "the actual blocker is untracked" pattern that
+      preceded #869). Scope stated precisely, with the falcon per-stage repro (public
+      falcon-components-v1.128.tar.gz, symbol-level not func_N) and THREE distinct sub-problems:
+        (1) GI-FPU-002 PHASE 1 - S-register exhaustion (S0..S15, "f32 expression too deep, no VFP spilling
+            yet") -> blocks position#tick, attitude#tick, iekf#estimate. The long-standing one.
+        (2) GI-FPU-002 PHASE 2 - D-register exhaustion (D0..D7), NEW IN v0.52 -> blocks rate#tick,
+            ekf#estimate, + a second failure on iekf. Concrete ask: route the i64<->float conversions through
+            --builtins (__aeabi_ul2f/l2f/ul2d/l2d are core-register based, ZERO VFP pressure) instead of the
+            inline-f64 form, which competes for exactly the register file these functions exhausted.
+        (3) THE RA TAIL - "spill-slot pool exhausted" + "no free callee-saved register to hold a call result
+            while reloading a spilled value", one of each per non-mixer stage (cf. #587 closed, #242 epic).
+      DEFINITION OF DONE stated to synth (jess's side): rate@0.7.0#tick, position@0.7.0#tick,
+      attitude@0.7.0#tick, ekf@0.7.0#estimate (both ekf+iekf builds) reaching nm->T on the real per-stage
+      components, plus fused falcon-flight at 0 skips. That is the ENTIRE remaining gate for the cascade on
+      the M7 - nothing else outstanding on jess's side, nothing needed from relay (source avenue exhausted
+      and verified in #869). Standing jess gate re-offered: any branch run against the real fused falcon +
+      all per-stage components, delta reported BY SYMBOL NAME, including READING THE GENERATED CODE for
+      soundness rather than just checking symbols appeared - that loop has now twice caught "green in
+      isolation, no movement in the real op-mix" (#369->#782, #869->v0.52), so it is worth running BEFORE a
+      release rather than after. No urgency implied upstream: mixer already lowers clean so jess has an
+      on-target rung to build while #881 is open.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
