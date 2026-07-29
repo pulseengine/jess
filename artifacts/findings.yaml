@@ -1383,6 +1383,39 @@ artifacts:
       isolation, no movement in the real op-mix" (#369->#782, #869->v0.52), so it is worth running BEFORE a
       release rather than after. No urgency implied upstream: mixer already lowers clean so jess has an
       on-target rung to build while #881 is open.
+      OCI CONSUMPTION PATH EXERCISED END-TO-END 2026-07-29 (falcon-v1.129.0; relay published all six cascade
+      stages as individually cosign-signed ghcr entities - the DD-026 delivery mechanism, FIRST REAL RUN):
+      jess pulled anonymously via the plain registry API (token -> manifest -> blob, no OCI CLI needed) and
+      digest-verified all six. relay's artifact-shape claims independently CONFIRMED (config.mediaType
+      application/vnd.wasm.config.v0+json, application/wasm layer, digests match).
+      *** AFD-037-CLASS PUBLISH DEFECT FOUND: falcon-rate:1.129.0 is published as a CORE MODULE, not a
+      component *** - magic 0061736d 01000000 vs 0061736d 0d000100 for the other five. ONLY rate (the
+      no_std-converted stage, relay#314) is affected; it still carries the
+      `component-type:wit-bindgen:0.41.0:...:encoded world` custom section = the signature of raw
+      cargo-component output published BEFORE `wasm-tools component new`. meld fuse rejects it outright
+      ("expected component, got core module") so the consumption path stops at step one. Reported to relay
+      with the fix (componentize + add a header/wasm-tools validate assert to the publish gate - the
+      config.mediaType is METADATA and says "component" regardless of payload). Also corrected relay's "15x
+      smaller" headline: 3.7KB core module vs 53-60KB COMPONENTS is not apples-to-apples; componentized it is
+      4,655 bytes (still a large genuine win). NOTE `wasm-tools component new` needed NO ADAPTER, which
+      independently confirms the WASI-free claim.
+      jess UNBLOCKED ITSELF (componentized locally) and ran the full path: the no_std conversion MEASURABLY
+      HELPS - rate 3 skips -> 1 skip; BOTH RA-tail helpers (spill-slot-pool-exhausted, no-free-callee-saved)
+      now LOWER. Object 1,983 bytes, 6 functions, 0 external symbols. Order signal given to relay: convert the
+      remaining stages, it should clear their RA-tail helpers the same way.
+      *** THE DECISIVE EVIDENCE FOR synth#881 ***: rate@0.7.0#tick STILL fails, with "GI-FPU-002 phase 2:
+      caller-saved VFP D-register file exhausted (D0..D7 all live) - F64 EXPRESSION TOO DEEP for this
+      increment (no VFP spilling, and D8..D15 are callee-saved)". Read against what the component IS - 3.7KB,
+      WASI-free, f32-ONLY BY RELAY CI POLICY, a rate controller and almost nothing else - and it fails on the
+      F64 register file. There is no plausible latent f64 expression tree in a 4.6KB f32-only controller, so
+      this RULES OUT the "latent GI-FPU-002 merely revealed" alternative reading jess had honestly offered on
+      #869: the D-pressure IS introduced by synth's inline-f64 conversion lowering. Handed to synth#881 as a
+      minimal public repro (anonymous curl one-liner) - far better than pointing at the 106KB fused core.
+      TWO INDEPENDENT FIXES OFFERED: (1) route i64<->float via --builtins (__aeabi_*, core registers r0-r3,
+      ZERO VFP pressure - removes the pressure rather than accommodating it; expected to take this component
+      to 0 skips); (2) USE D8..D15 - the diagnostic itself notes they are callee-saved and therefore untouched,
+      but callee-saved just means push/pop in prologue/epilogue, doubling the D-file for any deep f64
+      expression (also helps the phase-1 S-register cases).
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
