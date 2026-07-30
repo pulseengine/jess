@@ -1448,6 +1448,35 @@ artifacts:
       is now jess's NEXT FEATURE and the v0.7.0 on-target-bring-up milestone: build the self-contained M7
       image + a Renode harness driving plant -> tick -> torque -> plant, and diff the trajectory against the
       SIL numbers. Until it passes, jess claims only "lowers", never "works".
+      *** MAJOR PER-TARGET FINDING (2026-07-30, reported to synth#881): the inline-f64 lowering makes
+      affected functions cortex-m7dp-ONLY, locking them out of TWO OF JESS'S THREE CORES. ***
+      Per-target matrix on the SAME WASI-free falcon-rate component: cortex-m7dp[FPv5-D16 double] = 0 skips,
+      tick LOWERS; cortex-m7[single-prec] = 1 skip SKIPPED; cortex-m4f[FPv4-SP single] = SKIPPED; cortex-m4 +
+      cortex-m3 [soft-float] = SKIPPED. synth's own diagnostic gives the cause: "scalar f64 requires a
+      double-precision FPU target (cortex-m7dp); 'thumbv7em-none-eabihf' has a single-precision FPU (f32 only)
+      - refusing to emit f64" (that REFUSAL is correct behaviour - declining beats emitting f64 on hardware
+      that cannot execute it).
+      CAUSAL CHAIN CONFIRMED BY CONTROLLED COMPARISON of the wasm inputs: mixer has 0 convert_i64 ops + 0 f64
+      ops -> LOWERS on m7dp, m7 AND m4f. rate has exactly 1 convert_i64 op + ZERO f64 ops (f32-only, relay CI
+      policy) -> lowers ONLY on m7dp. So ONE integer->float conversion, lowered as inline f64, propagates an
+      f64-capable-FPU requirement to the WHOLE FUNCTION. An f32-only control law now needs a double-precision
+      FPU to compile.
+      *** ARCHITECTURAL CONSEQUENCE for DD-023/REQ-PIX-021 (the 3-core per-target-ISA image set): the M4
+      ESTIMATOR CORE IS fpv4-sp (SINGLE-PRECISION), so any falcon component carrying a u64->f32 conversion
+      CANNOT BE COMPILED FOR IT. The estimator stages (ekf/iekf) call the same Timestamp::as_secs_f32(), so as
+      things stand the estimator cannot target the M4 core it is architecturally assigned to - NOT because the
+      M4 lacks capability (it has a perfectly good f32 FPU and the code is f32-only) but purely because of the
+      lowering strategy for one conversion. A NEW north-star blocker, masked before v0.52 because the function
+      was skipped for a different reason. ***
+      This STRENGTHENS the --builtins case decisively: __aeabi_ul2f/l2f/ul2d/l2d are CORE-REGISTER routines
+      (r0-r3) working on EVERY target - m7dp, m7, m4f, m4 and soft-float m3 alike. So the builtin route
+      (1) removes the D-register pressure (the original #869/#881 argument) AND (2) RESTORES PORTABILITY ACROSS
+      ALL THREE CORES (the larger argument). The inline-f64 route structurally excludes single-precision and
+      soft-float targets from ever hosting a conversion-carrying function.
+      v0.53 PUNCH-LIST: rate#tick lowers on m7dp (spill path checked sound); attitude#tick / position#tick /
+      ekf#estimate still skipped on m7dp; rate + any conversion-carrying function unavailable on m4f/m4/m3
+      (the --builtins item); mixer lowers on m7dp + m7 + m4f = proof a conversion-FREE f32 stage is portable
+      TODAY.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
