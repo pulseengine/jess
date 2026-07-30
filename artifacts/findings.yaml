@@ -1416,6 +1416,38 @@ artifacts:
       to 0 skips); (2) USE D8..D15 - the diagnostic itself notes they are callee-saved and therefore untouched,
       but callee-saved just means push/pop in prologue/epilogue, doubling the D-file for any deep f64
       expression (also helps the phase-1 S-register cases).
+      *** SYNTH v0.53.0: falcon:cascade/rate@0.7.0#tick LOWERS — THE FIRST FALCON CONTROL STAGE THROUGH THE
+      FLOAT GATE *** (2026-07-30, SHA-verified). synth took #881 directly: PR#885 "VFP register-file spilling -
+      the GI-FPU-002 exhaustion rung (#881, VCR-RA-004, epic #242)". Verified against the real build:
+      the WASI-free falcon-rate:1.129.0 (OCI-pulled, componentized locally) -> **0 SKIPS**, 7 functions,
+      0 external symbols, 4,989-byte ARM object, with `falcon:cascade/rate@0.7.0#tick` a REAL DEFINED
+      SYMBOL (nm: T). So the M7 float gate is BROKEN OPEN for the rate controller.
+      FULL SWEEP v0.52 -> v0.53 (per-stage v1.128 + fused): rate 3->2 (tick now lowers), iekf 4->3,
+      fused flight 8->7, mixer 0->0 (still clean); attitude 3->3, position 3->3, ekf 3->3 STILL blocked at
+      their entry points. So VFP spilling raised the ceiling enough for rate but NOT for the deeper
+      expressions in attitude/position/ekf - the fused core still reports BOTH GI-FPU-002 phase 1 (S0..S15)
+      and phase 2 (D0..D7). Gate now: 2 of 6 stages lower (mixer + rate), 4 remain.
+      SOUNDNESS CHECKS RUN (because a new spill path is exactly the class synth has miscompiled before -
+      #581 "spill rung miscompiles: ldr reads a never-stored frame slot ... shipped path, WRONG VALUE" - and
+      code merely APPEARING is worse than an honest skip if the values are wrong):
+        (a) the #869 trap guards SURVIVE the new RA path: family repro still 0 skips / 12 lowered / exactly
+            8 udf (2 domain guards x 4 trapping ops).
+        (b) SPILL-SLOT CONSISTENCY (targets the #581 class directly): 11 distinct stack slots used, and the
+            set of vldr reload offsets EXACTLY EQUALS the set of vstr store offsets {96,164,168,172,176,180,
+            184,188,192,196,208} - no reload from a never-stored slot. Non-vacuous (11 load slots checked).
+        (c) NO ABI VIOLATION: spills are all S-register to stack (36 vstr/vldr, 0 D-register spills); D8..D15
+            (callee-saved) are NOT used, so no unsaved-callee-register clobber. (An initial suspicion of a
+            D8..D15 ABI break was a FALSE POSITIVE - the d8/d10/d12/d14 hits were HEX ADDRESSES in the
+            disassembly listing, not register operands. Retracted on inspection.)
+      LIMIT OF THESE CHECKS - STATED HONESTLY: they establish that the code lowers, keeps the trap semantics,
+      and has no orphan spill slots or ABI clobber. They DO NOT establish that rate#tick COMPUTES THE RIGHT
+      ANSWER. "It lowers" is NOT "it is correct". The proof obligation is the CLOSED-LOOP DIFFERENTIAL against
+      relay's SIL reference (converged 0.193 s, steady-state |err| 0.0059 rad/s, I=0.005 kg*m^2, dt=1 ms,
+      1 rad/s step about x, RateGains::DEFAULT) - exactly the division of labour agreed in DD-026 P2
+      (relay proves the loop closes IN SOURCE; jess proves it STILL closes AFTER LOWERING). That differential
+      is now jess's NEXT FEATURE and the v0.7.0 on-target-bring-up milestone: build the self-contained M7
+      image + a Renode harness driving plant -> tick -> torque -> plant, and diff the trajectory against the
+      SIL numbers. Until it passes, jess claims only "lowers", never "works".
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
