@@ -1476,6 +1476,35 @@ artifacts:
       v0.53 PUNCH-LIST: rate#tick lowers on m7dp (spill path checked sound); attitude#tick / position#tick /
       ekf#estimate still skipped on m7dp; rate + any conversion-carrying function unavailable on m4f/m4/m3
       (the --builtins item); mixer lowers on m7dp + m7 + m4f = proof a conversion-FREE f32 stage is portable
+      *** SYNTH v0.55.0 GATE (2026-08-12) - THE "LOWERS != WORKS" CAUTION IS NOW CONCRETELY VINDICATED ***
+      v0.55 adds VCR-RA-003, a REGISTER-ALLOCATION VALIDATOR that refuses to emit an object whose RA violates
+      an invariant: "VCR-RA-003: register-allocation validation FAILED - JoinValueNotAvailable { reg: R6,
+      join_block: 8 }. The emitted stream violates a register-allocation invariant (callee-saved preservation
+      #490 / spill-slot non-aliasing #331 / caller-saved-across-call / join-value-availability / THE #881 VFP
+      TWINS); this is a COMPILER BUG, not a program error. Refusing to emit a miscompiled object."
+      CONSEQUENCE: per-stage skip counts on the WASI-CARRYING v1.128 components ROSE by exactly one each
+      (rate 2->3, attitude/position/ekf 3->4, iekf 3->4, flight 7->8) - and this is an HONESTY IMPROVEMENT,
+      NOT A REGRESSION. The newly-skipped function per stage (rate func_90, attitude func_89, position func_92,
+      iekf func_95, ekf func_90, flight func_122) was BEING EMITTED BY v0.53 - VERIFIED: func_90 is absent from
+      v0.53's skip list and PRESENT in v0.53's object. So v0.53 SHIPPED A MISCOMPILED FUNCTION and v0.55 now
+      declines it. Counting the higher skip number as "worse" would be exactly backwards.
+      THIS IS THE CONCRETE VINDICATION of the caution jess attached to the v0.53 result. jess's static checks
+      at the time (trap guards intact, 11 spill slots with reload offsets exactly matching store offsets, no
+      ABI clobber) ALL PASSED - and they did NOT catch this, because JoinValueNotAvailable is a DIFFERENT
+      invariant (a value not live at a control-flow join) than the ones those checks covered. jess had stated
+      exactly this limitation ("a spill bug that swaps two live slots would pass every one of them"); the limit
+      was real, not rhetorical. Static structural checks are necessary but NOT sufficient - only execution
+      (the closed-loop differential) or a validator like VCR-RA-003 can close it.
+      *** THE HEADLINE RESULT HOLDS AND IS STRENGTHENED ***: the WASI-FREE falcon-rate:1.129.0 (the component
+      the v0.53 headline was actually about) compiles to 0 SKIPS ON BOTH v0.53 AND v0.55 - 7 functions,
+      0 external symbols, tick a real defined symbol - so it PASSES the new RA validator. mixer likewise stays
+      0 skips and validator-clean. The VCR-RA-003 failures are confined to the LARGER WASI-CARRYING v1.128
+      builds. This is further evidence for relay's OCI-P02 no_std rollout: the WASI-free build is not merely
+      smaller, it stays inside the register allocator's competence.
+      M4 PORTABILITY LOCKOUT UNCHANGED on v0.55: WASI-free rate still lowers ONLY on cortex-m7dp; m7 / m4f /
+      m4 / m3 all still decline with "scalar f64 requires a double-precision FPU target". synth v0.54/v0.55
+      did NOT address the --builtins item, and synth#881 is CLOSED - so the estimator-on-M4 blocker
+      (DD-023/REQ-PIX-021) needs a NEW upstream issue; it currently has no open tracker.
       TODAY.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
