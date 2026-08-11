@@ -598,7 +598,28 @@ artifacts:
       reg-map/decode), so the register-level bus is owned once (gale), not double-claimed vs DD-015's
       "relay owns drivers". Also: gale's gust-target-gen AADL device model overlaps jess's
       hardware/pixhawk6x-rt.aadl - the RT1176 target model needs ONE owner (jess owns it; gale generates
-      per-target constants FROM it). To pin in the DD-026 driver-path extension once gale/relay confirm.
+      per-target constants FROM it). *** RESOLVED + PINNED 2026-08-12 as the DD-026 DRIVER-PATH EXTENSION -
+      relay CONFIRMED BOTH boundaries on jess#167 (2026-07-28, "yes to both"): ***
+        (D1) THE BOUNDARY IS THE embedded-hal-async TRANSPORT TRAITS. gale IMPLEMENTS SpiDevice / I2c / AdcIn
+             (Kani-verified, silicon-validated, over gust:hal); relay CONSUMES them for register-map +
+             protocol decode + voting. relay stated it does NOT want to reach registers itself - "the
+             register-level bus being gale-verified is strictly better, and it keeps DD-015's 'relay owns
+             drivers + decode + voting' true at the PROTOCOL level. Fewer TCB lines in jess-native is the
+             right direction." relay had already retargeted falcon-baromag to embedded-hal-async with a
+             shared-pure-decode + sync/async equivalence pattern, so relay-hal's seams are already this shape.
+             CONSEQUENCE: the bus transport that DD-015 put in jess's NATIVE host moves DOWN into
+             gale-verified wasm, and jess's native TCB shrinks to gust:hal alone (bus/MMIO/PWM/time).
+        (D2) ONE AADL FOR THE RT1176, OWNED BY JESS. relay: "the board is yours, so hardware/pixhawk6x-rt.aadl
+             is the single source of truth and gust-target-gen generates the per-target constants FROM it.
+             Two overlapping models is exactly the drift we gate against elsewhere." Same principle already
+             agreed for the seam types (DD-026 P1). So jess's AADL stays THE model; gale's gust-target-gen
+             consumes it rather than maintaining a parallel RT1176 description.
+      FINAL DRIVER-PATH STACK (bottom-up, all three layers owned): gust:hal [JESS native, RT1176 mmio shim]
+      -> gale verified thin-seam bus driver [GALE; implements the embedded-hal-async transport] -> relay
+      protocol/decode/voting [RELAY; imu reg-map, UBX, DroneCAN, EKF voting] -> sensor-sample [the data seam,
+      JESS AADL/spar] -> relay flight app. Consistent with the runtime-half contract already verified:
+      gale-nano exports gust:os and its ONLY residual is gust:hal (verified on the real 0.6.0 artifact), so
+      gust:hal is the single native surface jess provides for BOTH the runtime and the driver path.
       REFINED by DD-018: the transport trait SHAPE named here (bespoke RegBus/SerialBus,
       read-reg) is SUPERSEDED - the seam now anchors on embedded-hal-async SpiDevice/I2c
       + embedded-io-async at TRANSACTION granularity (register helpers move relay-side).
