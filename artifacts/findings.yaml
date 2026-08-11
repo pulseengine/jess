@@ -1505,6 +1505,34 @@ artifacts:
       m4 / m3 all still decline with "scalar f64 requires a double-precision FPU target". synth v0.54/v0.55
       did NOT address the --builtins item, and synth#881 is CLOSED - so the estimator-on-M4 blocker
       (DD-023/REQ-PIX-021) needs a NEW upstream issue; it currently has no open tracker.
+      *** GALE v0.6.0: gale-nano IS PUBLISHED AND LOWERS TO ALL THREE CORES — DD-026's RUNTIME HALF IS
+      DELIVERED AND INDEPENDENTLY VERIFIED (2026-08-12) ***
+      `ghcr.io/pulseengine/gale-nano:0.6.0` is live (gale#226 landed the gust:os provider publish; gale#224
+      itself still OPEN). jess pulled it anonymously, digest-verified, and checked it against GALE'S OWN
+      STATED ACCEPTANCE INVARIANT from gale#223/DD-OS-DELIVERY-001.
+      ARTIFACT SHAPE - CORRECT: real COMPONENT (0061736d 0d000100), 20,741 bytes, config.mediaType
+      application/vnd.wasm.config.v0+json. WIT world matches the DD-026 three-layer contract EXACTLY:
+        EXPORTS gust:os/{time,log,spawn,exec,timer}@0.1.0   <- the gale-owned capability seam (layer i)
+        IMPORTS gust:hal/mmio@0.1.0                          <- the jess-provided native residual (layer iii)
+        IMPORTS gust:os/taskdisp@0.1.0                       <- scheduler dispatch, resolved by composition
+      So the contract jess/relay/gale pinned BEFORE anyone built to it is exactly what shipped.
+      ACCEPTANCE INVARIANT - VERIFIED: `meld 0.41.1 fuse --memory shared -> loom 1.2 optimize -> synth 0.55
+      --relocatable` gives **0 SKIPS** and EXACTLY THREE undefined symbols: `read32`, `write32`
+      (= gust:hal/mmio) and `poll-task` (= the typed taskdisp). Nothing else - no scheduler or heap leak.
+      That is gale's invariant ("the ONLY undefined symbols are the gust:hal mmio seam") met on the real
+      published artifact.
+      *** LOWERS ON ALL THREE NORTH-STAR CORES *** (identical residual on each): cortex-m7dp 0 skips 7,439 B;
+      cortex-m4f 0 skips 7,439 B; cortex-m3 0 skips 7,435 B. So the gale RUNTIME layer is on-target-ready for
+      M7 + M4-estimator + F100-failsafe simultaneously - a ~7.4KB gust:os provider per core. Contrast the
+      APPLICATION layer (falcon), which is M7-only and only for mixer + rate. Current north-star state:
+      RUNTIME = 3/3 cores; APPLICATION = 2/6 stages on 1/3 cores.
+      METHOD NOTE (jess error caught before it became a false upstream report): jess's FIRST run used plain
+      `meld fuse` (not gale's documented `--memory shared`) on meld 0.39, and produced 10 skips - 9 of them
+      "memory.fill mem=2: non-default-memory memory.fill is not lowered in multi-memory phase 1 (#406)" -
+      which would have been filed as a gale/synth defect. Re-running gale's DOCUMENTED pipeline
+      (meld 0.41.1 + --memory shared) gives 0 skips. The defect was jess's invocation, not the artifact.
+      Recorded because "run the supplier's documented pipeline before reporting a failure against it" is the
+      generalisable lesson.
       TODAY.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
