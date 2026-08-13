@@ -1534,6 +1534,45 @@ artifacts:
       Recorded because "run the supplier's documented pipeline before reporting a failure against it" is the
       generalisable lesson.
       TODAY.
+      *** THE FUSED-IMAGE BLOCKER, PROPERLY ROOT-CAUSED (2026-08-12/13): IT IS REBASE GRANULARITY, NOT THE
+      MISSING RELOCATIONS ***
+      jess ran relay's SWREQ-FALCON-OCI-P02 KILL-CRITERION (relay asked jess to run it; it is jess's to run):
+      `meld 0.42.0 fuse --memory shared --address-rebase` over the five v1.133 cascade stages -> REJECTS:
+      component mixer "is placed at a non-zero shared-memory base but carries no relocation metadata
+      (linking/reloc.*) ... Rebuild it with relocations retained on the FINAL link (-C link-arg=--emit-relocs)
+      - an unresolved relocatable object (wasm-ld -r) is NOT sufficient". NONE of relay's six components carry
+      linking/reloc.* So the kill-criterion FAILS and relay's hold at `implemented` (not `verified`) was right.
+      Zero memory.grow was NECESSARY BUT NOT SUFFICIENT - exactly as relay predicted. Reported on jess#167.
+      jess then found gale had the IDENTICAL gap (gale-nano component-5, same error) - one root cause across
+      two suppliers; reported on gale#223, gale filed meld#370 + gale#266.
+      *** BUT --emit-relocs IS THE EASY HALF AND IS ALREADY SOLVED *** (gale, on meld#370): the flag works,
+      survives `wasm-tools component new` (2 reloc sections/component), and --address-rebase then accepts and
+      rebases CORRECTLY with all segments disjoint. THE REAL BLOCKER IS REBASE GRANULARITY - meld rebases each
+      component to its DECLARED linear-memory extent, which is PAGE-granular, and A WASM PAGE IS 64 KB.
+      gale's measured matrix (3 components, STM32F100RB 8192 B SRAM): `--memory shared` (what ships) accepts
+      SILENTLY with 4 OVERLAPPING data-segment pairs, .bss 2,688, FITS - and fits BECAUSE it overlaps;
+      `shared --address-rebase` without relocs REJECTS; with relocs at 17 declared pages -> disjoint but .bss
+      2,230,708 (272x over); with relocs shrunk to the 1-page wasm MINIMUM -> disjoint but .bss 133,556 (16x
+      over). Actual used extent ~2,057 bytes. So the ONLY shippable build is the one that overlaps, and
+      page-granular rebasing CANNOT be tuned to fit an MCU at any component count >= 1. gale's revised ask:
+      rebase to each component's ACTUAL USED EXTENT (meld already knows it), or an opt-in --pack-rebase /
+      --rebase-extent=used for targets that can prove static-offset-only addressing (meld#326 computed-pointer
+      case is the soundness caveat).
+      *** JESS'S OWN CONTRIBUTION - THE PER-CORE BUDGET *** from hardware/pixhawk6x-rt.aadl (jess owns the
+      memory map, so only jess can state this): M7 = 256 KB DTCM + ~1.5 MB OCRAM; M4 = OCRAM; F100 = 8 KB SRAM.
+      Applying the 64 KB-per-component floor:
+        F100 (8 KB SRAM): ONE component needs 64 KB = 8x the ENTIRE SRAM. IMPOSSIBLE at any component count.
+          Page-granular rebasing can NEVER serve the failsafe core.
+        M7 DTCM (256 KB): gale-nano alone (1 component) = 64 KB FITS; but the fused flight set (5 cascade
+          stages + gale-nano = 6 components) = 384 KB EXCEEDS DTCM.
+        M7/M4 OCRAM (~1.5 MB): 384 KB fits - BUT OCRAM IS THE SLOW PATH. Forcing the flight components out of
+          DTCM into OCRAM costs latency on the INNERMOST rate loop - precisely the loop DD-026's data-flow
+          design optimised for (raw gyro co-scheduled on M7 to avoid cross-core delay). So the granularity
+          issue is not merely "fatal on the F100": on the M7 it silently trades away the latency margin the
+          architecture was designed around.
+      CONCLUSION: the fused 3-core image (DD-023/REQ-PIX-021) is blocked on meld gaining EXTENT-granular
+      (not page-granular) rebasing. --emit-relocs remains a publication precondition on BOTH suppliers -
+      necessary, now proven insufficient alone.
     tags: [release-watch, synth, arm, hard-float, gi-fpu, trunc-sat, on-target, falcon, blocking]
     fields:
       detected-by: jess release-watch chain-measure on synth v0.45.1 (meld v0.41.1, falcon-flight-v1.123); real-fused-core 26/156 skips vs the "#369 closed" claim; confirmed trunc_sat minimal repro; filed synth#782
