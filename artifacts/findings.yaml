@@ -1584,6 +1584,53 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-039
+    type: ai-found-defect
+    title: synth v0.59 adds TWO honest-refusal gates (#952 missing-export, #1041 unmaterialized data segments) — falcon numbers unchanged, but #1041 means jess's --relocatable objects were never executable
+    status: resolved
+    description: >
+      2026-08-26 release-watch. synth jumped v0.55 -> v0.59 (four releases). NO GI-FPU-002 / VFP work
+      landed - PR#1073 (the AEABI increment 1 for synth#1069) is still OPEN - so the falcon skip counts
+      are UNCHANGED on the real fused packed cascade: cortex-m7dp 3, cortex-m4f 5, cortex-m3 12, with
+      the same two exports (rate@0.7.0#tick, mixer@0.7.0#mix). Verified against the real build, not the
+      changelog.
+      TWO NEW GATES, both of the honest-refusal class jess has been arguing for all campaign:
+        #952 - synth now EXITS NON-ZERO rather than emitting an object silently missing a public export:
+          "3 of 6 requested export(s) were skipped ... Exiting non-zero rather than shipping an object
+          that is silently missing a public entry point - a build gating on $? would otherwise accept
+          it." Escape hatch `--allow-skipped-exports` for deliberate partial sweeps.
+        #1041 - the ARM RELOCATABLE path now REFUSES a module carrying active data segments, because
+          the object does not materialize them: "a load from the initialized region would silently read
+          whatever the target memory holds at runtime" (the gale#278 0xFF class). Escape hatches:
+          compile self-contained, --native-pointer-abi, or --embedder-data-init.
+      *** WHAT #1041 MEANS FOR JESS'S OWN PAST REPORTING - stated plainly ***: every `--relocatable`
+      object jess produced across this campaign (the per-stage sweeps, the fused-core counts) carried
+      NO data segments. The fused cascade has 13 active segments. So those objects were NEVER
+      EXECUTABLE - any load from initialized memory would have read target garbage. The SKIP COUNTS
+      remain valid (which functions compile is orthogonal to data-segment materialization) and every
+      comparative claim built on them stands. But the objects themselves were measurement artifacts,
+      not runnable images, and jess should not have implied otherwise.
+      CRUCIALLY THE EXECUTION PATH WAS CORRECT: TEST-PIX-031 - the only jess artifact that actually
+      RUNS - uses the SELF-CONTAINED path (`--cortex-m`), which ships the segments and copies them at
+      reset (#758). That is exactly what the oracle verifies (53,345 B copied to 0x20000100, checked at
+      non-zero probes). So the one thing jess executed was built the right way; the confusion would only
+      have arisen had jess tried to run a --relocatable object.
+      REGRESSION CHECK: the committed v0.55-built image still PASSES TEST-PIX-031 (both assertions OK).
+      On v0.59 the same source rebuilds to 65,576 B (v0.55: 65,452, +124 B) with `--allow-skipped-exports`,
+      identical export set. The committed image is NOT bumped this tick: the oracle is green and stable,
+      and a bump requires re-verifying the non-zero memory probes against the new data layout.
+      NOTE the improved diagnostics now name the D8..D15 point jess raised on #881: "D0..D7 all live;
+      D8..D15 are callee-saved and never allocated here", and "the backend retries with VFP spilling
+      (#881) and this surfaces only if that also fails".
+    tags: [release-watch, synth, honest-refusal, data-segments, exports, falcon, on-target]
+    fields:
+      detected-by: jess release-watch on synth v0.59.0 against the real fused cascade, 2026-08-26
+      severity: info
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: AFD-038
     type: ai-found-defect
     title: KILL-CRITERION PASSES on falcon-v1.134.1 — all three meld fuse modes accept, --pack-rebase is worth 5x on the M7, the fused cascade lowers; GI-FPU-002 is the sole remaining gate
