@@ -155,6 +155,8 @@ jobs:
         run: /tmp/renode/renode-test hardware/renode/gust-m3/passthrough-m3.robot
       - name: inter-core NavState crossing oracle (REQ-PIX-007, TEST-PIX-030)
         run: /tmp/renode/renode-test hardware/renode/navstate-xcore/navstate-crossing.robot
+      - name: FUSED falcon cascade on the RT1176 M7 (TEST-PIX-031)
+        run: /tmp/renode/renode-test hardware/renode/cascade-m7/falcon-cascade-m7.robot
 
   # REQ-PIX-018 leg b (TEST-PIX-022) — the DO-333 sound-static-analysis leg of
   # the V, on the CONSUMED (stripped) falcon wasm: fetch a pinned falcon

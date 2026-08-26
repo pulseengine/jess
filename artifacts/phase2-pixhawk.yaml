@@ -538,6 +538,49 @@ artifacts:
       - type: verifies
         target: REQ-PIX-005
 
+  - id: TEST-PIX-031
+    type: test-spec
+    title: The FUSED falcon flight cascade executes on the i.MX RT1176 Cortex-M7 (Renode) — linear-memory init byte-exact + execution progress, both negative-controlled
+    status: valid
+    release: v0.7.0
+    description: >
+      The emulation-track rung directly beneath real silicon, and the FIRST EXECUTION OF THE FALCON
+      CASCADE (not a single stage) on an RT1176. The image under test is jess's own pipeline output
+      end to end: relay falcon-v1.134.1 OCI components (iekf position attitude rate mixer) ->
+      meld 0.52.0 `fuse --memory shared --pack-rebase` (5 pages / 320 KB -> 1 page / 64 KB) ->
+      loom 1.2.0 optimize -> synth 0.55 `compile -t cortex-m7dp --cortex-m` = a self-contained
+      EXEC image, 65,452 B, entry 0x81, text at 0x0, RW at 0x20000000 (DTCM), exporting
+      pulseengine:falcon-cascade/{rate@0.7.0#tick, mixer@0.7.0#mix} as real defined symbols.
+      Three functions remain skipped, ALL GI-FPU-002 (VFP register-file exhaustion, synth#881), so
+      iekf/position/attitude entry points are NOT in this image - expected, and the single remaining
+      upstream gate.
+      ASSERTIONS, each chosen to be OBSERVABLE (a check that cannot fail is not a check):
+        A LINEAR-MEMORY INIT - the reset handler copies 0xd061 (53,345) B of wasm linear memory from
+          flash 0x2ac8 to RAM 0x20000100. Probes are deliberately NON-ZERO words, because RAM reads
+          back zero when untouched: a zero probe could not distinguish "copied correctly" from "never
+          executed" and would be VACUOUS. Probes 0x20002108=0xB2F0B451, 0x2000210C=0xB044B196,
+          0x20002238=0x3E800000 (0.25f), 0x2000223C=0x42480000 (50.0f) - the last two are recognisable
+          f32 control constants.
+        B EXECUTION PROGRESS - >100k instructions retired AND PC inside the image .text (0..0xFB29).
+          Observed PC 0x16C (immediately below mixer#mix at 0x178) and 0x344A8 = 214,696 instructions.
+          Discriminating: a never-started image retires ~0; a HardFault lockup pins PC at a vector.
+      NEGATIVE-CONTROLLED: both assertions were re-run with a wrong expected word (0xDEADBEEF) and an
+      impossible instruction threshold - BOTH FAILED, so neither is vacuous.
+      DELIBERATELY NOT ASSERTED: (1) that rate#tick computes correct torque - invoking it needs
+      canonical-ABI argument marshalling; that is the next rung and is where relay's SIL reference
+      (converged 0.193 s, steady-state |err| 0.0059 rad/s) becomes the comparison baseline. (2) FPU
+      enablement via CPACR: the reset handler does write 0xE000ED88 |= 0x00F00000, but that register is
+      NOT readable through `sysbus ReadDoubleWord` on this platform - pixhawk6xrt.repl models the NVIC
+      at 0xE000E000 but not the SCB, and Renode's CortexM keeps CPACR internal. The check was written,
+      returned an EMPTY STRING, and was REPLACED rather than left as a passing-looking no-op. Modelling
+      the SCB in the repl is the follow-up that would make it assertable.
+      TOOLCHAIN (jess has NO varve pin - stated plainly rather than implying a pinned run):
+      meld 0.52.0 / loom 1.2.0 / synth 0.55.0 / Renode 1.16.1 / rivet 0.32.0.
+    tags: [renode, rt1176, cortex-m7, falcon, cascade, fused, on-target, oracle, negative-controlled]
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+
   - id: TEST-PIX-016
     type: test-spec
     title: gust boots + runs N poll rounds on a Renode stm32f103 (Cortex-M3) - hermetic silicon-shaped confirmation of the synth v0.11.51 8KB link
