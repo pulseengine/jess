@@ -33,7 +33,12 @@ for f in "$@"; do
   [ "$n" -eq 0 ] && c3=PASS || { c3="FAIL($n wasi imports)"; fail=1; }
   n=$(printf '%s' "$wat" | grep -cE '@custom "(linking|reloc\.)')
   [ "$n" -gt 0 ] && c4=PASS || { c4="FAIL(no linking/reloc.* — need --emit-relocs on FINAL link)"; fail=1; }
-  printf '%s' "$wat" | grep -q '__heap_base' && c5=PASS || { c5="FAIL(no __heap_base — retain linking section)"; fail=1; }
+  # C5 reads the RAW BYTES, not `wasm-tools print`: __heap_base normally lives in the
+  # `linking` custom-section SYMBOL TABLE, which prints as an opaque @custom blob. Grepping
+  # the wat text gives a FALSE NEGATIVE on correctly-built components (observed on
+  # falcon-v1.134.1: 5 of 6 wrongly failed). Match the symbol in the binary instead.
+  if strings -a "$f" 2>/dev/null | grep -q '__heap_base'; then c5=PASS
+  else c5="FAIL(no __heap_base — export it or retain the linking section)"; fail=1; fi
 
   [ $fail -eq 0 ] && verdict="CONSUMABLE" || { verdict="NOT CONSUMABLE"; rc=1; }
   printf '%-28s %s\n' "$name" "$verdict"
