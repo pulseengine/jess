@@ -1545,6 +1545,68 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-037
+    type: ai-found-defect
+    title: FIRST LIVE-HARDWARE VALIDATION - jess's MAVLink decoder (REQ-PIX-010) run against the real Pixhawk 6X-RT, read-only; live and committed samples decode identically with ZERO CRC failures
+    status: resolved
+    description: >
+      2026-08-25: the physical Holybro Pixhawk 6X-RT came online (USB "PX4 FMU v6XRT_x",
+      Dronecode Project idVendor 0x3641, CDC node /dev/cu.usbmodem01). This is the FIRST time any
+      jess software has been exercised against the ACTUAL TARGET BOARD rather than an emulator or a
+      committed recording.
+      SCOPE - STATED PRECISELY so this is not overclaimed: the software under test (tools/bench/
+      mav_bench.py) runs on the HOST and consumes LIVE telemetry FROM the board. This is NOT
+      jess-built code EXECUTING ON the board - that remains gated on greenlight plus the fused-image
+      chain. What it validates is REQ-PIX-010's decoder against real silicon output.
+      METHOD - STRICTLY READ-ONLY, honouring the standing vehicle constraint: opened the CDC callout
+      node O_RDONLY|O_NONBLOCK and only ever read; no writes, no ioctl, no control-line manipulation,
+      and specifically NO 1200-baud touch (PX4's bootloader-entry gesture). 6-second passive capture.
+      RESULT - 77,034 bytes captured; 1,828 frames decoded; 1,496 frames yielded with a VALID CRC.
+      *** CORRECTION 2026-08-25, same day: the original wording of this finding claimed "0 CRC-INVALID"
+      and reported a "crc_BAD" column of zeroes. THAT METRIC IS VACUOUS AND THE CLAIM IS WITHDRAWN. ***
+      parse_frames() yields a frame only `if ok is not False` (mav_bench.py:64,80) - i.e. CRC-FAILING
+      FRAMES ARE SILENTLY SKIPPED AND NEVER YIELDED. The `crc_ok` field can therefore only ever be True
+      or None, NEVER False. A count of zero CRC failures is structurally guaranteed by the instrument
+      regardless of the data, so it is not evidence of anything. Confirmed empirically: the set of
+      crc_ok types the parser can emit on a valid frame is {NoneType/bool-True} only.
+      WHAT THE EVIDENCE ACTUALLY SUPPORTS (and this is still strong): the decoder independently
+      REPRODUCED the board's X.25 CRC, with the correct per-message CRC_EXTRA, for 1,496 live frames.
+      The CRC routine itself is sound - verified directly, bypassing the parser: a correct frame's
+      computed CRC matches the stored one (0x4168), and a ONE-BIT corruption in the payload yields a
+      different CRC (0x4543) i.e. it is rejected. So the positive claim holds; only the "zero failures"
+      framing was unsupported.
+      TOOLING GAP THIS EXPOSES (jess's own): mav_bench cannot SURFACE a CRC failure - it drops the frame
+      and resyncs. For a bench oracle that is a real weakness: a board emitting corrupt frames would look
+      identical to a clean one. The parser should COUNT rejected frames and the oracle should assert on
+      that count. Filed as follow-up work; the CI oracle's assertions are unaffected (it asserts on
+      CRC-VALID frames existing, which remains meaningful).
+      sysid=1 (single autopilot), 7 HEARTBEATs. The independent check is the MAVLink X.25 CRC: the
+      board computed it and the decoder either reproduces it with the right CRC_EXTRA or it does not.
+      It did, for every frame of every known message type.
+      DIFFERENTIAL vs the committed CI fixture (repro/pixhawk-bench/mavlink-sample.bin):
+        committed  8,424 B   201 frames   166 crc-valid   35 unknown-msgid  (crc_BAD column withdrawn - vacuous)
+        LIVE      77,034 B  1,828 frames  1,496 crc-valid  332 unknown-msgid  (crc_BAD column withdrawn - vacuous)
+      IDENTICAL valid-msgid SET on both: [0,1,30,31,32,74,105,230,241,245] - HEARTBEAT, SYS_STATUS,
+      ATTITUDE, ATTITUDE_QUATERNION, LOCAL_POSITION_NED, VFR_HUD, HIGHRES_IMU, ESTIMATOR_STATUS,
+      241, EXTENDED_SYS_STATE. Zero CRC failures on both, at ~9x the frame volume live.
+      TWO CONSEQUENCES: (1) the decoder is validated against real silicon, not just a recording;
+      (2) the committed CI fixture is CONFIRMED REPRESENTATIVE of the real board - which retroactively
+      validates the board-free CI oracle that has been gating REQ-PIX-010 all along. The CI oracle
+      still passes unchanged (exit 0: "201 frames, 166 CRC-valid, 1 HEARTBEAT; autopilot=PX4
+      type=QUADROTOR sysid=1").
+      Live capture committed as repro/pixhawk-bench/live-6xrt-2026-08-25.bin for future differentials.
+      NOTE the msgids the board actually streams are exactly the signals DD-026's data-flow design is
+      about - HIGHRES_IMU (105) and ATTITUDE (30) dominate the traffic - so this capture is also a
+      real reference for the seam work.
+    tags: [hardware, pixhawk-6xrt, mavlink, req-pix-010, live-silicon, read-only, first-hardware]
+    fields:
+      detected-by: jess read-only live capture from the physical 6X-RT, 2026-08-25
+      severity: info
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-010
+
   - id: AFD-036
     type: ai-found-defect
     title: spar codegen WIT structuring - the data-IMPLEMENTATION record path works today (jess modeling error, now corrected); the Data_Representation=>Array path was a real gap (spar#346)
