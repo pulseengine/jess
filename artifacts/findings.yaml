@@ -1584,6 +1584,55 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-038
+    type: ai-found-defect
+    title: KILL-CRITERION PASSES on falcon-v1.134.1 — all three meld fuse modes accept, --pack-rebase is worth 5x on the M7, the fused cascade lowers; GI-FPU-002 is the sole remaining gate
+    status: resolved
+    description: >
+      2026-08-26. relay shipped v1.134.1 carrying every marker the fuse needs (__heap_base, __data_end,
+      per-stage __stack_pointer taken from jess's scry bounds: flight 16384 / iekf 8192 / rest 512, plus
+      reloc+linking sections). jess ran relay's SWREQ-FALCON-OCI-P02 KILL-CRITERION on the real published
+      artifacts. RESULT - PASSES.
+      meld 0.52.0 over the five fused stages (iekf position attitude rate mixer):
+        --address-rebase  accepts, 1 memory, 5 pages = 320 KB
+        --pack-rebase     accepts, 1 memory, 1 page  =  64 KB
+        --share-stack     accepts, 1 memory, 1 page  =  64 KB
+      All three paths work for the first time. THE PACKING IS LOAD-BEARING, not cosmetic: 320 KB EXCEEDS the
+      M7's 256 KB DTCM (forcing the cascade to slow OCRAM and spending the inner-loop latency margin DD-026
+      was designed around); 64 KB FITS DTCM comfortably. 64 KB is one wasm page = the format minimum = the floor.
+      AND IT LOWERS: --pack-rebase output -> loom -> synth 0.55 --relocatable gives cortex-m7dp 3 skips /
+      18 functions / 11,811 B; cortex-m4f 5 skips; cortex-m3 12 skips. TWO ENTRY POINTS are real defined
+      symbols in the FUSED object: pulseengine:falcon-cascade/mixer@0.7.0#mix and
+      pulseengine:falcon-cascade/rate@0.7.0#tick. The namespace rename is confirmed on the PULLED ARTIFACT,
+      not merely in relay's source.
+      *** ALL THREE REMAINING SKIPS ARE GI-FPU-002 *** - VFP register-file exhaustion, two phase-1 (S0..S15)
+      and one phase-2 (D0..D7). Nothing supplier-side remains in that list. GI-FPU-002 is now LITERALLY THE
+      ONLY THING between the fused cascade and a complete M7 image, which makes synth#881 the single remaining
+      gate - and #881 was CLOSED without the register-pressure half resolved. Re-raise upstream.
+      JESS TOOLING DEFECT FOUND AND FIXED, reported to relay unprompted: jess's publish-gate C5 check reported
+      __heap_base MISSING on 5 of 6 components. THAT WAS JESS'S BUG, NOT RELAY'S - C5 grepped `wasm-tools
+      print` TEXT output, but __heap_base lives in the `linking` custom-section SYMBOL TABLE, which prints as
+      an opaque @custom blob. Reading the RAW BYTES instead: present on all six, exactly as relay claimed.
+      Gate fixed to read the binary rather than the pretty-printer; the negative control (the v1.129
+      core-module bug) still bites on C1+C2. This mattered because jess had offered that script to BOTH
+      suppliers as a CI gate - A GATE THAT FAILS A CORRECT BUILD IS WORSE THAN NO GATE. Second
+      tooling-honesty catch in two days, after the vacuous crc_ok metric (AFD-037).
+      SCOPE HELD: this is "the fuse accepts and the output lowers" - it is NOT "it executes correctly".
+      Nothing has run on silicon; the Pixhawk was not attached this tick. The on-target differential against
+      relay's SIL reference (0.193 s, |err| 0.0059 rad/s) remains outstanding, so OCI-P05/P06 should stay
+      `implemented` - jess said so upstream rather than let a green fuse read as a green behaviour claim.
+      CORROBORATION: relay's cascade timing baseline (full tick 1.2413 us, iekf 1.1256 us = 91% of it) agrees
+      with jess's scry static stack bounds (iekf 4192 B vs 16-112 B for the rest) that the ESTIMATOR CARRIES
+      THE MASS - two independent methods, same conclusion, and directly useful for partition placement.
+    tags: [fuse, meld, pack-rebase, kill-criterion, falcon, on-target, gi-fpu-002, publish-gate, oci]
+    fields:
+      detected-by: jess kill-criterion run on falcon-v1.134.1 published artifacts, meld 0.52.0, 2026-08-26
+      severity: info
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: AFD-037
     type: ai-found-defect
     title: FIRST LIVE-HARDWARE VALIDATION - jess's MAVLink decoder (REQ-PIX-010) run against the real Pixhawk 6X-RT, read-only; live and committed samples decode identically with ZERO CRC failures
