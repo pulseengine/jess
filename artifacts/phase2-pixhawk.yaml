@@ -568,7 +568,8 @@ artifacts:
           0x20002238=0x3E800000 (0.25f), 0x2000223C=0x42480000 (50.0f) - the last two are recognisable
           f32 control constants.
         B EXECUTION PROGRESS - >100k instructions retired AND PC inside the image .text (0..0xFB29).
-          Observed PC 0x16C (immediately below mixer#mix at 0x178) and 0x344A8 = 214,696 instructions.
+          Observed PC 0x16C and 0x341BF = 213,439 instructions (the 214,696 figure was the earlier
+          2-of-5 image; corrected after clean-room verification flagged the inconsistency).
           Discriminating: a never-started image retires ~0; a HardFault lockup pins PC at a vector.
       NEGATIVE-CONTROLLED: both assertions were re-run with a wrong expected word (0xDEADBEEF) and an
       impossible instruction threshold - BOTH FAILED, so neither is vacuous.
