@@ -1,0 +1,7 @@
+package gust:hal@0.1.0;
+
+interface mmio {
+  read32: func(addr: u32) -> u32;
+
+  write32: func(addr: u32, val: u32);
+}
