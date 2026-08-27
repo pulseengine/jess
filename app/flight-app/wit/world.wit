@@ -1,0 +1,32 @@
+package jess:flight-app@0.1.0;
+
+// The jess flight APPLICATION — the mapping between relay's flight cascade and
+// gale's gust:os runtime. This is the piece AFD-043 identified as missing: falcon
+// imports no gust:os and gale-nano exports it, so nothing connected the two. jess
+// owns integration under DD-026, so this world is jess's to define.
+//
+// EVERY DEPENDENCY BELOW WAS EXTRACTED FROM THE SHIPPED WASM, not from a repo copy:
+//   deps/gust-os, deps/gust-hal        <- wasm-tools component wit gale-nano-0.7.0.wasm
+//   deps/falcon-cascade                <- unioned across the five falcon-v1.134.1 components
+//                                         (each ships a TREE-SHAKEN `types` carrying only the
+//                                          records it needs, so the full type set exists in no
+//                                          single component and had to be reconstructed)
+//
+// SHAPE per gale (#223): `export run: func() -> u32` is the canonical entry the runtime calls.
+// Capability subset follows gale's WORKING `app-ts` example (time + spawn) rather than the full
+// `world app`, deliberately: `world app-timer` is DECLARED BUT UNIMPLEMENTED upstream, and the
+// periodicity design it would serve (timer-ISR vs partition-window) is explicitly UNSETTLED. So
+// this first rung proves the seam composes; periodicity comes after that question has evidence.
+world app {
+    // gale's runtime capabilities — the app↔runtime composition seam (DD-026 layer i)
+    import gust:os/time@0.1.0;
+    import gust:os/spawn@0.1.0;
+
+    // relay's flight cascade — the data seams (DD-026 layer ii)
+    import pulseengine:falcon-cascade/types@0.7.0;
+    import pulseengine:falcon-cascade/rate@0.7.0;
+    import pulseengine:falcon-cascade/mixer@0.7.0;
+
+    // gale's canonical entry point
+    export run: func() -> u32;
+}
