@@ -550,10 +550,16 @@ artifacts:
       meld 0.52.0 `fuse --memory shared --pack-rebase` (5 pages / 320 KB -> 1 page / 64 KB) ->
       loom 1.2.0 optimize -> synth 0.55 `compile -t cortex-m7dp --cortex-m` = a self-contained
       EXEC image, 65,452 B, entry 0x81, text at 0x0, RW at 0x20000000 (DTCM), exporting
-      pulseengine:falcon-cascade/{rate@0.7.0#tick, mixer@0.7.0#mix} as real defined symbols.
-      Three functions remain skipped, ALL GI-FPU-002 (VFP register-file exhaustion, synth#881), so
-      iekf/position/attitude entry points are NOT in this image - expected, and the single remaining
-      upstream gate.
+      the cascade entry points as real defined symbols.
+      *** UPDATED 2026-08-27: ALL FIVE STAGES NOW EXPORT AND THE IMAGE STILL EXECUTES. *** synth
+      increment 2 (PR#1075, "frame-homed overflow VFP locals", on synth main) removes the 13->14
+      homed-local wall, and the fused --pack-rebase image compiles with 0 SKIPS and 5/5 exports:
+      attitude@0.7.0#tick, ekf@0.7.0#estimate, mixer@0.7.0#mix, position@0.7.0#tick, rate@0.7.0#tick.
+      Image 65,452 -> 94,907 B (+45%). Both oracle assertions still pass (PC 0x16C, 213,439
+      instructions retired, linear-memory init byte-exact at the same four non-zero probes - the probe
+      VALUES are unchanged because the fused linear memory is identical, only relocated in flash).
+      This closed the gap synth named explicitly: they verified per-stage but not on the meld-fused
+      image (their local meld predates fuse --pack-rebase), and asked jess to close it before v0.60.
       ASSERTIONS, each chosen to be OBSERVABLE (a check that cannot fail is not a check):
         A LINEAR-MEMORY INIT - the reset handler copies 0xd061 (53,345) B of wasm linear memory from
           flash 0x2ac8 to RAM 0x20000100. Probes are deliberately NON-ZERO words, because RAM reads
