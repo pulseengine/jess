@@ -1716,9 +1716,18 @@ artifacts:
       INCIDENTAL: casc_new.wasm (pre-loom) yields the same 1348 as casc_new.loom.wasm — loom is
       numerically neutral on this vector. Recorded as an observation, NOT as a general claim: one
       vector cannot establish that.
-      TOOL FRICTION FOUND: cargo-component 0.21.1 refuses to merge a local wit/deps tree that
-      wasm-tools resolves without complaint ("package 'gust:os@0.1.0' not found" vs rc=0). Routed
-      around via plain cargo + `wasm-tools component new`. To be reported.
+      *** A "TOOL FRICTION" CLAIM MADE HERE WAS WRONG AND IS WITHDRAWN (same day) ***: this finding
+      first recorded that cargo-component 0.21.1 "refuses to merge a local wit/deps tree that
+      wasm-tools resolves". A minimal 4-line repro showed the real cause is JESS'S MISUSE, not a
+      defect: cargo-component does not auto-discover wit/deps/, it requires the dependency declared
+      in [package.metadata.component.target.dependencies]. Adding that one line builds cleanly. The
+      claim was caught BEFORE it was reported to anyone, but it had already been committed here and
+      in the commit message, which is the same failure jess corrected synth for in AFD-042 — a wrong
+      citation sitting in a safety-case artifact. Withdrawn rather than quietly edited away.
+      The BUILD CHOICE still stands, on a different and now-correct ground: cargo-component defaults
+      to wasm32-wasip1, which publish-gate C3 (no-wasi) refuses. jess needs wasm32-unknown-unknown
+      plus specific lld flags (--emit-relocs, --export=__heap_base), so plain cargo +
+      `wasm-tools component new` is the right route here — but for that reason, not the stated one.
       NOT CLAIMED: this ran under wasmtime, NOT on the RT1176 and not in Renode. Periodicity is still
       a single call, not a schedule — the timer-ISR vs partition-window question (DD-025) remains
       open. gust:hal is a STUB; real MMIO is the on-target rung.
