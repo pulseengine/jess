@@ -15,3 +15,13 @@ robot_output.xml
 log.html
 report.html
 snapshots/
+
+# Renode robot per-run output (regenerated; the .robot file is the evidence)
+logs/
+# assembled silicon bring-up payloads (rebuild from sig.S via build.sh)
+hardware/silicon/**/*.o
+hardware/silicon/**/*.elf
+hardware/silicon/**/*.bin
+# jess wasm components: rebuilt by tools/appcompose/build-and-verify.sh
+app/*/target/
+app/*/*.wasm

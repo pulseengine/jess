@@ -1584,6 +1584,244 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-043
+    type: ai-found-defect
+    title: THE COMPLETE WASM STACK CANNOT BE COMPOSED YET — falcon imports NO gust:os, so the DD-026 seam has nothing to plug; the flight APPLICATION component is missing and it is JESS'S to build
+    status: resolved
+    description: >
+      2026-08-27, prompted by a direct question jess could not answer honestly ("have you worked to have
+      this integrated with gale to build the complete wasm stack"). The answer was NO - and checking
+      revealed it is not merely undone but currently IMPOSSIBLE with what is published.
+      DD-026 pins: "The flight app IMPORTS gust:os; gale's OCI component EXPORTS it; composition happens
+      ALONG gust:os (wac plug + meld fuse --memory shared)". That is not what ships.
+      MEASURED ON THE PUBLISHED ARTIFACTS:
+        falcon rate@1.134.1  imports pulseengine:falcon-cascade/types@0.7.0 (TYPE-ONLY); gust: refs = 0
+        falcon flight        imports: NONE
+        fused cascade core   imports: 0
+        gale-nano 0.7.0      exports gust:os/{time,log,spawn,exec,timer}; imports gust:hal/mmio + taskdisp
+      EMPIRICAL: `wac plug rate.wasm --plug gale-nano.wasm` fails - "the socket component had no matching
+      imports for the plugs that were provided". No import/export pair connects. The halves are disjoint.
+      NEITHER SUPPLIER IS WRONG: falcon being a PURE COMPUTATION library with zero OS dependency is a good
+      property - it is why it self-contains, lowers cleanly and reached 5/5 on two cores. gale-nano
+      exporting gust:os is exactly its contract. What is missing is the piece BETWEEN them.
+      *** THE MISSING PIECE - a flight APPLICATION component *** that IMPORTS gust:os (scheduling, time,
+      logging), IMPORTS the falcon cascade interfaces, and exports an entry the runtime starts. Today
+      nothing calls the cascade on a schedule: the synth self-contained image `blx`es the first export at
+      reset and spins (observed at PC 0x16c). The stack has a hole where the control loop's DRIVER belongs.
+      *** OWNERSHIP SETTLED (user, 2026-08-27): THIS MAPPING IS JESS'S. *** jess owns integration and
+      composition under DD-015/DD-026, so the driver component - the thing that maps the falcon cascade
+      onto gust:os - is jess's to build, not relay's and not gale's. jess is to consult gale on the
+      intended shape of the gust:os side rather than guess, since gale owns that interface.
+      SECOND MISSING PIECE, also jess-owned: gust:hal (read32/write32), gale-nano's residual. The stack
+      needs BOTH the application seam AND the native HAL before "complete" means anything.
+      *** RESOLVED 2026-08-27 by AFD-044: both missing pieces are now BUILT, and the full stack
+      composes, runs, and agrees with an independent reference. See AFD-044 for the evidence.
+      *** GALE ANSWERED 2026-08-27 — the shape, and a correction to jess's METHOD ***:
+      (4) NEITHER PLUG DIRECTION — USE `wac compose` WITH A WAC SCRIPT, NOT `wac plug`. jess's error had
+          a specific cause unrelated to the components: a plug result exports only the SOCKET's exports,
+          and plug wires plugs into the socket's imports ONLY, never plug->plug. So plug can NEVER produce
+          a composite exporting five capabilities living in five components - there is no socket whose
+          exports are the union. gale hit this themselves and moved build-os-ts.sh off plug. The node is
+          built by `wac compose` over an explicit script naming the edges, with `{ ... }` forwarding each
+          instance's remaining unsatisfied imports outward. Documented in drivers/FUSED-GUSTOS.md.
+      (2) THERE IS A CANONICAL WORLD: `world app` in wit-os/gust-os.wit — imports time, log, spawn,
+          channel, io, timer; and *** exports `run: func() -> u32` — the entry the runtime calls ***.
+          Three working examples to copy, smallest first: drivers/app-time (time only), app-tl (+log),
+          app-ts (+spawn — the first EXECUTOR-BACKED capability across the syscall seam, and the closest
+          to jess's case). CAUTION gale volunteered: `world app-timer` is DECLARED BUT HAS NO
+          IMPLEMENTATION — building the first one is new ground.
+      (3) `taskdisp` IS JESS'S, alongside gust:hal. Not another gale component. One function:
+          `poll-task: func(id: u32) -> u32` — the node's trusted dispatch saying whether task id is done;
+          the executor calls it, the embedder implements it. ENFORCED, not merely intended:
+          build-fused-gustos.sh gates the composite's residual to EXACTLY gust:hal/* + gust:os/taskdisp
+          and fails otherwise. Note what that gate REJECTS: a `gust:sched/*` residual — that would mean
+          spawn/timer were never bound to the one executor, handing a downstream the power to mutate
+          scheduler state and turning "one scheduler" from a fact into a claim.
+      (1) THE PERIODIC LOOP is (b)-with-a-correction: the app calls `spawn.start`, something drives
+          `exec.poll-round`, and the executor then calls jess's `taskdisp.poll-task` per ready task.
+          exec-provider owns the SINGLE executor and exports gust:sched/tasks; spawn and timer are
+          STATELESS consumers of it. timer consumes `time` rather than reading a register behind time's
+          back — deliberately, so there is ONE CLOCK.
+      *** TWO MEASURED WARNINGS FROM GALE THAT CHANGE JESS'S PARTITION SIZING (DD-025) ***:
+        (i) DO NOT SIZE A BUDGET FROM A DWT HIGH-WATER MARK. T4 static WCET currently bounds only 3 of 31
+            functions on the fused gust:os object; the blocker is loop-bound inference (scry#144). Until
+            that lands, a 1 kHz window budget derived from observation is AN OBSERVATION, NOT A BOUND.
+        (ii) *** THE SWITCH COSTS A TICK PER WINDOW *** — Switcher::tick fires at `offset + budget - 1`,
+            so a partition owning k windows receives Θ − k, NOT Θ. Instantiating the schedulability
+            analysis with the RAW budget is UNSOUND — machine-checked in proofs/lean/PartitionSupply.lean,
+            first violation at t=2560 for one window and t=828 for three. A 1 kHz loop sized against the
+            raw window budget "will look fine in short tests and fail later". This directly constrains the
+            two-partition MPU split jess was designing: window budgets must be instantiated at Θ − k.
+      STILL OPEN AND GALE SAYS SO: whether poll-round is driven from a TIMER ISR or from the PARTITION
+      WINDOW is a DD-025 question gale has NOT answered with evidence. gale asked jess to report which way
+      the integration forces it, as evidence for DD-025.
+    tags: [dd-026, composition, gust-os, gale, application-seam, resolved-by-afd-044, jess-owned]
+    fields:
+      detected-by: jess attempted the falcon+gale-nano composition for the first time, 2026-08-27
+      severity: major
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
+  - id: AFD-044
+    type: ai-found-defect
+    severity: major
+    triage-status: confirmed
+    detected-by: ai-agent
+    title: THE COMPLETE WASM STACK NOW COMPOSES AND RUNS — flight-app + gust-hal-stub close the DD-026 seam; composed image agrees EXACTLY with an independent reference (1348), both legs positively observed
+    status: resolved
+    description: >
+      2026-08-27. AFD-043 identified two missing pieces, both jess-owned: the flight APPLICATION
+      component (the driver mapping falcon onto gust:os) and the gust:hal native residual. Both are
+      now built, and the whole stack composes, executes, and is checked against an independent
+      reference. AFD-043 is resolved by this finding.
+      WHAT WAS BUILT
+        app/flight-app       imports gust:os/time + falcon rate/mixer, exports run: func() -> u32
+        app/gust-hal-stub    exports gust:hal/mmio + gust:os/taskdisp (stub; real MMIO is on-target)
+        app/bump-alloc       shared no_std bump allocator over __heap_base, never calls memory.grow
+      *** THE RESIDUAL WAS DERIVED, NOT DESIGNED *** — the strongest part of this result. Composing
+      flight-app against gale-nano + falcon left EXACTLY three unsatisfied imports:
+      gust:os/taskdisp, gust:hal/mmio, and falcon types. That is the mechanically-determined list of
+      what jess still owes the embedder. It was previously a guess; it is now a wac output.
+      COMPOSITION (tools/appcompose/build-and-verify.sh, one command, reproducible)
+        wac compose  flight-app + gale-nano + rate + mixer   -> step1.wasm  (3 imports left)
+        wac compose  step1 + gust-hal-stub                   -> full.wasm   (types-only import left)
+        wasm-tools validate full.wasm                        -> VALID
+        wasmtime run --invoke run() full.wasm                -> 2147484996
+      RESULT DECOMPOSED — both legs POSITIVELY observed, neither inferred from an absence:
+        low 31 bits = 1348  the falcon cascade fold
+        bit 31      = 1     gale's clock did real arithmetic on OUR argument
+      The clock bit was FIRST WRITTEN VACUOUSLY and corrected before reporting. The initial version
+      set bit 31 from `elapsed(now, deadline) == false`, which an inert clock returns too — the same
+      trap that voided the CRC claim in AFD-037. It now tests `deadline(t0,1) != t0`, which no
+      zero-returning stub can produce.
+      DIFFERENTIAL, not a golden number. tools/cascade-differential/cascade_ref.py recomputes the
+      same fold by a COMPLETELY DIFFERENT ROUTE — fused core module, raw canonical-ABI pointers, no
+      component model, no wac, no gust:os. Both routes give 1348. A golden value would be satisfied
+      by both sides sharing one bug; agreement across two routes would not be.
+        torque tx=1 ty=0.472507507 tz=-0.147003502 thrust=0.5   <- reproduces the SIL reference exactly
+        pwm    m1=0 m2=0 m3=0.348992109 m4=1  sum=1.34899211
+      NEGATIVE CONTROLS, all three run:
+        (i)   reference perturbed (wx 0.30 -> 0.35) -> 2000, DISTINCT: the fold tracks its input, so
+              1348 is not a constant a miscompile that drops the state would also produce.
+        (ii)  reference deliberately falsified (x1000 -> x1001) -> oracle EXITS 1 with
+              "DIFFERENTIAL MISMATCH: composed=1348 reference=1350"; restored -> PASS. The gate can fail.
+        (iii) publish gate on jess's OWN components: FAILED C4+C5 before the link flags, PASSED after.
+      *** JESS FAILED ITS OWN PUBLISH GATE *** — worth stating plainly. flight-app was NOT CONSUMABLE
+      on first build: no reloc.* sections and no __heap_base, the exact defect jess reported against
+      relay's publish path. lld defines __heap_base synthetically but does not export it, and emits no
+      relocations, unless asked. Fixed with --emit-relocs / --export=__heap_base in .cargo/config.toml.
+      Both jess components now pass all five checks. The gate was not written to point outward only.
+      INCIDENTAL: casc_new.wasm (pre-loom) yields the same 1348 as casc_new.loom.wasm — loom is
+      numerically neutral on this vector. Recorded as an observation, NOT as a general claim: one
+      vector cannot establish that.
+      *** A "TOOL FRICTION" CLAIM MADE HERE WAS WRONG AND IS WITHDRAWN (same day) ***: this finding
+      first recorded that cargo-component 0.21.1 "refuses to merge a local wit/deps tree that
+      wasm-tools resolves". A minimal 4-line repro showed the real cause is JESS'S MISUSE, not a
+      defect: cargo-component does not auto-discover wit/deps/, it requires the dependency declared
+      in [package.metadata.component.target.dependencies]. Adding that one line builds cleanly. The
+      claim was caught BEFORE it was reported to anyone, but it had already been committed here and
+      in the commit message, which is the same failure jess corrected synth for in AFD-042 — a wrong
+      citation sitting in a safety-case artifact. Withdrawn rather than quietly edited away.
+      The BUILD CHOICE still stands, on a different and now-correct ground: cargo-component defaults
+      to wasm32-wasip1, which publish-gate C3 (no-wasi) refuses. jess needs wasm32-unknown-unknown
+      plus specific lld flags (--emit-relocs, --export=__heap_base), so plain cargo +
+      `wasm-tools component new` is the right route here — but for that reason, not the stated one.
+      NOT CLAIMED: this ran under wasmtime, NOT on the RT1176 and not in Renode. Periodicity is still
+      a single call, not a schedule — the timer-ISR vs partition-window question (DD-025) remains
+      open. gust:hal is a STUB; real MMIO is the on-target rung.
+    links:
+      - type: traces-to
+        target: DD-026
+      - type: traces-to
+        target: REQ-PIX-007
+
+  - id: AFD-045
+    type: ai-found-defect
+    severity: major
+    triage-status: confirmed
+    detected-by: jess attempted to lower the newly-composed DD-026 stack for the RT1176, 2026-08-27
+    title: THE COMPOSED STACK HAS NO MCU LOWERING PATH — multi-memory validates but has no single-address-space lowering, and shared+address-rebase emits INVALID wasm with exit 0 (meld#390, distinct from #351/#326/#339)
+    status: open
+    description: >
+      2026-08-27, immediately after AFD-044 closed the composition gap. The natural next rung was to
+      lower the composed image for the RT1176. It does not lower today, and the reason is a meld
+      defect that jess found, minimised and filed as meld#390.
+      THE FORK, and both tines are currently dead ends:
+        --memory multi (the `auto` choice)     VALIDATES and RUNS CORRECTLY, but meld itself states
+                                               multi-memory "has no single-address-space (MCU)
+                                               lowering" (meld#172). Cannot reach the RT1176.
+        --memory shared --address-rebase       the ONLY single-address-space route, and it emits a
+                                               module that FAILS wasm-tools validate. meld EXITS 0.
+      MINIMAL REPRO — two components, not the 19-component graph:
+        meld fuse flight-app.wasm rate.wasm --memory shared --address-rebase   -> exit 0
+        wasm-tools validate                                                    -> func 14 failed:
+          "type mismatch: values remaining on stack at end of block (at offset 0x840)"
+      *** DISTINCT FROM THE KNOWN REBASE ISSUES *** and this is why it was filed rather than added to
+      one: meld#351 states explicitly that "the fused module validates cleanly", and #326/#339 are
+      likewise about WRONG ADDRESSES IN A VALID MODULE. Here the module is not valid at all and meld
+      reports success. The only warning printed is the standard #326 unsoundness note, which points
+      at computed addresses - not at malformed output.
+      WHAT SEPARATES PASS FROM FAIL (the discriminating table, all measured):
+        flight-app alone / rate alone            valid
+        rate + mixer                             VALID   <- both record-carrying, but neither imports
+                                                            the other: no call crosses the boundary
+        flight-app + gale-nano                   VALID   <- a call DOES cross, but gust:os/time is
+                                                            scalar-only (u64/bool)
+        flight-app + rate                        INVALID (func 14)
+        flight-app + mixer                       INVALID (func 12)
+        full 19-component composition            INVALID (func 72, "expected f32, found i32")
+      HYPOTHESIS OFFERED TO MELD AS A SEARCH AIM, NOT AS A DIAGNOSIS: the trigger is a wired
+      cross-component call whose signature passes or returns a RECORD via linear memory - exactly the
+      calls the rebase pass must touch. jess has not read the rebase implementation and did not claim to.
+      RULED OUT BEFORE FILING: not relocation-driven (rebuilding flight-app WITHOUT --emit-relocs
+      reproduces the identical func 14 failure); not a wac artefact (fusing the four raw components
+      with no wac step fails identically); not general toolchain breakage (the pre-existing falcon
+      fused cascade still validates); not a bad input (the default path produces a valid module that
+      RUNS and reproduces the AFD-044 reference value 1348 exactly).
+      *** A NARROWING ERROR WAS MADE AND CORRECTED MID-INVESTIGATION *** - recorded because the wrong
+      version was briefly believed. The first narrowing pass reported "INVALID" for cases where meld
+      had actually FAILED TO PRODUCE OUTPUT AT ALL: validate was run on a non-existent file and its
+      failure was scored as an invalid module. Two different failures were being conflated under one
+      label. Re-run with meld's exit code and wasm-tools' exit code checked SEPARATELY, which is what
+      produced the table above. The corrected run happens to reach the same conclusion, but the first
+      pass was not evidence for it.
+      *** THIS FINDING WAS FIRST WRITTEN AGAINST STALE TOOLING - A PROCESS FAILURE, RECORDED ***: the
+      investigation and the initial meld#390 report were run on meld 0.41.3 while 0.52.0 IS LATEST -
+      eleven minor versions. "Run a supplier's DOCUMENTED pipeline before reporting a failure against
+      it" is a standing rule and it was broken. Re-run in full on 0.52.0 and meld#390 corrected in a
+      comment. THE DEFECT IS REAL AND REPRODUCES EXACTLY on 0.52.0 (same func 14, same offset 0x840),
+      so the conclusion survives - but it was not earned until the re-run, and three specifics were wrong:
+        (a) BROADER THAN FILED: `--pack-rebase` did not exist in 0.41.3 and was never tested. It fails
+            IDENTICALLY. That matters because --pack-rebase is the path the campaign actually uses.
+        (b) LESS SEVERE THAN FILED: meld already ships `--validate`, which CATCHES this (exit 1,
+            "Validation failed"). The "silent, exit 0" framing was an overstatement - it is silent only
+            by DEFAULT, and jess should have checked for the flag before characterising it.
+        (c) the version citation in the report header was wrong.
+      MATRIX RE-MEASURED ON MELD 0.52.0:
+        rate + mixer            --pack-rebase      VALID    <- the falcon-only cascade path is NOT affected
+        flight-app + rate       --pack-rebase      INVALID
+        full composition        --pack-rebase      INVALID
+        full composition        --address-rebase   INVALID
+        full composition        --memory multi     VALID (but no MCU lowering)
+      The `rate + mixer` row is the important one: this does NOT regress the existing cascade lowering.
+      It specifically breaks fusing the cascade TOGETHER WITH an application that imports it.
+      *** SECOND-ORDER FINDING - JESS'S TOOLCHAIN IS UNPINNED AND DRIFTED ***: local meld was 0.41.3,
+      CI pins MELD_VERSION v0.41.3, and latest is 0.52.0. Nothing detected the drift because JESS HAS
+      NO VARVE PIN. This is the concrete cost of that gap: an upstream report filed against tooling
+      eleven versions old. The varve pin moves from "nice to have" to a real defect-prevention control.
+      CAMPAIGN IMPACT: the on-target rung for the COMPOSED stack is blocked upstream. Note this does
+      NOT block the falcon cascade alone - that image still lowers 5/5 on m7dp and m4f (AFD-042). What
+      is blocked is lowering the cascade TOGETHER WITH the runtime and the application, which is what
+      DD-026 actually requires. Filed meld#390; awaiting response.
+    tags: [meld, address-rebase, lowering, mcu, dd-026, composition, blocker, upstream]
+    links:
+      - type: traces-to
+        target: DD-026
+      - type: traces-to
+        target: REQ-PIX-021
+
   - id: AFD-042
     type: ai-found-defect
     title: synth v0.60.0 — 5/5 on BOTH m7dp and m4f (the M4 estimator lockout is closed), image byte-identical across three independent builds; and a correction — synth cited "jess executed it on hardware" for a `verified` status flip, which is FALSE
