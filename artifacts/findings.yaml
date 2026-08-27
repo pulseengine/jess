@@ -1737,6 +1737,67 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-045
+    type: ai-found-defect
+    severity: major
+    triage-status: confirmed
+    detected-by: jess attempted to lower the newly-composed DD-026 stack for the RT1176, 2026-08-27
+    title: THE COMPOSED STACK HAS NO MCU LOWERING PATH — multi-memory validates but has no single-address-space lowering, and shared+address-rebase emits INVALID wasm with exit 0 (meld#390, distinct from #351/#326/#339)
+    status: open
+    description: >
+      2026-08-27, immediately after AFD-044 closed the composition gap. The natural next rung was to
+      lower the composed image for the RT1176. It does not lower today, and the reason is a meld
+      defect that jess found, minimised and filed as meld#390.
+      THE FORK, and both tines are currently dead ends:
+        --memory multi (the `auto` choice)     VALIDATES and RUNS CORRECTLY, but meld itself states
+                                               multi-memory "has no single-address-space (MCU)
+                                               lowering" (meld#172). Cannot reach the RT1176.
+        --memory shared --address-rebase       the ONLY single-address-space route, and it emits a
+                                               module that FAILS wasm-tools validate. meld EXITS 0.
+      MINIMAL REPRO — two components, not the 19-component graph:
+        meld fuse flight-app.wasm rate.wasm --memory shared --address-rebase   -> exit 0
+        wasm-tools validate                                                    -> func 14 failed:
+          "type mismatch: values remaining on stack at end of block (at offset 0x840)"
+      *** DISTINCT FROM THE KNOWN REBASE ISSUES *** and this is why it was filed rather than added to
+      one: meld#351 states explicitly that "the fused module validates cleanly", and #326/#339 are
+      likewise about WRONG ADDRESSES IN A VALID MODULE. Here the module is not valid at all and meld
+      reports success. The only warning printed is the standard #326 unsoundness note, which points
+      at computed addresses - not at malformed output.
+      WHAT SEPARATES PASS FROM FAIL (the discriminating table, all measured):
+        flight-app alone / rate alone            valid
+        rate + mixer                             VALID   <- both record-carrying, but neither imports
+                                                            the other: no call crosses the boundary
+        flight-app + gale-nano                   VALID   <- a call DOES cross, but gust:os/time is
+                                                            scalar-only (u64/bool)
+        flight-app + rate                        INVALID (func 14)
+        flight-app + mixer                       INVALID (func 12)
+        full 19-component composition            INVALID (func 72, "expected f32, found i32")
+      HYPOTHESIS OFFERED TO MELD AS A SEARCH AIM, NOT AS A DIAGNOSIS: the trigger is a wired
+      cross-component call whose signature passes or returns a RECORD via linear memory - exactly the
+      calls the rebase pass must touch. jess has not read the rebase implementation and did not claim to.
+      RULED OUT BEFORE FILING: not relocation-driven (rebuilding flight-app WITHOUT --emit-relocs
+      reproduces the identical func 14 failure); not a wac artefact (fusing the four raw components
+      with no wac step fails identically); not general toolchain breakage (the pre-existing falcon
+      fused cascade still validates); not a bad input (the default path produces a valid module that
+      RUNS and reproduces the AFD-044 reference value 1348 exactly).
+      *** A NARROWING ERROR WAS MADE AND CORRECTED MID-INVESTIGATION *** - recorded because the wrong
+      version was briefly believed. The first narrowing pass reported "INVALID" for cases where meld
+      had actually FAILED TO PRODUCE OUTPUT AT ALL: validate was run on a non-existent file and its
+      failure was scored as an invalid module. Two different failures were being conflated under one
+      label. Re-run with meld's exit code and wasm-tools' exit code checked SEPARATELY, which is what
+      produced the table above. The corrected run happens to reach the same conclusion, but the first
+      pass was not evidence for it.
+      CAMPAIGN IMPACT: the on-target rung for the COMPOSED stack is blocked upstream. Note this does
+      NOT block the falcon cascade alone - that image still lowers 5/5 on m7dp and m4f (AFD-042). What
+      is blocked is lowering the cascade TOGETHER WITH the runtime and the application, which is what
+      DD-026 actually requires. Filed meld#390; awaiting response.
+    tags: [meld, address-rebase, lowering, mcu, dd-026, composition, blocker, upstream]
+    links:
+      - type: traces-to
+        target: DD-026
+      - type: traces-to
+        target: REQ-PIX-021
+
   - id: AFD-042
     type: ai-found-defect
     title: synth v0.60.0 — 5/5 on BOTH m7dp and m4f (the M4 estimator lockout is closed), image byte-identical across three independent builds; and a correction — synth cited "jess executed it on hardware" for a `verified` status flip, which is FALSE
