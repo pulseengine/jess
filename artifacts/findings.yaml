@@ -1787,6 +1787,30 @@ artifacts:
       label. Re-run with meld's exit code and wasm-tools' exit code checked SEPARATELY, which is what
       produced the table above. The corrected run happens to reach the same conclusion, but the first
       pass was not evidence for it.
+      *** THIS FINDING WAS FIRST WRITTEN AGAINST STALE TOOLING - A PROCESS FAILURE, RECORDED ***: the
+      investigation and the initial meld#390 report were run on meld 0.41.3 while 0.52.0 IS LATEST -
+      eleven minor versions. "Run a supplier's DOCUMENTED pipeline before reporting a failure against
+      it" is a standing rule and it was broken. Re-run in full on 0.52.0 and meld#390 corrected in a
+      comment. THE DEFECT IS REAL AND REPRODUCES EXACTLY on 0.52.0 (same func 14, same offset 0x840),
+      so the conclusion survives - but it was not earned until the re-run, and three specifics were wrong:
+        (a) BROADER THAN FILED: `--pack-rebase` did not exist in 0.41.3 and was never tested. It fails
+            IDENTICALLY. That matters because --pack-rebase is the path the campaign actually uses.
+        (b) LESS SEVERE THAN FILED: meld already ships `--validate`, which CATCHES this (exit 1,
+            "Validation failed"). The "silent, exit 0" framing was an overstatement - it is silent only
+            by DEFAULT, and jess should have checked for the flag before characterising it.
+        (c) the version citation in the report header was wrong.
+      MATRIX RE-MEASURED ON MELD 0.52.0:
+        rate + mixer            --pack-rebase      VALID    <- the falcon-only cascade path is NOT affected
+        flight-app + rate       --pack-rebase      INVALID
+        full composition        --pack-rebase      INVALID
+        full composition        --address-rebase   INVALID
+        full composition        --memory multi     VALID (but no MCU lowering)
+      The `rate + mixer` row is the important one: this does NOT regress the existing cascade lowering.
+      It specifically breaks fusing the cascade TOGETHER WITH an application that imports it.
+      *** SECOND-ORDER FINDING - JESS'S TOOLCHAIN IS UNPINNED AND DRIFTED ***: local meld was 0.41.3,
+      CI pins MELD_VERSION v0.41.3, and latest is 0.52.0. Nothing detected the drift because JESS HAS
+      NO VARVE PIN. This is the concrete cost of that gap: an upstream report filed against tooling
+      eleven versions old. The varve pin moves from "nice to have" to a real defect-prevention control.
       CAMPAIGN IMPACT: the on-target rung for the COMPOSED stack is blocked upstream. Note this does
       NOT block the falcon cascade alone - that image still lowers 5/5 on m7dp and m4f (AFD-042). What
       is blocked is lowering the cascade TOGETHER WITH the runtime and the application, which is what
