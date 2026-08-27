@@ -1615,6 +1615,45 @@ artifacts:
       SECOND MISSING PIECE, also jess-owned: gust:hal (read32/write32), gale-nano's residual. The stack
       needs BOTH the application seam AND the native HAL before "complete" means anything.
       STATUS open deliberately - a live gap with jess as the owner, not a resolved finding.
+      *** GALE ANSWERED 2026-08-27 — the shape, and a correction to jess's METHOD ***:
+      (4) NEITHER PLUG DIRECTION — USE `wac compose` WITH A WAC SCRIPT, NOT `wac plug`. jess's error had
+          a specific cause unrelated to the components: a plug result exports only the SOCKET's exports,
+          and plug wires plugs into the socket's imports ONLY, never plug->plug. So plug can NEVER produce
+          a composite exporting five capabilities living in five components - there is no socket whose
+          exports are the union. gale hit this themselves and moved build-os-ts.sh off plug. The node is
+          built by `wac compose` over an explicit script naming the edges, with `{ ... }` forwarding each
+          instance's remaining unsatisfied imports outward. Documented in drivers/FUSED-GUSTOS.md.
+      (2) THERE IS A CANONICAL WORLD: `world app` in wit-os/gust-os.wit — imports time, log, spawn,
+          channel, io, timer; and *** exports `run: func() -> u32` — the entry the runtime calls ***.
+          Three working examples to copy, smallest first: drivers/app-time (time only), app-tl (+log),
+          app-ts (+spawn — the first EXECUTOR-BACKED capability across the syscall seam, and the closest
+          to jess's case). CAUTION gale volunteered: `world app-timer` is DECLARED BUT HAS NO
+          IMPLEMENTATION — building the first one is new ground.
+      (3) `taskdisp` IS JESS'S, alongside gust:hal. Not another gale component. One function:
+          `poll-task: func(id: u32) -> u32` — the node's trusted dispatch saying whether task id is done;
+          the executor calls it, the embedder implements it. ENFORCED, not merely intended:
+          build-fused-gustos.sh gates the composite's residual to EXACTLY gust:hal/* + gust:os/taskdisp
+          and fails otherwise. Note what that gate REJECTS: a `gust:sched/*` residual — that would mean
+          spawn/timer were never bound to the one executor, handing a downstream the power to mutate
+          scheduler state and turning "one scheduler" from a fact into a claim.
+      (1) THE PERIODIC LOOP is (b)-with-a-correction: the app calls `spawn.start`, something drives
+          `exec.poll-round`, and the executor then calls jess's `taskdisp.poll-task` per ready task.
+          exec-provider owns the SINGLE executor and exports gust:sched/tasks; spawn and timer are
+          STATELESS consumers of it. timer consumes `time` rather than reading a register behind time's
+          back — deliberately, so there is ONE CLOCK.
+      *** TWO MEASURED WARNINGS FROM GALE THAT CHANGE JESS'S PARTITION SIZING (DD-025) ***:
+        (i) DO NOT SIZE A BUDGET FROM A DWT HIGH-WATER MARK. T4 static WCET currently bounds only 3 of 31
+            functions on the fused gust:os object; the blocker is loop-bound inference (scry#144). Until
+            that lands, a 1 kHz window budget derived from observation is AN OBSERVATION, NOT A BOUND.
+        (ii) *** THE SWITCH COSTS A TICK PER WINDOW *** — Switcher::tick fires at `offset + budget - 1`,
+            so a partition owning k windows receives Θ − k, NOT Θ. Instantiating the schedulability
+            analysis with the RAW budget is UNSOUND — machine-checked in proofs/lean/PartitionSupply.lean,
+            first violation at t=2560 for one window and t=828 for three. A 1 kHz loop sized against the
+            raw window budget "will look fine in short tests and fail later". This directly constrains the
+            two-partition MPU split jess was designing: window budgets must be instantiated at Θ − k.
+      STILL OPEN AND GALE SAYS SO: whether poll-round is driven from a TIMER ISR or from the PARTITION
+      WINDOW is a DD-025 question gale has NOT answered with evidence. gale asked jess to report which way
+      the integration forces it, as evidence for DD-025.
     tags: [dd-026, composition, gust-os, gale, application-seam, gap, jess-owned]
     fields:
       detected-by: jess attempted the falcon+gale-nano composition for the first time, 2026-08-27
