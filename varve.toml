@@ -1,0 +1,21 @@
+# jess's toolchain pin.
+#
+# WHY THIS EXISTS, concretely: on 2026-08-27 jess filed an upstream defect report
+# (meld#390) against meld 0.41.3 while 0.52.0 was latest — ELEVEN minor versions
+# stale. Nothing detected the drift, because nothing was pinned: the local binary
+# came from PATH and CI pinned its own separate versions in ci.yml. That cost a
+# supplier's attention on a report whose version citation was wrong. See AFD-045.
+#
+# The realm supplies both the registry and the trust root, so no environment
+# variable is needed; varve-realms.toml is committed beside this file.
+manifest-version = 1
+
+[toolchain]
+realm   = "pulseengine"
+channel = "rolling"
+layer   = "2026.08.4"
+# The layer NAME is not sufficient on its own: two entries for 2026.08.4 exist in this
+# realm under different digests, and varve refuses to guess between them rather than
+# silently picking one. That refusal is the feature. This digest is the one `varve
+# install` fetched and verified against the realm's trust root on 2026-08-27.
+digest  = "sha256:c1e6a418f87dedfb97caca3d983cb7a17b3365492f66de920487a8470f064fe1"
