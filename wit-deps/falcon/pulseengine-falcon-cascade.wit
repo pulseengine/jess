@@ -1,15 +1,6 @@
 package pulseengine:falcon-cascade@0.7.0;
 
 interface types {
-  record imu-sample {
-    ax: f32,
-    ay: f32,
-    az: f32,
-    gx: f32,
-    gy: f32,
-    gz: f32,
-  }
-
   record vehicle-state {
     qw: f32,
     qx: f32,
@@ -27,6 +18,29 @@ interface types {
     innovation: f32,
   }
 
+  record rate-setpoint {
+    rx: f32,
+    ry: f32,
+    rz: f32,
+    thrust: f32,
+  }
+
+  record torque-setpoint {
+    tx: f32,
+    ty: f32,
+    tz: f32,
+    thrust: f32,
+  }
+
+  record imu-sample {
+    ax: f32,
+    ay: f32,
+    az: f32,
+    gx: f32,
+    gy: f32,
+    gz: f32,
+  }
+
   record waypoint {
     north: f32,
     east: f32,
@@ -42,20 +56,6 @@ interface types {
     thrust: f32,
   }
 
-  record rate-setpoint {
-    rx: f32,
-    ry: f32,
-    rz: f32,
-    thrust: f32,
-  }
-
-  record torque-setpoint {
-    tx: f32,
-    ty: f32,
-    tz: f32,
-    thrust: f32,
-  }
-
   record motor-pwm {
     m1: f32,
     m2: f32,
@@ -64,30 +64,26 @@ interface types {
   }
 }
 
-interface ekf {
-  use types.{imu-sample, vehicle-state};
-
-  estimate: func(imu: imu-sample) -> vehicle-state;
-}
-
-interface position {
-  use types.{vehicle-state, waypoint, attitude-setpoint};
-
-  tick: func(state: vehicle-state, target: waypoint) -> attitude-setpoint;
-}
-
-interface attitude {
-  use types.{vehicle-state, attitude-setpoint, rate-setpoint};
-
-  tick: func(state: vehicle-state, sp: attitude-setpoint) -> rate-setpoint;
-}
-
 interface rate {
   use types.{vehicle-state, rate-setpoint, torque-setpoint};
 
   tick: func(state: vehicle-state, sp: rate-setpoint) -> torque-setpoint;
 }
+interface ekf {
+  use types.{imu-sample, vehicle-state};
 
+  estimate: func(imu: imu-sample) -> vehicle-state;
+}
+interface position {
+  use types.{vehicle-state, waypoint, attitude-setpoint};
+
+  tick: func(state: vehicle-state, target: waypoint) -> attitude-setpoint;
+}
+interface attitude {
+  use types.{vehicle-state, attitude-setpoint, rate-setpoint};
+
+  tick: func(state: vehicle-state, sp: attitude-setpoint) -> rate-setpoint;
+}
 interface mixer {
   use types.{torque-setpoint, motor-pwm};
 
