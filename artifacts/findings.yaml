@@ -1584,6 +1584,52 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-041
+    type: ai-found-defect
+    title: Clean-room verify of the 5/5 cascade claims — 7/7 CONFIRMED and one claim STRENGTHENED (bit-reproducible image), but the oracle's own prose was STALE and CI gated execution without provenance
+    status: resolved
+    description: >
+      2026-08-27 SELF-VERIFY (overdue - four features since the last, and two claims had gone UPSTREAM
+      to synth#1069, so an overclaim would have been costly). Fresh-context subagent, no inherited framing.
+      ALL SEVEN CLAIMS CONFIRMED, and claim 1 came back STRONGER THAN CLAIMED: the verifier rebuilt the
+      fused cascade from the five .wasm inputs independently (0 skips, 5/5 T symbols), ADDED a negative
+      control jess had not run (the v0.59.0 RELEASE synth on the SAME fused input gives exit=1, 3 skips,
+      0 T symbols), and established something jess had not: THE COMMITTED IMAGE IS BIT-REPRODUCIBLE - a
+      fresh pipeline build yields a byte-identical SHA256 (c692f50d..., 94,907 B) from two independent
+      builds. Also confirmed: the source-built synth genuinely differs from the release build (md5
+      1a3244 vs 6cdf7f despite both reporting 0.59.0) and the fixture discriminates exactly; the oracle
+      is NON-VACUOUS (both injected mutants fail with real read-back values); the publish-gate SIGPIPE
+      fix holds with 6/6 positive and the negative control still biting; rivet PASS (197 warnings);
+      no stranded branches this time (git ls-remote = main only, 62 PRs all merged); no CI gate bypassed.
+      *** THE REAL INCONSISTENCY - STALE PROSE IN THE EVIDENCE ITSELF ***: the header comment of
+      hardware/renode/cascade-m7/falcon-cascade-m7.robot still described the PREVIOUS 2-of-5 image -
+      "loom 1.2.0 / synth 0.55 / 65,452 B" and, flatly false of the committed ELF, "Three functions
+      remain skipped ... iekf/position/attitude entry points are NOT in this image - that is expected
+      and is the single remaining upstream gate". The test cases were correct and non-vacuous; only the
+      prose lied. It mattered because THIS FILE IS THE EVIDENCE cited upstream for the 5/5 claim: anyone
+      opening it to check would read a comment saying three stages were missing. Also the instruction
+      count 214,696 (the 2-of-5 figure) survived in both the robot and one paragraph of TEST-PIX-031
+      while the updated paragraph said 213,439. Both corrected.
+      *** STRUCTURAL GAP FOUND (the more valuable finding) ***: CI runs the robot against the COMMITTED
+      ELF and never rebuilds the meld->loom->synth chain, so CI gated EXECUTION but not PROVENANCE - a
+      hand-swapped or drifted image would have passed. Closed HALF of it: an IMAGE PROVENANCE PIN
+      (SHA256 asserted in the robot, negative-controlled - a mutated digest fails). HONEST SCOPE stated
+      in the file: the pin detects that the committed bytes changed; it does NOT prove the pipeline
+      produced them. The full gate (rebuild the chain in CI) needs meld/loom/synth in the runner and is
+      tracked as follow-on work. Pinning is meaningful here precisely BECAUSE the image was shown
+      bit-reproducible - pinning an unreproducible blob would be theatre.
+      METHOD NOTE: the verifier also observed main's HEAD CI was QUEUED when it started (so the claim
+      was not yet true at that moment) and polled it to completion (5/5 jobs green) rather than
+      reporting the queued state as a pass - the same never-on-pending discipline, applied to jess.
+    tags: [self-verify, clean-room, oracle, provenance, reproducibility, falcon, cascade]
+    fields:
+      detected-by: fresh-context clean-room subagent over the 5/5 cascade claims, 2026-08-27
+      severity: minor
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: AFD-040
     type: ai-found-defect
     title: gale-nano 0.7.0 passes the gate and holds its invariant via the SOUND path; meld now REFUSES the silent-overlap fuse; loom 1.4.1 neutral; and jess's own publish-gate had a SIGPIPE false-negative
