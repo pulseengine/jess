@@ -37,7 +37,13 @@ for f in "$@"; do
   # `linking` custom-section SYMBOL TABLE, which prints as an opaque @custom blob. Grepping
   # the wat text gives a FALSE NEGATIVE on correctly-built components (observed on
   # falcon-v1.134.1: 5 of 6 wrongly failed). Match the symbol in the binary instead.
-  if strings -a "$f" 2>/dev/null | grep -q '__heap_base'; then c5=PASS
+  # NOTE: do NOT pipe `strings` into `grep -q` here. `set -o pipefail` is active, and
+  # `grep -q` exits on first match, SIGPIPE-ing the producer; the pipeline then returns 141
+  # and the check reports a FALSE FAIL. Whether it bites depends on WHERE in the file the
+  # symbol occurs, so it is arbitrary per-artifact — observed: gale-nano 0.7.0 (30 KB) wrongly
+  # failed while relay's mixer (12 KB) passed. Match the binary directly instead; `grep -a`
+  # treats it as text and there is no pipe to break.
+  if grep -qa '__heap_base' "$f" 2>/dev/null; then c5=PASS
   else c5="FAIL(no __heap_base — export it or retain the linking section)"; fail=1; fi
 
   [ $fail -eq 0 ] && verdict="CONSUMABLE" || { verdict="NOT CONSUMABLE"; rc=1; }

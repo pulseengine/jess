@@ -1584,6 +1584,65 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-040
+    type: ai-found-defect
+    title: gale-nano 0.7.0 passes the gate and holds its invariant via the SOUND path; meld now REFUSES the silent-overlap fuse; loom 1.4.1 neutral; and jess's own publish-gate had a SIGPIPE false-negative
+    status: resolved
+    description: >
+      2026-08-27 release-watch. Five suppliers moved (gale 0.6->0.7, loom 1.2->1.4.1, rivet 0.32->0.34,
+      spar 0.35->0.40, sigil 0.10->0.11). Tested the two that sit in the pipeline.
+      *** JESS TOOLING DEFECT - FOUND BEFORE IT CAUSED A FALSE REPORT (third such catch) ***: the
+      publish-gate C5 check reported __heap_base MISSING on gale-nano 0.7.0. Verified independently
+      first (strings / grep -a / wasm-tools print all found it, 5 occurrences) - THE GATE WAS WRONG.
+      ROOT CAUSE: the script runs `set -o pipefail` and C5 piped `strings -a FILE | grep -q PATTERN`.
+      `grep -q` exits on first match, SIGPIPEs the producer, and with pipefail the pipeline returns 141
+      -> the `if` takes the else branch -> FALSE FAIL. Whether it bites depends on WHERE in the file the
+      symbol occurs, so it is ARBITRARY PER-ARTIFACT: gale-nano 0.7.0 (30 KB) wrongly failed while
+      relay's mixer (12 KB) passed. Demonstrated: rc=0 without pipefail, rc=141 with it, on the same
+      file. FIXED by matching the binary directly (`grep -qa PATTERN "$f"`) with no pipe.
+      RE-VERIFIED EVERY PRIOR CLAIM with the fixed gate: relay v1.134.1 all six still CONSUMABLE (the
+      report to relay was correct - luck, not judgement); gale-nano 0.6.0 still fails C4+C5 (that report
+      was correct too); the negative control (v1.129 core-module) still bites on C1+C2. So no prior
+      upstream report was wrong - but the next one would have been.
+      GALE-NANO 0.7.0 - PASSES. Component, digest OK, 30,476 B (0.6.0: 20,741). Gate C1-C5 ALL PASS:
+      gale added BOTH --emit-relocs (C4, which 0.6.0 failed) AND __heap_base (C5). WIT world unchanged
+      and still matches the DD-026 three-layer contract (exports gust:os/{time,log,spawn,exec,timer},
+      imports gust:hal/mmio + gust:os/taskdisp).
+      ACCEPTANCE INVARIANT RE-VERIFIED, AND THIS TIME SOUNDLY: 0 skips on all three cores with residual
+      EXACTLY `poll-task read32 write32`; 7,785 B (m7dp/m4f), 7,781 B (m3). The 0.6.0 result was obtained
+      via plain `--memory shared`, which SILENTLY OVERLAPPED data segments; 0.7.0 goes through
+      `--pack-rebase`, which does not.
+      *** MELD#370 IS FIXED AND ENFORCING *** - meld 0.52 now HARD-REFUSES the plain `--memory shared`
+      fuse: "overlapping data segments in fused output (10 overlapping pair(s)) ... this silently
+      corrupts data. use --address-rebase (page-granular) or the compact --pack-rebase". That is the
+      exact command jess ran on 0.6.0 and had to retract a claim over (AFD-038 correction). The tool now
+      makes that mistake impossible.
+      *** SYNTH v0.59's THREE GATES MECHANICALLY ENUMERATE THE JESS EMBEDDER CONTRACT *** - a genuinely
+      useful by-product for the unstarted gust:hal work. Hitting them in sequence on gale-nano says
+      exactly what jess-as-embedder must provide:
+        (1) the IMPORTS - gust:hal/mmio read32/write32 + gust:os/taskdisp poll-task (the residual);
+        (2) #1041 DATA-SEGMENT population - `--embedder-data-init` declares the embedder populates the
+            module's active data segments at instantiation;
+        (3) #1052 GLOBAL-INITIALIZER evaluation - `--embedder-global-init` declares the embedder
+            evaluates the module's 6 global initializers and seeds the R9 globals table BEFORE any
+            export runs (the documented contract assigns only the table BASE to the embedder, never
+            initializer evaluation).
+      Each refuses loudly rather than silently reading whatever target memory holds. So the gust:hal
+      specification is no longer guesswork: it is (1)+(2)+(3).
+      LOOM 1.4.1 (from 1.2.0) - NEUTRAL for the falcon gate. Re-optimized the fused packed cascade:
+      wasm 64,486 -> 61,216 B (5% SMALLER), but skip counts IDENTICAL on all three targets (m7dp 3,
+      m4f 5, m3 12) and the self-contained ARM image slightly LARGER (65,723 vs 65,576, +147 B). Smaller
+      input does not imply smaller output; recorded because the opposite is the natural assumption.
+      Consistent with GI-FPU-002 being a synth register-allocation limit no upstream optimizer can remove.
+    tags: [release-watch, gale, gale-nano, loom, meld, synth, publish-gate, embedder-contract, gust-hal]
+    fields:
+      detected-by: jess release-watch 2026-08-27 on gale 0.7.0 + loom 1.4.1 against the real artifacts
+      severity: info
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: AFD-039
     type: ai-found-defect
     title: synth v0.59 adds TWO honest-refusal gates (#952 missing-export, #1041 unmaterialized data segments) — falcon numbers unchanged, but #1041 means jess's --relocatable objects were never executable
