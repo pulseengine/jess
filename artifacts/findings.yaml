@@ -1584,6 +1584,51 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-042
+    type: ai-found-defect
+    title: synth v0.60.0 — 5/5 on BOTH m7dp and m4f (the M4 estimator lockout is closed), image byte-identical across three independent builds; and a correction — synth cited "jess executed it on hardware" for a `verified` status flip, which is FALSE
+    status: resolved
+    description: >
+      2026-08-27. synth released v0.60.0 carrying increments 1+2 and CLOSED synth#1069, flipping the
+      rivet status to `verified`.
+      *** THE CORRECTION - jess's own claim, mis-stated upstream, attached to a status flip ***: synth's
+      closing note says the flip to `verified` happened "because JESS EXECUTED IT ON HARDWARE". That is
+      FALSE and jess corrected it immediately. Every run in that thread was on an RT1176 RENODE MODEL.
+      The physical Pixhawk 6X-RT has been ABSENT on every loop tick - the hardware probe runs first each
+      cycle and has never found it. What the evidence actually supports: (a) 5/5 cascade stages reach
+      nm->T on m7dp - synth's own stated DoD, independently reproduced by jess; (b) the fused image
+      builds, loads, initialises linear memory byte-exact and retires 213,439 instructions on an
+      EMULATED RT1176 M7. What it does NOT support: execution on silicon, and numerical correctness of
+      the stages (invoking rate#tick needs canonical-ABI marshalling, which jess has NOT got working).
+      jess told synth the `verified` STATUS is probably still defensible - their DoD was the symbols
+      reaching nm->T, which is met - but the CITATION is wrong, and asked them to restate the grounds
+      rather than leave "executed on hardware" sitting in a safety-case artifact with jess's name behind
+      it. This matters doubly because synth derived a lifecycle rule from this very issue
+      ("implemented = the code is in; verified = the evidence closes"); a mis-described evidence base
+      applies the rule to something other than what happened.
+      RELEASE SWEEP (the standing offer, delivered on the release binary, SHA-verified, against the real
+      fused cascade meld 0.52 --pack-rebase -> loom 1.4.1):
+        cortex-m7dp  exit=0  0 skips  5/5 exports
+        cortex-m4f   exit=0  0 skips  5/5 exports   <- NEW
+        cortex-m3    12 skips (soft-float; falcon was never targeted there)
+      *** m4f AT 5/5 CLOSES THE M4-ESTIMATOR PORTABILITY PROBLEM jess raised on synth#881 *** - the
+      estimator can now be built for the single-precision core it is architecturally assigned to
+      (DD-023/REQ-PIX-021). On v0.55 that column was 5 skips. jess had not expected increment 2 to reach
+      it; this exceeds the issue's DoD.
+      REPRODUCIBILITY: the v0.60.0 release build of the self-contained image is BYTE-IDENTICAL to the
+      pre-tag source build and to a third build done independently by jess's clean-room checker -
+      SHA256 c692f50d..., three builds one digest. That is what makes the TEST-PIX-031 provenance pin
+      meaningful rather than theatre.
+      Oracle still 3/3 on the committed image.
+    tags: [release-watch, synth, m4f, estimator, reproducibility, correction, verified-status]
+    fields:
+      detected-by: jess release-watch on synth v0.60.0 against the real fused cascade, 2026-08-27
+      severity: minor
+      triage-status: closed
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: AFD-041
     type: ai-found-defect
     title: Clean-room verify of the 5/5 cascade claims — 7/7 CONFIRMED and one claim STRENGTHENED (bit-reproducible image), but the oracle's own prose was STALE and CI gated execution without provenance
