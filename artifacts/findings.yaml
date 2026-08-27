@@ -1737,6 +1737,65 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-046
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: jess release-watch on relay falcon-v1.135.0 + per-core lowering matrix, 2026-08-27
+    title: THE M4-PORTABILITY HALF OF GI-FPU-002 IS RESOLVED — the FULL 5-stage cascade lowers 5/5 on cortex-m4f via synth's relocatable + embedder-contract path, and jess's obligation is exactly THREE AEABI symbols, verified linkable
+    status: resolved
+    description: >
+      2026-08-27. The loop asked whether synth#881's "--builtins / M4-portability half" was still
+      unresolved in practice, to be re-filed if so. IT IS RESOLVED. Nothing needs re-filing; what it
+      needs is jess keeping two promises.
+      THE SELF-CONTAINED PATH STILL DECLINES 3 FUNCTIONS ON m4f, AND THAT IS CORRECT BEHAVIOUR, not a
+      defect: synth refuses to emit f64 on a single-precision FPU (#369). The declined functions are
+      func_4, position#tick and rate#tick, and synth's own message names the remedy - route the
+      i64<->f32 conversions through the AEABI builtins with --relocatable (#1069).
+      FOLLOWING SYNTH'S DOCUMENTED REMEDY WALKS A CHAIN OF THREE HONEST-REFUSAL GATES, each of which
+      hands jess an obligation rather than failing silently:
+        --relocatable                 -> refuses on #1041: 13 active data segments not materialised
+        + --embedder-data-init        -> refuses on #1052: 12 global initialisers do not reach the object
+        + --embedder-global-init      -> exit 0, ZERO skips, 5/5 stages
+      RESULT, MEASURED (falcon v1.135.0, meld 0.52 --pack-rebase -> loom 1.4.0 -> synth v0.60):
+        cortex-m7dp   exit 0   0 skips   5/5 stages   0 external symbols
+        cortex-m4f    exit 0   0 skips   5/5 stages   3 external symbols
+        cortex-m3     exit 1   12 skips              (soft-float; falcon was never targeted there)
+      *** JESS'S ENTIRE M4 LINK OBLIGATION IS THREE SYMBOLS ***: __aeabi_f2lz, __aeabi_l2f,
+      __aeabi_ul2f. m7dp needs NONE - it has the double-precision FPU, so no builtins are required.
+      "IT LOWERS" IS NOT "IT WORKS", so the obligation was DISCHARGED, not just described: all three
+      are defined in the stock arm-none-eabi libgcc (thumb/v7e-m+fp/hard multilib), `arm-none-eabi-ld
+      -r` against it returns 0 with ZERO undefined symbols remaining, and all 5 cascade stages are
+      still present as T in the linked object.
+      NEGATIVE CONTROL: linking WITHOUT libgcc leaves exactly those 3 symbols undefined. Without this
+      the "0 undefined" result would be vacuous - an empty nm is also what a broken object prints.
+      The oracle asserts the negative control and FAILS if it comes back empty.
+      TWO PROMISES JESS NOW OWES AT INSTANTIATION, and they are real, not paperwork: the flags emit
+      BYTE-IDENTICAL code and only convert a refusal into an acknowledgement. jess must (i) populate
+      memory 0's active data segments and (ii) seed the R9 globals table from the module's
+      initialisers, before any export runs. If jess does not, every load from the initialised region
+      and every global.get reads whatever the target memory happens to hold - the gale#278 0xFF class.
+      RELEASE-WATCH VERDICT ON falcon-v1.135.0 - CLEAN, NO REGRESSION: all 10 published artifacts
+      match their digests; 8 of 10 pass the publish gate. Numerically IDENTICAL to v1.134.1 (torque
+      tx=1 ty=0.472507507 tz=-0.147003502 thrust=0.5; the composed flight-app returns the same
+      2147484996). A CONTROLLED COMPARISON was run before any regression was suspected: v1.134.1 and
+      v1.135.0 give the SAME 3 m4f skips under an identical pipeline, so the skip count is a property
+      of the path, not of the release.
+      THE TWO NEW ARTIFACTS ARE NOT MCU-TARGETED AND THAT IS FINE: falcon-cascade-stream-composed
+      (2.8 MB, imports wasi:cli/*) and falcon-cascade-stream-fused (211 KB core module) are P3
+      async-STREAM artifacts - stream-new, task-return, stream-cancel-*. They fail jess's publish
+      gate on C3/C1 respectively, which is expected for host-side artifacts and is NOT reported as a
+      defect. Worth relay confirming the intended consumer, since P3-async-everywhere is jess's
+      north star and these are the first shipped P3 artifacts in the stack.
+      ALSO CONFIRMED: meld#390 reproduces identically with v1.135.0 components, ruling out the falcon
+      build as a variable; reported on the issue.
+    tags: [synth, gi-fpu-002, m4f, lowering, aeabi, embedder-contract, release-watch, falcon-v1.135]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-023
+
   - id: AFD-045
     type: ai-found-defect
     severity: major
