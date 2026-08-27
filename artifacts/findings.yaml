@@ -1584,6 +1584,46 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-001
 
+  - id: AFD-043
+    type: ai-found-defect
+    title: THE COMPLETE WASM STACK CANNOT BE COMPOSED YET — falcon imports NO gust:os, so the DD-026 seam has nothing to plug; the flight APPLICATION component is missing and it is JESS'S to build
+    status: open
+    description: >
+      2026-08-27, prompted by a direct question jess could not answer honestly ("have you worked to have
+      this integrated with gale to build the complete wasm stack"). The answer was NO - and checking
+      revealed it is not merely undone but currently IMPOSSIBLE with what is published.
+      DD-026 pins: "The flight app IMPORTS gust:os; gale's OCI component EXPORTS it; composition happens
+      ALONG gust:os (wac plug + meld fuse --memory shared)". That is not what ships.
+      MEASURED ON THE PUBLISHED ARTIFACTS:
+        falcon rate@1.134.1  imports pulseengine:falcon-cascade/types@0.7.0 (TYPE-ONLY); gust: refs = 0
+        falcon flight        imports: NONE
+        fused cascade core   imports: 0
+        gale-nano 0.7.0      exports gust:os/{time,log,spawn,exec,timer}; imports gust:hal/mmio + taskdisp
+      EMPIRICAL: `wac plug rate.wasm --plug gale-nano.wasm` fails - "the socket component had no matching
+      imports for the plugs that were provided". No import/export pair connects. The halves are disjoint.
+      NEITHER SUPPLIER IS WRONG: falcon being a PURE COMPUTATION library with zero OS dependency is a good
+      property - it is why it self-contains, lowers cleanly and reached 5/5 on two cores. gale-nano
+      exporting gust:os is exactly its contract. What is missing is the piece BETWEEN them.
+      *** THE MISSING PIECE - a flight APPLICATION component *** that IMPORTS gust:os (scheduling, time,
+      logging), IMPORTS the falcon cascade interfaces, and exports an entry the runtime starts. Today
+      nothing calls the cascade on a schedule: the synth self-contained image `blx`es the first export at
+      reset and spins (observed at PC 0x16c). The stack has a hole where the control loop's DRIVER belongs.
+      *** OWNERSHIP SETTLED (user, 2026-08-27): THIS MAPPING IS JESS'S. *** jess owns integration and
+      composition under DD-015/DD-026, so the driver component - the thing that maps the falcon cascade
+      onto gust:os - is jess's to build, not relay's and not gale's. jess is to consult gale on the
+      intended shape of the gust:os side rather than guess, since gale owns that interface.
+      SECOND MISSING PIECE, also jess-owned: gust:hal (read32/write32), gale-nano's residual. The stack
+      needs BOTH the application seam AND the native HAL before "complete" means anything.
+      STATUS open deliberately - a live gap with jess as the owner, not a resolved finding.
+    tags: [dd-026, composition, gust-os, gale, application-seam, gap, jess-owned]
+    fields:
+      detected-by: jess attempted the falcon+gale-nano composition for the first time, 2026-08-27
+      severity: major
+      triage-status: in-progress
+    links:
+      - type: traces-to
+        target: REQ-PIX-001
+
   - id: AFD-041
     type: ai-found-defect
     title: Clean-room verify of the 5/5 cascade claims — 7/7 CONFIRMED and one claim STRENGTHENED (bit-reproducible image), but the oracle's own prose was STALE and CI gated execution without provenance
