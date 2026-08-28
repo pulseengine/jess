@@ -25,3 +25,4 @@ hardware/silicon/**/*.bin
 # jess wasm components: rebuilt by tools/appcompose/build-and-verify.sh
 app/*/target/
 app/*/*.wasm
+.scratch/tprobe/
