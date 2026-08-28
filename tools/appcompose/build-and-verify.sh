@@ -3,11 +3,14 @@
 # the result against an independently-computed reference.
 #
 # This is the oracle for AFD-043 (the missing application seam). It is written as a
-# DIFFERENTIAL rather than a golden value on purpose: the composed component and the
-# reference reach the same number by completely different routes — component model +
-# wac composition + gale's gust:os on one side, fused core module + raw canonical-ABI
-# pointers on the other. A single golden number would be satisfied by both sides
-# sharing one bug; agreement across the two routes would not.
+# DIFFERENTIAL rather than a golden value, but WITH A CORRECTED CLAIM about what that
+# buys. The two legs differ in their COMPOSITION AND ABI PATH — component model + wac +
+# gale's gust:os on one side, fused core module + raw canonical-ABI pointers on the
+# other. They do NOT differ in their ARITHMETIC: clean-room verification disassembled
+# both and found the rate#tick bodies instruction-identical apart from a uniform data
+# rebase. So this oracle catches composition, lowering and ABI-marshalling faults, and
+# CANNOT catch a bug inside falcon itself — both sides would share it. The earlier
+# header claimed the opposite; that claim was wrong.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/appcompose}"
@@ -41,6 +44,16 @@ fi
 for t in cargo wasm-tools wac wasmtime; do
   command -v "$t" >/dev/null || fail "required tool not on PATH: $t"
 done
+
+# The reference driver needs the wasmtime PYTHON module, which is a separate thing from
+# the wasmtime CLI checked above. Omitting this check made the script exit 1 on a clean
+# machine with a bare ModuleNotFoundError from inside step 5 — after the composition had
+# already succeeded, so the failure looked like an oracle mismatch rather than a missing
+# dependency. See tools/cascade-differential/requirements.txt.
+"$PY" -c 'import wasmtime' 2>/dev/null || fail \
+  "the Python module 'wasmtime' is missing for interpreter: $PY
+   install it:  $PY -m pip install -r $ROOT/tools/cascade-differential/requirements.txt
+   or point PY= at an interpreter that has it"
 
 say "== 1. build the two jess components =="
 for c in flight-app gust-hal-stub; do

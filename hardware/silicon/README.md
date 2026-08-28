@@ -3,7 +3,10 @@
 The literal-silicon rung for **REQ-PIX-009 / TEST-PIX-016** — closing the
 "physical F100 reflash pending hardware" caveat on the synth#383 8 KB shrink.
 qemu (lm3s) gave the functional result; Renode (Cortex-M3 + 8 KB) gives the real
-M3-ISA model; **this is the actual chip.** Grounded in gale `benches/gust/REFLASH.md`.
+M3-ISA model of that chip. **NOTE (corrected 2026-08-28): the phrase "this is the
+actual chip" stood here while everything below ran under Renode 1.16.1. Renode models
+the real M3 ISA and 8 KB SRAM, which is the point — but it is not silicon, and the
+physical rung below is still pending.** Grounded in gale `benches/gust/REFLASH.md`.
 
 ## Board (ordered — standalone eval, NOT the Pixhawk)
 **STM32VLDISCOVERY** — STM32F100RBT6B: Cortex-M3, 128 KB flash @ `0x08000000`,

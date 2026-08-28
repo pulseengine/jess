@@ -1,0 +1,4 @@
+# The reference driver runs the fused core module under wasmtime's Python bindings.
+# Unpinned, build-and-verify.sh exited 1 on a clean machine with ModuleNotFoundError —
+# it preflighted cargo/wasm-tools/wac/wasmtime and the supplier artifacts, but not this.
+wasmtime>=42,<49
