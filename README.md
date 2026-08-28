@@ -31,7 +31,7 @@ flowchart LR
   fw["falcon firmware<br/>(Cortex-M ELF)"]
   gale["gale<br/>verified RTOS primitives"]
   kiln["kiln<br/>QM validation runtime"]
-  renode["Renode<br/>HIL emulation"]
+  renode["Renode<br/>emulation (no hardware in this loop)"]
   rwc["rules_wasm_component<br/>hermetic Bazel chain"]
 
   subgraph gov["evidence & architecture"]

@@ -1696,15 +1696,26 @@ artifacts:
       set bit 31 from `elapsed(now, deadline) == false`, which an inert clock returns too — the same
       trap that voided the CRC claim in AFD-037. It now tests `deadline(t0,1) != t0`, which no
       zero-returning stub can produce.
-      DIFFERENTIAL, not a golden number. tools/cascade-differential/cascade_ref.py recomputes the
-      same fold by a COMPLETELY DIFFERENT ROUTE — fused core module, raw canonical-ABI pointers, no
-      component model, no wac, no gust:os. Both routes give 1348. A golden value would be satisfied
-      by both sides sharing one bug; agreement across two routes would not be.
+      DIFFERENTIAL, and THE CLAIM ABOUT WHAT THAT BUYS IS CORRECTED (2026-08-28, AFD-048). The two
+      legs differ in COMPOSITION AND ABI PATH - component model + wac + gust:os on one side, fused
+      core module + raw canonical-ABI pointers on the other. They do NOT differ in ARITHMETIC:
+      disassembly shows the rate#tick bodies INSTRUCTION-IDENTICAL apart from a uniform data rebase.
+      So the oracle catches composition, lowering and ABI-marshalling faults and CANNOT catch a bug
+      inside falcon - both sides would share it. The original wording claimed the exact opposite and
+      was wrong. The fold is now BIT-EXACT (raw f32 bits) rather than int(sum*1000), which accepted
+      a 0.07% window and let a falsified thrust setpoint pass undetected.
         torque tx=1 ty=0.472507507 tz=-0.147003502 thrust=0.5   <- reproduces the SIL reference exactly
         pwm    m1=0 m2=0 m3=0.348992109 m4=1  sum=1.34899211
       NEGATIVE CONTROLS, all three run:
-        (i)   reference perturbed (wx 0.30 -> 0.35) -> 2000, DISTINCT: the fold tracks its input, so
-              1348 is not a constant a miscompile that drops the state would also produce.
+        (i)   *** THIS CONTROL WAS VACUOUS AND IS WITHDRAWN (corrected 2026-08-28 by clean-room
+              verification, AFD-048) ***. It perturbed wx by +0.05 and re-ticked ON THE SAME
+              INSTANCE, reporting the changed fold as proof the output tracks its input. It proved
+              only that the module is STATEFUL: the rate loop carries an integrator, so a second
+              call differs REGARDLESS of input - ticking the IDENTICAL input twice also gives
+              1348 -> 2000. Worse, the documented perturbation moves the fold by ZERO on a fresh
+              instance, because this operating point is mixer-SATURATED (m1=m2=0, m4=1). A build
+              ignoring its input entirely would have passed. Replaced with a FRESH-INSTANCE control
+              perturbing wy, which demonstrably moves the fold.
         (ii)  reference deliberately falsified (x1000 -> x1001) -> oracle EXITS 1 with
               "DIFFERENTIAL MISMATCH: composed=1348 reference=1350"; restored -> PASS. The gate can fail.
         (iii) publish gate on jess's OWN components: FAILED C4+C5 before the link flags, PASSED after.
@@ -1731,6 +1742,86 @@ artifacts:
       NOT CLAIMED: this ran under wasmtime, NOT on the RT1176 and not in Renode. Periodicity is still
       a single call, not a schedule — the timer-ISR vs partition-window question (DD-025) remains
       open. gust:hal is a STUB; real MMIO is the on-target rung.
+    links:
+      - type: traces-to
+        target: DD-026
+      - type: traces-to
+        target: REQ-PIX-007
+
+  - id: AFD-048
+    type: ai-found-defect
+    severity: critical
+    triage-status: closed
+    detected-by: clean-room verification with a fresh-context subagent over PRs #191/#192/#193, 2026-08-28
+    title: CLEAN-ROOM VERIFICATION FOUND A VACUOUS NEGATIVE CONTROL INSIDE A MERGED SAFETY ARTIFACT — AFD-044's control measured STATEFULNESS, not input sensitivity; plus an overstated independence claim, a 0.07% oracle window, an unpinned dependency, and documentation overclaims
+    status: resolved
+    description: >
+      2026-08-28. A fresh-context verifier was run over the three PRs merged that day, per the
+      standing every-~2-features rule. It found six real defects. THE HEADLINE: the campaign's own
+      anti-vacuity discipline failed inside the artifact that most loudly advertised it.
+      *** F1, CRITICAL - AFD-044's NEGATIVE CONTROL (i) WAS VACUOUS ***. It perturbed wx by +0.05,
+      re-ticked, and reported the changed fold (1348 -> 2000) as proof "the fold tracks its input".
+      The second tick ran ON THE SAME INSTANCE. The rate loop carries an integrator, so the second
+      call differs REGARDLESS of input: ticking the IDENTICAL input twice ALSO gives 1348 -> 2000.
+      Independently reproduced here. And on a FRESH instance the documented perturbation moves the
+      fold by ZERO, because the operating point is mixer-SATURATED (m1=m2=0, m4=1) and absorbs small
+      moves. A build that ignored its input entirely would have passed this control.
+      FIXED: the control now uses a FRESH INSTANCE and perturbs wy, which demonstrably moves the fold.
+      MEASURED SCOPE, now printed by the oracle rather than assumed: only 4 of 18 input scalars
+      (wx, wy, wz, sp.ry, sp.rz) move the fold at all on a single tick. The entire quaternion,
+      position and velocity - 10 scalars - are INERT even at +-5.0. So the differential cannot detect
+      a miscompile confined to attitude/position/velocity handling, and now says so.
+      *** F3 - THE "COMPLETELY DIFFERENT ROUTE" CLAIM WAS FALSE ***. Both legs execute the SAME
+      compiled falcon code; disassembly shows the rate#tick bodies instruction-identical apart from a
+      uniform data rebase. The oracle tests composition, lowering and ABI marshalling - NOT falcon
+      arithmetic, which both sides would get wrong together. The header claimed precisely the
+      property it lacked.
+      *** F4 - THE ORACLE'S WINDOW WAS 0.07% ***. It compared int(sum * 1000.0), so composed=1348
+      accepted any reference in [1.348, 1.349). The verifier falsified the reference's THRUST
+      SETPOINT to 0.75 and the gate still passed. FIXED: the fold is now the raw f32 BITS (sign
+      dropped, bit 31 still the clock leg). Both escapes now FAIL - and the thrust falsification
+      differs by a SINGLE LSB (1068280774 vs 1068280773), which the old fold rounded away.
+      *** F5 - build-and-verify.sh EXITED 1 AS SHIPPED ***: it preflighted cargo/wasm-tools/wac/the
+      wasmtime CLI and four supplier artifacts, but not the wasmtime PYTHON MODULE its oracle
+      imports. On a clean machine it failed at step 5 with a bare ModuleNotFoundError - AFTER the
+      composition succeeded, so it read as an oracle mismatch rather than a missing dependency.
+      FIXED: preflight + tools/cascade-differential/requirements.txt.
+      *** F6 - check-drift.sh HAD TWO RESIDUAL VACUITIES OF ITS OWN ***, in the tool written to
+      prevent exactly this: (a) if EVERY tool was absent it printed "no drift" and exited 0 - a green
+      verdict on a toolchain never inspected; now exits 2. (b) a tool found in exactly ONE source
+      scored "ok"; one value compared against nothing is not agreement; now "single-source (not
+      compared)". Both negative-controlled, and the ok path proven still reachable. A third issue is
+      RECORDED BUT NOT FIXED: `ver` reads versions via `--version`, so tools lacking that flag (spar,
+      ordeal) read as absent even though the binary IS on PATH - they drop silently OUT of the
+      comparison, the inverse and more dangerous direction. varve verify reports 7 shadowed tools.
+      *** F10 - DOCUMENTATION OVERCLAIMS, one of them MINE THIS SESSION ***:
+        - AFD-042 said the Pixhawk "has been ABSENT on every loop tick ... and has never found it".
+          FALSE. The board WAS attached 2026-08-25 and jess captured 77,034 bytes of live telemetry
+          (AFD-037, 4ee2a5f), independently re-parsed by the verifier at 1,021 CRC-valid MAVLink v1
+          frames, single sysid, ATTITUDE/HIGHRES_IMU-dominated. jess REPEATED that false absolute
+          this session while correcting a different error. The defensible claim is the SCOPED one:
+          no falcon code has ever EXECUTED on the RT1176.
+        - hardware/silicon/README.md asserted "this is the actual chip" while everything under it ran
+          on Renode 1.16.1 and the board is marked "(ordered)".
+        - README.md labelled the Renode node "HIL emulation". There is no hardware in that loop.
+        - AFD-037's TITLE still carried "ZERO CRC failures" - a claim the same PR's second commit had
+          explicitly withdrawn as vacuous. The withdrawal never propagated to the title.
+      ALSO CORRECTED: AFD-046 named the m4f-declined function func_4; it is func_3. And AFD-046's
+      "the obligation was DISCHARGED" now states plainly that the discharge is a successful LINK, not
+      an execution - the object has been run nowhere.
+      *** WHAT THE VERIFIER CONFIRMED, so this is not only bad news ***: the m4-matrix result
+      (AFD-046) reproduced BYTE-IDENTICALLY from the recorded input, its "0 undefined" is NOT vacuous
+      (an empty object fails the post-link 5/5 recount), and its zero-skips claim is substantiated by
+      the self-contained path visibly producing skips. The composition, the run and the agreement are
+      all real - it is the CONTROL around them that was weak. The CI gate is genuinely non-empty:
+      5 substantive checks ran SUCCESS on every merge commit.
+      *** F2, SEPARATE AND FOR THE USER: main has NO required status checks ***. The ruleset carries
+      deletion, non_fast_forward, pull_request and required_signatures, but no required_status_checks,
+      and required_approving_review_count is 0. The five green checks are ADVISORY - a red board would
+      not block a merge. jess has been asserting "CONFIRM CI SUCCESS before merging" as a process rule
+      and honouring it by hand, while the repo would not have enforced it. Also: none of the three new
+      oracles is wired into CI, and check-drift.sh currently exits 1 where it lives.
+    tags: [clean-room, vacuous-metric, self-correction, oracle, negative-control, campaign-machinery]
     links:
       - type: traces-to
         target: DD-026
@@ -1807,7 +1898,7 @@ artifacts:
       needs is jess keeping two promises.
       THE SELF-CONTAINED PATH STILL DECLINES 3 FUNCTIONS ON m4f, AND THAT IS CORRECT BEHAVIOUR, not a
       defect: synth refuses to emit f64 on a single-precision FPU (#369). The declined functions are
-      func_4, position#tick and rate#tick, and synth's own message names the remedy - route the
+      func_3, position#tick and rate#tick, and synth's own message names the remedy - route the
       i64<->f32 conversions through the AEABI builtins with --relocatable (#1069).
       FOLLOWING SYNTH'S DOCUMENTED REMEDY WALKS A CHAIN OF THREE HONEST-REFUSAL GATES, each of which
       hands jess an obligation rather than failing silently:
@@ -1824,6 +1915,9 @@ artifacts:
       are defined in the stock arm-none-eabi libgcc (thumb/v7e-m+fp/hard multilib), `arm-none-eabi-ld
       -r` against it returns 0 with ZERO undefined symbols remaining, and all 5 cascade stages are
       still present as T in the linked object.
+      PRECISION ON "DISCHARGED" (clean-room, AFD-048): the discharge is a successful LINK, not an
+      execution. The object has not been RUN anywhere - not on silicon, not in Renode. "It links" is
+      weaker than "it works" in exactly the way "it lowers" is, and is meant as such.
       NEGATIVE CONTROL: linking WITHOUT libgcc leaves exactly those 3 symbols undefined. Without this
       the "0 undefined" result would be vacuous - an empty nm is also what a broken object prints.
       The oracle asserts the negative control and FAILS if it comes back empty.
@@ -1948,8 +2042,12 @@ artifacts:
       *** THE CORRECTION - jess's own claim, mis-stated upstream, attached to a status flip ***: synth's
       closing note says the flip to `verified` happened "because JESS EXECUTED IT ON HARDWARE". That is
       FALSE and jess corrected it immediately. Every run in that thread was on an RT1176 RENODE MODEL.
-      The physical Pixhawk 6X-RT has been ABSENT on every loop tick - the hardware probe runs first each
-      cycle and has never found it. What the evidence actually supports: (a) 5/5 cascade stages reach
+      The physical Pixhawk 6X-RT was absent on every loop tick OF THIS LOWERING TRACK.
+      *** THE ORIGINAL ABSOLUTE HERE - "has been ABSENT on every loop tick ... and has never found
+      it" - IS FALSE, corrected 2026-08-28 (AFD-048) ***: the board WAS attached on 2026-08-25 and
+      jess captured 77,034 bytes of live telemetry from it (AFD-037, commit 4ee2a5f), independently
+      re-parsed at 1,021 CRC-valid MAVLink v1 frames from a single sysid. The defensible claim is the
+      SCOPED one - no falcon code has ever EXECUTED on the RT1176 - not the absolute. What the evidence actually supports: (a) 5/5 cascade stages reach
       nm->T on m7dp - synth's own stated DoD, independently reproduced by jess; (b) the fused image
       builds, loads, initialises linear memory byte-exact and retires 213,439 instructions on an
       EMULATED RT1176 M7. What it does NOT support: execution on silicon, and numerical correctness of
@@ -2186,7 +2284,7 @@ artifacts:
 
   - id: AFD-037
     type: ai-found-defect
-    title: FIRST LIVE-HARDWARE VALIDATION - jess's MAVLink decoder (REQ-PIX-010) run against the real Pixhawk 6X-RT, read-only; live and committed samples decode identically with ZERO CRC failures
+    title: FIRST LIVE-HARDWARE VALIDATION - jess's MAVLink decoder (REQ-PIX-010) run against the real Pixhawk 6X-RT, read-only; live and committed samples decode identically (the "ZERO CRC failures" phrase once in this title was VACUOUS and is withdrawn - see the body)
     status: resolved
     description: >
       2026-08-25: the physical Holybro Pixhawk 6X-RT came online (USB "PX4 FMU v6XRT_x",

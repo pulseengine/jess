@@ -39,7 +39,9 @@ def main():
 
     # The SAME fold the component performs, in f32 to match wasm arithmetic exactly.
     acc32 = struct.unpack("<f", struct.pack("<f", sum(pwm)))[0]
-    folded = int(struct.unpack("<f", struct.pack("<f", acc32 * 1000.0))[0]) & 0x7FFFFFFF
+    # BIT-EXACT fold: the raw f32 bits, sign dropped. See flight-app's note — the old
+    # `int(sum * 1000)` accepted a 0.07% window and let a falsified setpoint pass.
+    folded = struct.unpack("<I", struct.pack("<f", acc32))[0] & 0x7FFFFFFF
 
     print(f"  module   {MODULE}")
     print(f"  torque   tx={torque[0]:.9g} ty={torque[1]:.9g} tz={torque[2]:.9g} thrust={torque[3]:.9g}")
@@ -47,19 +49,47 @@ def main():
     print(f"  sum      {acc32:.9g}")
     print(f"  EXPECTED FOLDED u32 (low 31 bits): {folded}")
 
-    # NEGATIVE CONTROL. A fold that is the same for every input proves nothing —
-    # a miscompile that drops the state entirely would still "match". Perturb one
-    # body rate and require the fold to MOVE.
-    pert = list(VEHICLE_STATE); pert[10] += 0.05          # wx 0.30 -> 0.35
-    mem.write(store, struct.pack("<14f", *pert) + struct.pack("<4f", *RATE_SETPOINT), argp)
-    tp2 = ex["pulseengine:falcon-cascade/rate@0.7.0#tick"](store, argp)
-    t2 = struct.unpack("<4f", mem.read(store, tp2, tp2 + 16))
-    p2 = ex["pulseengine:falcon-cascade/mixer@0.7.0#mix"](store, *t2)
-    pwm2 = struct.unpack("<4f", mem.read(store, p2, p2 + 16))
+    # NEGATIVE CONTROL — REWRITTEN 2026-08-28 after clean-room verification found the
+    # original was VACUOUS. Recorded here because the mistake is instructive.
+    #
+    # The original perturbed wx by +0.05 and re-ticked ON THE SAME INSTANCE, then
+    # reported the changed fold as proof that "the fold tracks its input". It proved
+    # nothing of the sort: the rate loop carries integrator state, so a SECOND call
+    # differs from the first REGARDLESS of input. Ticking the IDENTICAL input twice
+    # also gives 1348 -> 2000. A build that ignored its input entirely would have
+    # passed that control.
+    #
+    # Two things were wrong and both are fixed:
+    #   (1) the control now uses a FRESH INSTANCE, so state cannot masquerade as
+    #       input sensitivity;
+    #   (2) the perturbation is one that DEMONSTRABLY moves the fold on a fresh
+    #       instance. wx +0.05 does NOT — this operating point is mixer-SATURATED
+    #       (m1=m2=0, m4=1), which absorbs small moves. wy +0.05 does (1348 -> 1663).
+    store2 = Store()
+    inst2 = Instance(store2, Module.from_file(store2.engine, MODULE), [])
+    ex2 = inst2.exports(store2)
+    mem2 = ex2["memory"]
+    argp2 = (ex2["__heap_base"].value(store2) + 0xF) & ~0xF
+    pert = list(VEHICLE_STATE)
+    pert[11] += 0.05                                   # wy, an axis the fold responds to
+    mem2.write(store2, struct.pack("<14f", *pert) + struct.pack("<4f", *RATE_SETPOINT), argp2)
+    tp2 = ex2["pulseengine:falcon-cascade/rate@0.7.0#tick"](store2, argp2)
+    t2 = struct.unpack("<4f", mem2.read(store2, tp2, tp2 + 16))
+    p2 = ex2["pulseengine:falcon-cascade/mixer@0.7.0#mix"](store2, *t2)
+    pwm2 = struct.unpack("<4f", mem2.read(store2, p2, p2 + 16))
     a2 = struct.unpack("<f", struct.pack("<f", sum(pwm2)))[0]
-    f2 = int(struct.unpack("<f", struct.pack("<f", a2 * 1000.0))[0]) & 0x7FFFFFFF
-    print(f"  negative control (wx 0.30 -> 0.35): {f2}"
-          f"   {'DISTINCT — the fold tracks the input' if f2 != folded else 'IDENTICAL — VACUOUS, fold ignores state'}")
+    f2 = struct.unpack("<I", struct.pack("<f", a2))[0] & 0x7FFFFFFF
+    print(f"  negative control (FRESH instance, wy +0.05): {f2}"
+          f"   {'DISTINCT — the fold tracks its input' if f2 != folded else 'IDENTICAL — VACUOUS'}")
+
+    # HONEST LIMIT OF THIS ORACLE, measured rather than assumed: on a single tick from
+    # a fresh instance, only wx/wy/wz and the ry/rz setpoints move the fold at all. The
+    # other 10 vehicle-state scalars — the whole quaternion, position and velocity —
+    # are INERT even at +-5.0, because the mixer saturates. So this differential cannot
+    # detect a miscompile confined to attitude/position/velocity handling. It covers the
+    # rate->mixer path and the composition plumbing, and nothing else.
+    print("  oracle scope: 4 of 18 input scalars move the fold (wx, wy, wz, sp.ry/rz);")
+    print("                the quaternion, position and velocity fields are INERT here.")
     return 0 if f2 != folded else 1
 
 

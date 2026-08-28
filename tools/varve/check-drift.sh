@@ -23,21 +23,35 @@ ci_pin() { # tool -> the version ci.yml downloads, or empty
 }
 ver() { "$@" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
 
+compared=0; single=0
 printf '%-8s  %-12s  %-12s  %-12s  %s\n' TOOL PATH VARVE-PIN CI-YML STATUS
 for t in rivet spar meld synth loom sigil; do
   p="$(ver "$t")"
   v="$(varve run "$t" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
   c="$(ci_pin "$t")"
-  # Compare only the sources that actually exist. A tool absent from a source is not
-  # drift — spar is legitimately not on this machine's PATH, and not every tool is
-  # pinned in ci.yml. Treating absence as disagreement would make this cry wolf.
+  # Compare only the sources that actually exist; not every tool is pinned in ci.yml,
+  # and treating absence as disagreement would make this cry wolf.
+  #
+  # CAVEAT, found by clean-room verification and NOT yet fixed: `ver` reads a version by
+  # running `<tool> --version`. Tools that do not support that flag (spar, ordeal) read as
+  # absent even though the binary IS on PATH — so a PATH binary at a wildly divergent
+  # version silently drops OUT of the comparison. That is the inverse of crying wolf and
+  # is the more dangerous direction. `varve verify` currently reports 7 shadowed tools.
   seen=(); [ -n "$p" ] && seen+=("$p"); [ -n "$v" ] && seen+=("$v"); [ -n "$c" ] && seen+=("$c")
   uniq_n=$(printf '%s\n' "${seen[@]:-}" | sort -u | grep -c . || true)
   # A tool present in NO source is "absent", not "ok". Scoring it ok would be a vacuous
   # pass — it reports agreement where nothing was compared, which is how a checker ends
   # up green on a toolchain it never looked at.
+  #
+  # Clean-room verification found this stopped one step short in two ways, both fixed:
+  #   - a tool found in exactly ONE source also scored "ok" — one value compared against
+  #     nothing is not agreement either. It is now "single-source (not compared)".
+  #   - if EVERY tool was absent the script still exited 0 with "no drift", i.e. a green
+  #     verdict on a toolchain it never inspected. Tracked below and now an error.
+  n_sources=${#seen[@]}
   if   [ "${uniq_n:-0}" -eq 0 ]; then st="absent (not checked)"
-  elif [ "${uniq_n:-0}" -eq 1 ]; then st="ok"
+  elif [ "$n_sources" -eq 1 ]; then st="single-source (not compared)"; single=$((single+1))
+  elif [ "${uniq_n:-0}" -eq 1 ]; then st="ok"; compared=$((compared+1))
   else st="DRIFT"; drift=1; fi
   printf '%-8s  %-12s  %-12s  %-12s  %s\n' "$t" "${p:--}" "${v:--}" "${c:--}" "$st"
 done
@@ -53,5 +67,11 @@ a wrong citation costs a supplier's attention (AFD-045, meld#390).
 MSG
   exit 1
 fi
-echo "no drift: every tool agrees across the sources that define it."
-echo "(rows marked 'absent (not checked)' were compared against nothing — they are not evidence.)"
+if [ "$compared" -eq 0 ]; then
+  echo "NOTHING WAS ACTUALLY COMPARED: no tool was found in two or more sources." >&2
+  echo "A 'no drift' verdict here would be green on a toolchain never inspected." >&2
+  exit 2
+fi
+echo "no drift: all $compared tool(s) found in 2+ sources agree."
+[ "$single" -gt 0 ] && echo "($single row(s) 'single-source' and any 'absent' rows were compared against nothing — not evidence.)"
+exit 0
