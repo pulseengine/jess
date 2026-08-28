@@ -1,0 +1,15 @@
+package jess:gust-hal-stub@0.1.0;
+
+// jess's NATIVE RESIDUAL (DD-026 layer iii), in stub form.
+//
+// This world was not designed — it was DERIVED. Composing flight-app against
+// gale-nano + the falcon cascade leaves exactly these imports unsatisfied, so
+// this is the mechanically-determined list of what jess still owes the embedder.
+//
+// STUB, not an implementation: mmio returns a marker instead of touching silicon,
+// so a composed image can be EXECUTED off-target. Real MMIO is the on-target rung.
+world hal {
+    export gust:hal/mmio@0.1.0;
+    export gust:os/taskdisp@0.1.0;
+}
+

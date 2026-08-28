@@ -1,0 +1,8 @@
+package jess:full;
+let hal = new jess:hal { ... };
+let app = new jess:probed {
+  "gust:hal/mmio@0.1.0": hal["gust:hal/mmio@0.1.0"],
+  "gust:os/taskdisp@0.1.0": hal["gust:os/taskdisp@0.1.0"],
+  ...
+};
+export app...;

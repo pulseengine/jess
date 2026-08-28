@@ -1,0 +1,34 @@
+package gust:os@0.1.0;
+
+interface taskdisp {
+  poll-task: func(id: u32) -> u32;
+}
+interface time {
+  now: func() -> u64;
+
+  deadline: func(now: u64, ticks: u64) -> u64;
+
+  elapsed: func(now: u64, deadline: u64) -> bool;
+
+  resolution: func() -> u64;
+}
+interface log {
+  line: func(msg: list<u8>);
+}
+interface spawn {
+  start: func(entry: u32) -> u32;
+
+  poll: func(handle: u32) -> u32;
+}
+interface exec {
+  admit: func(prio: u32, deadline-lo: u32, deadline-hi: u32) -> u32;
+
+  poll-round: func(now-lo: u32, now-hi: u32);
+
+  state: func(h: u32) -> u32;
+}
+interface timer {
+  sleep: func(handle: u32, ticks: u32) -> u32;
+
+  slept: func(handle: u32) -> u32;
+}
