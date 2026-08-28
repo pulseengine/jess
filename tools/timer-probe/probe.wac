@@ -1,0 +1,10 @@
+package jess:probed;
+let gale = new gust:runtime { ... };
+let p = new jess:probe {
+  "gust:os/time@0.1.0": gale["gust:os/time@0.1.0"],
+  "gust:os/spawn@0.1.0": gale["gust:os/spawn@0.1.0"],
+  "gust:os/timer@0.1.0": gale["gust:os/timer@0.1.0"],
+  "gust:os/exec@0.1.0": gale["gust:os/exec@0.1.0"],
+  ...
+};
+export p...;

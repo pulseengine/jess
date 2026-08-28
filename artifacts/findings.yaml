@@ -1737,6 +1737,63 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-047
+    type: ai-found-defect
+    severity: major
+    triage-status: open
+    detected-by: jess exercised gale's app-timer shape against the SHIPPED gale-nano 0.7.0, 2026-08-28
+    title: ON SHIPPED gale-nano 0.7.0 THE CLOCK DOES NOT ADVANCE — every timer semantic holds INCLUDING a negative control, but time::now() is constant (36) and an armed wake never fires in 10,000 polls; this is the DD-025 evidence gale asked for
+    status: open
+    description: >
+      2026-08-28. gale answered jess's periodicity question on gale#223: `world app-timer` was BROKEN
+      (no `spawn` import, so no valid handle was obtainable and only the invalid-handle path was
+      reachable), fixed in 7f09ada with a worked example, and Q1's answer is (a) - spawn a task, arm
+      a wake on its handle, poll it. gale left one thing explicitly open: WHO DRIVES THE EXECUTOR,
+      timer ISR vs ARINC-653 partition window, and invited jess's integration to force the answer.
+      jess built that integration. WHAT HOLDS on the shipped artifact (5 of 6, including the control):
+        deadline(t0,1) != t0        PASS   the clock does real arithmetic on OUR argument
+        spawn.start(0)              PASS   returns a handle, not the INVALID sentinel
+        timer.sleep(h,1)            PASS   reports armed (0)
+        timer.slept(h)              PASS   returns a DEFINED state, not INVALID
+        sleep(INVALID,1)==INVALID   PASS   NEGATIVE CONTROL - the runtime genuinely discriminates
+      WHAT DOES NOT: time::now() returns a CONSTANT 36 across 1000 spins, and an armed wake never
+      fires - 10,000 polls made, last slept() = 0 (pending) throughout.
+      *** THE NEGATIVE CONTROL IS WHAT MAKES THIS REPORTABLE ***: sleep(INVALID) correctly returns
+      the sentinel, so gale-nano is NOT a stub returning 0 for everything. The timer logic is real;
+      it is the TIME SOURCE that is absent. Without that control this finding would be worthless.
+      TWO WRONG EXPLANATIONS WERE TESTED AND DISCARDED before reporting, which is the point:
+        (i)  "jess's gust-hal stub freezes it" - the stub returns a value derived from the ADDRESS,
+             constant per address, so an MMIO-backed counter could not tick. Built a TICKING variant
+             (app/gust-hal-tick). The clock STILL does not advance, so gale's time::now() does NOT
+             read through gust:hal/mmio. Observation right, mechanism wrong.
+        (ii) "the executor just needs driving" - called exec.poll-round from the app, first with
+             now() and then with a SYNTHETIC ADVANCING clock (poll-round takes time as an argument,
+             which suggested the caller supplies it). The wake still never fired.
+      So an application cannot make its own wake fire on the shipped runtime by any means available
+      to it in pure wasm. Something outside the component graph must supply time. THAT is the DD-025
+      evidence: the open question is not only who drives the EXECUTOR, it is who supplies the CLOCK.
+      *** VERSION CAVEAT, AND IT IS LOAD-BEARING ***: gale's app-timer fix (7f09ada) merged
+      2026-08-28 and is NOT in v0.7.0 (released 2026-08-26). This tests a PRE-FIX runtime. jess is
+      therefore ASKING gale whether this is expected of 0.7.0 and whether the merged fix touches the
+      runtime or only the world and example - NOT filing a defect. Reporting a failure against a
+      version that predates the fix is exactly the meld#390 mistake, and it is not being repeated.
+      TWO SELF-INFLICTED VACUITIES CAUGHT IN THE PROBE ITSELF, both before any report:
+        (a) the poll loop broke on BOTH an INVALID handle and on exhaustion, and both produced
+            elapsed_at == 0 - conflating "polled 10,000 times, never fired" with "bailed at poll 0".
+            The probe now reports polls-actually-made; it is 10,000, so this is exhaustion.
+        (b) a refactor dropped the semantics flags from the packed return, so the decoder read the
+            POLL COUNT as the flags and printed a coincidental PASS on bit 4. Fields now occupy
+            disjoint bit ranges. Overlapping fields is how a probe lies.
+      tools/timer-probe/run.sh reproduces the whole thing and DECODES rather than asserting, because
+      the informative outcome here is that five properties hold and one does not - a pass/fail oracle
+      would have said "fail" and taught nothing.
+    tags: [gale, dd-025, periodicity, timer, clock, app-timer, open-question]
+    links:
+      - type: traces-to
+        target: DD-025
+      - type: traces-to
+        target: REQ-PIX-007
+
   - id: AFD-046
     type: ai-found-defect
     severity: major

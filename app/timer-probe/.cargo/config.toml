@@ -1,0 +1,11 @@
+# The RT1176 embedder needs relocations and a heap symbol to place this component
+# into a statically-sized partition. Neither is emitted by default: lld defines
+# __heap_base synthetically but does not export it, and emits no reloc.* sections
+# unless asked. This is the SAME defect jess reported against relay's publish path
+# (tools/publish-gate/check-consumable.sh C4/C5) — it applies to jess's own output too.
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "link-arg=--emit-relocs",
+    "-C", "link-arg=--export=__heap_base",
+    "-C", "link-arg=--export=__data_end",
+]

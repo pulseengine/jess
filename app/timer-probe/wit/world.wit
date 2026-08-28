@@ -1,0 +1,11 @@
+package jess:timer-probe@0.1.0;
+
+// gale's app-timer world (gale#223, fixed in 7f09ada — `spawn` was missing, so no
+// valid handle could be obtained and only the invalid-handle path was reachable).
+world probe {
+    import gust:os/time@0.1.0;
+    import gust:os/spawn@0.1.0;
+    import gust:os/timer@0.1.0;
+    import gust:os/exec@0.1.0;
+    export run: func() -> u32;
+}
