@@ -1833,7 +1833,7 @@ artifacts:
     severity: major
     triage-status: closed
     detected-by: jess discharging the two embedder obligations AFD-046 declared to synth, 2026-09-02
-    title: THE TWO INSTANTIATION PROMISES ARE NOW KEPT, NOT JUST DECLARED — 13 data segments and 12 global initialisers extracted to linkable C and verified byte-identical against wasmtime's own instantiated memory
+    title: THE TWO INSTANTIATION PROMISES ARE NOW KEPT, NOT JUST DECLARED — 13 data segments and 12 global initialisers extracted, verified byte-identical against wasmtime's own memory, and LINKED into the m4f object with 0 undefined
     status: resolved
     description: >
       2026-09-02. AFD-046 lowered the full 5-stage cascade for cortex-m4f by declaring two
@@ -1866,11 +1866,24 @@ artifacts:
       The driver also preflights the wasmtime PYTHON module before doing expensive work, because a
       sibling oracle in this repo died mid-run with a bare ImportError after its composition had
       already succeeded, which read as an oracle mismatch rather than a missing dependency (AFD-048 F5).
-      NOT CLAIMED: the tables are VERIFIED CORRECT but have not been APPLIED on target. Nothing here
-      has run on the RT1176 or in Renode. "It extracts and verifies" is not "the image boots" - the
-      next rung is linking jess_wasm_init.c beside the m4f object and showing an export reads the
-      initialised region correctly, which needs the meld#390 blocker cleared first for the composed
-      stack (the cascade-only object can go sooner).
+      *** AND THE EMITTED C DID NOT COMPILE FOR THE TARGET IT INITIALISES - CAUGHT AND FIXED ***.
+      The first version emitted #include <stdint.h> / <stddef.h>. homebrew's arm-none-eabi-gcc ships
+      NO libc headers, so `arm-none-eabi-gcc -c ... jess_wasm_init.c` died on "stdint.h: No such
+      file or directory". The finding meanwhile called that file "the linkable form" - an overclaim,
+      because a table that cannot be compiled for the target it initialises is not linkable at all.
+      Now FREESTANDING BY CONSTRUCTION: no libc headers, its own jess_u8/jess_u32/jess_usize typedefs.
+      LINKED, and the claim is now MECHANICAL rather than prose. run.sh takes an optional OBJ= and,
+      when given, compiles the emitted C for the target and links it against the ARM object:
+        compiled freestanding, linked clean: 0 undefined, 5 init symbol(s), 5 cascade stage(s)
+      So one m4f object now carries the cascade code, the AEABI helpers and the initialisation
+      tables with NOTHING unresolved. The link step counts what SURVIVED (init symbols and cascade
+      stages) rather than only checking for undefined symbols, because an EMPTY object also reports
+      zero undefined - the AFD-046 lesson applied to a new gate. Negative-controlled: a bogus object
+      -> FAIL "link failed"; a missing OBJ path -> FAIL rather than a silent skip.
+      NOT CLAIMED: the tables are VERIFIED and LINKABLE but have not been APPLIED on target. Nothing
+      here has EXECUTED on the RT1176 or in Renode. "It links" is not "the image boots" - the next
+      rung is showing an export actually reads the initialised region on an emulated core, which for
+      the COMPOSED stack still needs meld#390 cleared (the cascade-only object can go sooner).
     tags: [synth, embedder-contract, data-segments, globals, m4f, arm, independent-verification]
     links:
       - type: traces-to

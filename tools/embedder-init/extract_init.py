@@ -84,29 +84,35 @@ def emit_c(segs, globs, module, out_c):
         " * The initialisation state a synth --relocatable object does NOT carry.",
         " * Apply BOTH tables before calling any export, or every load from the",
         " * initialised region and every global.get reads uninitialised target memory.",
+        " *",
+        " * FREESTANDING BY CONSTRUCTION: no <stdint.h>, no <stddef.h>. This is compiled",
+        " * by a bare-metal cross toolchain that may ship no libc headers at all (homebrew's",
+        " * arm-none-eabi-gcc does not), and an embedder-init table that cannot be compiled",
+        " * for the target it initialises is not a linkable form.",
         " */",
-        "#include <stdint.h>",
-        "#include <stddef.h>",
+        "typedef unsigned char jess_u8;",
+        "typedef unsigned int  jess_u32;    /* 32-bit on every ARM EABI target */",
+        "typedef unsigned long jess_usize;",
         "",
         f"/* {len(segs)} active data segment(s), {total} bytes total */",
-        "const uint8_t jess_wasm_data_blob[] = {",
+        "const jess_u8 jess_wasm_data_blob[] = {",
     ]
     blob = b"".join(s["bytes"] for s in segs)
     for i in range(0, len(blob), 16):
         lines.append("    " + ", ".join(f"0x{b:02x}" for b in blob[i:i+16]) + ",")
     lines += ["};", "",
-              "typedef struct { uint32_t dst; uint32_t off; uint32_t len; } jess_seg_t;",
+              "typedef struct { jess_u32 dst; jess_u32 off; jess_u32 len; } jess_seg_t;",
               f"const jess_seg_t jess_wasm_data_segs[{len(segs)}] = {{"]
     off = 0
     for s in segs:
         lines.append(f"    {{ {s['offset']}u, {off}u, {len(s['bytes'])}u }},  /* seg {s['index']} */")
         off += len(s["bytes"])
-    lines += ["};", f"const size_t jess_wasm_data_seg_count = {len(segs)};", "",
+    lines += ["};", f"const jess_usize jess_wasm_data_seg_count = {len(segs)};", "",
               f"/* {len(globs)} global initialiser(s) — seed the R9 table in this order */",
-              f"const uint32_t jess_wasm_global_init[{len(globs)}] = {{"]
+              f"const jess_u32 jess_wasm_global_init[{len(globs)}] = {{"]
     for g in globs:
         lines.append(f"    0x{g['value']:08x}u,  /* global {g['index']} {'(mut) ' if g['mutable'] else ''}{g['type']} */")
-    lines += ["};", f"const size_t jess_wasm_global_count = {len(globs)};", ""]
+    lines += ["};", f"const jess_usize jess_wasm_global_count = {len(globs)};", ""]
     open(out_c, "w").write("\n".join(lines) + "\n")
     return total
 

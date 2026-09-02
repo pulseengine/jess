@@ -33,6 +33,29 @@ echo "== verify against independent sources =="
 "$PY" "$ROOT/tools/embedder-init/verify_init.py" "$MOD" "$OUT/init.json" "$OUT/jess_wasm_init.c" \
     || fail "extracted init does not match the module"
 
+# --- optional but NOT skippable-in-silence: if an ARM object is named, prove the
+# emitted C actually compiles for that target and links against it with nothing left
+# undefined. "the linkable form" is a claim, and this is what makes it one that fails.
+if [ -n "${OBJ:-}" ]; then
+  echo "== compile for the target and link against $OBJ =="
+  [ -f "$OBJ" ] || fail "OBJ not found: $OBJ"
+  command -v arm-none-eabi-gcc >/dev/null || fail "OBJ given but arm-none-eabi-gcc is not on PATH"
+  CPU="${CPU:--mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard}"
+  # -ffreestanding: the emitted C deliberately pulls no libc headers, because the
+  # cross toolchain may ship none (homebrew's does not).
+  arm-none-eabi-gcc -c $CPU -ffreestanding -O2 "$OUT/jess_wasm_init.c" -o "$OUT/init.o"     || fail "the emitted init does not COMPILE for this target"
+  LG="$(arm-none-eabi-gcc $CPU -print-libgcc-file-name)"
+  arm-none-eabi-ld -r "$OBJ" "$OUT/init.o" "$LG" -o "$OUT/linked.o"     || fail "link failed"
+  left="$(arm-none-eabi-nm "$OUT/linked.o" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
+  [ -z "$left" ] || fail "undefined after linking: $left"
+  # An empty object also prints no undefined symbols, so count what SURVIVED.
+  ntab=$(arm-none-eabi-nm "$OUT/linked.o" | grep -c 'jess_wasm_' || true)
+  nstage=$(arm-none-eabi-nm "$OUT/linked.o" | grep -cE ' T .*pulseengine:falcon-cascade' || true)
+  [ "$ntab" -ge 5 ] || fail "init tables missing from the linked object ($ntab/5)"
+  [ "$nstage" -ge 1 ] || fail "no cascade stage survived the link — an empty object also shows 0 undefined"
+  echo "   compiled freestanding, linked clean: 0 undefined, $ntab init symbol(s), $nstage cascade stage(s)"
+fi
+
 echo
 echo "PASS — the embedder-init tables reproduce wasmtime's instantiated memory byte for"
 echo "       byte, and the globals agree with the raw binary section."
