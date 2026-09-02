@@ -1,0 +1,13 @@
+package jess:looped;
+let gale = new gust:runtime { ... };
+let r = new pulseengine:rate { ... };
+let m = new pulseengine:mixer { ... };
+let app = new jess:floop {
+  "gust:os/time@0.1.0": gale["gust:os/time@0.1.0"],
+  "gust:os/spawn@0.1.0": gale["gust:os/spawn@0.1.0"],
+  "gust:os/timer@0.1.0": gale["gust:os/timer@0.1.0"],
+  "pulseengine:falcon-cascade/rate@0.7.0": r["pulseengine:falcon-cascade/rate@0.7.0"],
+  "pulseengine:falcon-cascade/mixer@0.7.0": m["pulseengine:falcon-cascade/mixer@0.7.0"],
+  ...
+};
+export app...;
