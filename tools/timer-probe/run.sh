@@ -62,4 +62,14 @@ elif polls >= 9999:
     print("     (this is the DD-025 observation; it is NOT an early break)")
 else:
     print(f"  -> broke early at poll {polls} — NOT loop exhaustion, do not read this as evidence")
+
+# Gate on the properties, not just on the build steps.
+missing = [i for i in range(6) if not (r >> i) & 1]
+if missing:
+    print(f"\nFAIL: {len(missing)} of 6 properties did not hold: bits {missing}")
+    sys.exit(1)
+if not elapsed:
+    print("\nFAIL: the wake never fired — the timer path did not close")
+    sys.exit(1)
+print("\nPASS — 6/6 properties hold and the wake fired.")
 PY
