@@ -1828,6 +1828,56 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-051
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: jess discharging the two embedder obligations AFD-046 declared to synth, 2026-09-02
+    title: THE TWO INSTANTIATION PROMISES ARE NOW KEPT, NOT JUST DECLARED — 13 data segments and 12 global initialisers extracted to linkable C and verified byte-identical against wasmtime's own instantiated memory
+    status: resolved
+    description: >
+      2026-09-02. AFD-046 lowered the full 5-stage cascade for cortex-m4f by declaring two
+      obligations to synth: --embedder-data-init (#1041) and --embedder-global-init (#1052). Those
+      flags emit BYTE-IDENTICAL code - they convert a refusal into an acknowledgement and nothing
+      more. They are PROMISES, and until now jess had only made them.
+      WHAT WAS OWED, measured on the real fused image (meld 0.52 --pack-rebase -> loom 1.4.0):
+        13 active data segments, 43,005 bytes
+        12 global initialisers, every one a NON-ZERO i32.const
+      The non-zero part is why synth refuses: an all-zero table is already a zeroed R9 table's
+      correct state, so only non-zero inits create an obligation.
+      BUILT: tools/embedder-init/ - extract_init.py emits the tables as linkable C
+      (jess_wasm_data_blob + a {dst,off,len} segment descriptor table + jess_wasm_global_init), and
+      verify_init.py checks them.
+      *** THE VERIFIER IS INDEPENDENT OF THE EXTRACTOR, WHICH IS THE WHOLE POINT ***. A verifier
+      that re-read the extractor's own parse would prove only that a parser agrees with itself -
+      the exact shape of vacuity AFD-048 and AFD-049 were. So each fact is reached twice by
+      different routes:
+        DATA SEGMENTS  reconstructed from the emitted C and compared BYTE-FOR-BYTE against the
+                       memory WASMTIME produces by actually instantiating the module. Different
+                       engine, different code path, identical bytes required.
+        GLOBALS        re-read from the RAW BINARY global section with a hand-written LEB128
+                       parser, NOT from the `wasm-tools print` text the extractor used.
+      RESULT: 13 segments / 43,005 bytes byte-identical across 65,536 B of memory; 12 globals agree.
+      NEGATIVE-CONTROLLED THREE WAYS, each with a precise diagnostic rather than a bare failure:
+        flip ONE byte in the blob      -> FAIL "differs at 1 byte(s); first at 0xAAC0 (recon 0xAA vs wasmtime 0x01)"
+        corrupt ONE global value       -> FAIL "global 0 mismatch - manifest 8447 vs binary 8192"
+        shift ONE segment offset by 1  -> FAIL "differs at 309 byte(s)"
+        restored                       -> rc=0
+      The driver also preflights the wasmtime PYTHON module before doing expensive work, because a
+      sibling oracle in this repo died mid-run with a bare ImportError after its composition had
+      already succeeded, which read as an oracle mismatch rather than a missing dependency (AFD-048 F5).
+      NOT CLAIMED: the tables are VERIFIED CORRECT but have not been APPLIED on target. Nothing here
+      has run on the RT1176 or in Renode. "It extracts and verifies" is not "the image boots" - the
+      next rung is linking jess_wasm_init.c beside the m4f object and showing an export reads the
+      initialised region correctly, which needs the meld#390 blocker cleared first for the composed
+      stack (the cascade-only object can go sooner).
+    tags: [synth, embedder-contract, data-segments, globals, m4f, arm, independent-verification]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-023
+
   - id: AFD-050
     type: ai-found-defect
     severity: major

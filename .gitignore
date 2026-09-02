@@ -26,3 +26,5 @@ hardware/silicon/**/*.bin
 app/*/target/
 app/*/*.wasm
 .scratch/tprobe/
+.scratch/einit/
+.scratch/floop/
