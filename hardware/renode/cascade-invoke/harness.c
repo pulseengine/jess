@@ -1,0 +1,65 @@
+/* TEST-PIX-034 harness — apply the embedder obligations, then invoke a cascade stage.
+ *
+ * FREESTANDING: no libc headers (the cross toolchain may ship none — AFD-051).
+ */
+typedef unsigned char jess_u8;
+typedef unsigned int  jess_u32;
+typedef unsigned long jess_usize;
+
+/* Emitted by tools/embedder-init/extract_init.py FROM THE SAME MODULE this links
+ * against — binding enforced by run.sh's LOWER= path (AFD-053 S1). */
+extern const jess_u8   jess_wasm_data_blob[];
+typedef struct { jess_u32 dst; jess_u32 off; jess_u32 len; } jess_seg_t;
+extern const jess_seg_t jess_wasm_data_segs[];
+extern const jess_usize jess_wasm_data_seg_count;
+extern const jess_u32   jess_wasm_global_init[];
+extern const jess_usize jess_wasm_global_count;
+
+#define LINMEM   ((volatile jess_u8  *)0x20000000u)
+#define GLOBALS  ((volatile jess_u32 *)0x20010100u)
+#define ARGOFF   0x0000E000u
+
+/* The canonical ABI of the export, from the WIT and the lowered signature:
+ *     rate@0.7.0#tick : (param i32) -> (result i32)
+ * The symbol carries ':' '@' and '#', so it is reached via an asm label rather than
+ * a C identifier. */
+/* The export symbol contains ':' '@' and '#'. '@' begins a comment in ARM assembly, so an
+ * __asm__ label truncates it mid-name — the assembler reports "garbage following
+ * instruction". The object is therefore renamed with
+ *   objcopy --redefine-sym 'pulseengine:falcon-cascade/rate@0.7.0#tick=jess_rate_tick'
+ * which sidesteps assembler quoting entirely. build.sh does this and ASSERTS the rename
+ * landed, so a silent objcopy no-op cannot leave an unresolved reference. */
+extern int jess_rate_tick(int arg);
+
+/* The SIL reference vector — byte-identical to tools/cascade-differential/cascade_ref.py.
+ * Sharing it is the point: the ARM result is then directly comparable to the number
+ * wasmtime already produces, so a wrong embedder register shows up as a wrong torque
+ * rather than as a plausible-looking one. */
+static const jess_u32 ARGV_WORDS[18] = {
+    0x3F800000u,0x00000000u,0x00000000u,0x00000000u,   /* qw qx qy qz */
+    0x00000000u,0x00000000u,0xC0200000u,               /* pos n e d   */
+    0x3DCCCCCDu,0xBE4CCCCDu,0x3D4CCCCDu,               /* vel n e d   */
+    0x3E99999Au,0xBE19999Au,0x3D8F5C29u,               /* wx wy wz    */
+    0x00000000u,                                       /* innovation  */
+    0x3F800000u,0x00000000u,0x00000000u,0x3F000000u    /* rx ry rz thrust */
+};
+
+void jess_init(void)
+{
+    /* (1) the data-segment promise (#1041) */
+    for (jess_usize s = 0; s < jess_wasm_data_seg_count; ++s) {
+        const jess_seg_t *g = &jess_wasm_data_segs[s];
+        for (jess_u32 i = 0; i < g->len; ++i)
+            LINMEM[g->dst + i] = jess_wasm_data_blob[g->off + i];
+    }
+    /* (2) the R9 globals promise (#1052), in declaration order — the order synth's own
+     * reset handler seeds them in, verified like-for-like on this module (AFD-056). */
+    for (jess_usize i = 0; i < jess_wasm_global_count; ++i)
+        GLOBALS[i] = jess_wasm_global_init[i];
+
+    /* the argument vector, at the offset boot.S passes in r0 */
+    volatile jess_u32 *a = (volatile jess_u32 *)(LINMEM + ARGOFF);
+    for (int i = 0; i < 18; ++i) a[i] = ARGV_WORDS[i];
+}
+
+int jess_call_rate(int arg) { return jess_rate_tick(arg); }

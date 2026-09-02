@@ -1828,6 +1828,62 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-057
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: jess building the invocation harness AFD-056 showed was missing, 2026-09-02
+    title: A FALCON CASCADE STAGE EXECUTES ON EMULATED RT1176 AND REPRODUCES RELAY'S SIL REFERENCE BIT-EXACT — first stage execution on this target; the embedder ABI is confirmed BY RESULT and the init tables are proven load-bearing
+    status: resolved
+    description: >
+      2026-09-02. AFD-056 established that the self-contained image never enters a stage - it
+      initialises and spins, and TEST-PIX-031's instruction count was satisfied by a memcpy. This
+      is the harness that actually calls one, and the answer it returns is the point.
+      *** rate@0.7.0#tick EXECUTED on emulated RT1176 Cortex-M7 (Renode 1.16.1) ***:
+        tx      0x3F800000  = 1
+        ty      0x3EF1EC81  = 0.472507507
+        tz      0xBE168816  = -0.147003502
+        thrust  0x3F000000  = 0.5
+      BIT-EXACT against relay's SIL reference and against jess's own wasmtime differential. Four
+      words, all four matching, on a completely different execution substrate.
+      HOW: the DD-018 tcb-link pattern - a custom boot.S plus a synth --relocatable object. The
+      harness enables the FPU, applies BOTH embedder obligations from AFD-051's extracted tables,
+      establishes the registers, calls the stage, and parks the returned torque plus a completion
+      sentinel at 0x20011000. Completion is asserted on the sentinel and on PC reaching the spin at
+      0x52 (verified by disassembly to be `b.n 52`, the instruction after the sentinel store) -
+      not on "it ran".
+      *** THE EMBEDDER ABI IS NOW CONFIRMED BY RESULT, NOT ASSUMED ***. synth#1131 asked which
+      register carries the linear-memory base. AFD-056 read the answer off synth's own reset
+      handler and confirmed it at runtime: fp(r11)=0x20000000 base, sl(r10)=0x10000 size,
+      r9=0x20010100 globals. This harness sets exactly those and gets the reference torque to the
+      last bit. A wrong base does not produce a plausible-but-wrong number; it produces garbage. So
+      the reading is now falsified-if-wrong rather than inferred. synth#1131 stays open for
+      confirmation that this is the CONTRACT and not an artifact of the self-contained path.
+      *** NC2 IS THE MOST VALUABLE PART: THE INIT TABLES ARE LOAD-BEARING ***. synth emits
+      BYTE-IDENTICAL code with or without --embedder-data-init / --embedder-global-init, so nothing
+      about the object can tell you whether the promises were kept. Building the same image with
+      jess_init() short-circuited returns tx=ty=tz=thrust=0x00000000. That is the only available
+      demonstration that AFD-051's 13 data segments and 12 R9 globals are necessary rather than
+      ceremonial - and it passes.
+      NC1: perturbing wy in the argument moves ty from 0x3EF1EC81 to 0x3F214856 while tx, tz and
+      thrust hold. So the stage reads its argument; a constant-returning stage would have matched
+      the reference forever.
+      TWO TOOLING NOTES worth keeping: the export symbol contains ':' '@' and '#', and '@' begins a
+      comment in ARM assembly, so a GCC __asm__ label truncates it mid-name ("garbage following
+      instruction"). Renamed with objcopy --redefine-sym instead, and build.sh ASSERTS the rename
+      landed rather than trusting it. Separately, Renode cannot drive this: setting cpu PC after a
+      RunFor leaves the CPU neither halted nor advancing, and `cpu Step` does not move it either -
+      which is why the harness is linked into the image rather than injected.
+      NOT CLAIMED: this is RENODE, not silicon. One stage, one invocation, one input vector - not a
+      soak, not the full cascade, and not a timing result. The composed application+cascade image
+      remains blocked on meld#393.
+    tags: [renode, rt1176, execution, sil-differential, embedder-abi, synth-1131, milestone]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-026
+
   - id: AFD-056
     type: ai-found-defect
     severity: critical

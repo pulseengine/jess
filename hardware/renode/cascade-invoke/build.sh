@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Build the TEST-PIX-034 cascade-invocation image.
+#
+# Links a synth --relocatable falcon cascade object with a harness that keeps the two
+# embedder promises (AFD-051) and then actually CALLS rate@0.7.0#tick — the thing
+# AFD-056 showed the self-contained image never does.
+#
+# NOTE flags are written out, not held in a variable: zsh does not word-split an
+# unquoted variable, which silently produced `-mcpu=cortex-m7 -mfpu=...` as ONE argument
+# and four confusing errors.
+set -uo pipefail
+D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
+OUT="${OUT:-$ROOT/.scratch/invoke}"; mkdir -p "$OUT"
+SYNTH="${SYNTH:-$ROOT/.scratch/fg60/synth}"
+PY="${PY:-python3}"
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
+[ -x "$SYNTH" ] || fail "synth not at $SYNTH"
+"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || fail "external artifacts do not match tools/deps/artifacts.pins"
+
+echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
+varve run meld fuse "$ROOT"/.scratch/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+    --memory shared --pack-rebase -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
+varve run loom optimize "$OUT/c.wasm" -o "$OUT/c.loom.wasm" >"$OUT/loom.log" 2>&1 || fail "loom"
+"$SYNTH" compile "$OUT/c.loom.wasm" -t cortex-m7dp --cortex-m --relocatable \
+    --embedder-data-init --embedder-global-init -o "$OUT/cascade.o" >"$OUT/synth.log" 2>&1 || fail "synth"
+
+echo "== 2. extract the init tables from THAT SAME module =="
+MOD="$OUT/c.loom.wasm" PY="$PY" OUT="$OUT/einit" "$ROOT/tools/embedder-init/run.sh" >"$OUT/einit.log" 2>&1 \
+  || { tail -3 "$OUT/einit.log" >&2; fail "embedder-init"; }
+
+echo "== 3. rename the export ('@' begins an ARM comment, so an asm label truncates it) =="
+arm-none-eabi-objcopy --redefine-sym \
+  'pulseengine:falcon-cascade/rate@0.7.0#tick=jess_rate_tick' "$OUT/cascade.o" "$OUT/cascade_named.o" \
+  || fail "objcopy"
+# ASSERT the rename landed — a silent no-op would leave an unresolved reference and the
+# only symptom would be a link error three steps later.
+arm-none-eabi-nm "$OUT/cascade_named.o" | grep -qE ' T jess_rate_tick$' \
+  || fail "objcopy --redefine-sym did not produce jess_rate_tick"
+
+echo "== 4. compile + link =="
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot.S"    -o "$OUT/boot.o"    || fail "boot.S"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 "$D/harness.c" -o "$OUT/harness.o" || fail "harness.c"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 "$OUT/einit/jess_wasm_init.c" -o "$OUT/init.o" || fail "init.c"
+LG="$(arm-none-eabi-gcc -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -print-libgcc-file-name)"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/invoke.elf" || fail "link"
+
+left="$(arm-none-eabi-nm "$OUT/invoke.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
+[ -z "$left" ] || fail "undefined after link: $left"
+# An empty ELF also shows no undefined symbols, so count what survived.
+n=$(arm-none-eabi-nm "$OUT/invoke.elf" | grep -cE ' T (jess_rate_tick|_reset|jess_init)$')
+[ "$n" -ge 3 ] || fail "expected symbols missing from the image ($n/3)"
+echo "   linked: $(stat -f%z "$OUT/invoke.elf" 2>/dev/null || stat -c%s "$OUT/invoke.elf") B, 0 undefined, $n/3 key symbols"
+
+echo "== 5. build the two negative-control images =="
+# NC1 — perturb wy in the argument vector. The torque MUST move; a stage returning a
+# constant would match the reference forever.
+sed 's/0xBE19999Au,/0xBE4CCCCDu,/' "$D/harness.c" > "$OUT/nc1.c"
+cmp -s "$D/harness.c" "$OUT/nc1.c" && fail "NC1 edit changed nothing — the perturbation did not apply"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 "$OUT/nc1.c" -o "$OUT/nc1.o" || fail "nc1 compile"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc1.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc1.elf" || fail "nc1 link"
+
+# NC2 — keep the argument but SKIP the data-segment and globals init. synth emits
+# byte-identical code with or without the --embedder-* flags, so this is the only way to
+# show the promises are load-bearing rather than ceremonial.
+sed 's/^    for (jess_usize s = 0/    return; for (jess_usize s = 0/' "$D/harness.c" > "$OUT/nc2.c"
+cmp -s "$D/harness.c" "$OUT/nc2.c" && fail "NC2 edit changed nothing"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -Wno-unreachable-code "$OUT/nc2.c" -o "$OUT/nc2.o" || fail "nc2 compile"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc2.elf" || fail "nc2 link"
+echo "   nc1.elf (perturbed input) and nc2.elf (no embedder init) built"

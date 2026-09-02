@@ -28,3 +28,4 @@ app/*/*.wasm
 .scratch/tprobe/
 .scratch/einit/
 .scratch/floop/
+.scratch/invoke/
