@@ -1828,6 +1828,55 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-050
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: jess built the DD-025 periodic rung once AFD-049 unblocked it, 2026-09-02
+    title: THE CASCADE NOW RUNS ON A SCHEDULE — 8/8 timer-paced periods, every wake fired, and the SAME image completes 0 periods once the clock stops ticking
+    status: resolved
+    description: >
+      2026-09-02. AFD-047 claimed an application could not make its own wake fire; AFD-049 showed
+      that rested on a stale artifact. This finding is what the correction unblocked: the falcon
+      cascade driven ON A SCHEDULE rather than called once - the DD-025 structural rung.
+      BUILT: app/flight-loop, a component SEPARATE from flight-app. flight-app's single-shot run()
+      is the AFD-044 regression baseline whose exact fold the composition differential pins;
+      widening its import surface to add the timer would risk that baseline for no gain.
+      RESULT (8 iterations, 3 ticks per period, wasmtime): 8/8 completed, every wake fired, the fold
+      varied, the clock advanced.
+      *** THE ORACLE IS A DIFFERENTIAL ON THE CLOCK, NOT AN ASSERTION THAT THE LOOP RAN ***. The
+      same composed image runs twice with exactly ONE thing changed - whether read32 ticks:
+        TICKING   iters=8/8  all_fired=true   varied=true   clock=true
+        CONSTANT  iters=0/8  all_fired=false  varied=false  clock=false
+      Both directions are required for a PASS. A loop that "completes" under a frozen clock is
+      SPINNING, not scheduling - exactly the confusion AFD-047 fell into - so the oracle refuses it
+      rather than celebrating a completion count.
+      TIED TO THE ESTABLISHED REFERENCE: iteration 1 reproduces the single-shot differential fold
+      EXACTLY (0xABC6 = low half of 1068280774, which cascade_ref.py computes independently). The
+      periodic path re-enters the arithmetic already pinned rather than forming a separate universe.
+      THE `varied` BIT IS THE ANTI-VACUITY GUARD: falcon carries integrator state, so a fold that
+      CHANGES across iterations is positive evidence the body genuinely re-executed. A constant fold
+      over >1 iterations would mean the loop counted without computing. From iteration 2 the mixer
+      SATURATES (sum = 4.0, all four motors at 1.0) because a constant 1 rad/s setpoint error winds
+      the integrator up with no feedback - expected for an OPEN-LOOP drive, recorded so it is not
+      misread as a control result.
+      FOUND WHILE NEGATIVE-CONTROLLING THE ORACLE: `ticks-per-period = 0` degenerates to a BUSY LOOP.
+      sleep(h,0) means "wake immediately", so all 8 iterations complete even under a frozen clock.
+      The oracle catches it and it is deliberately NOT special-cased in the component - silently
+      rewriting a caller's 0 into a 1 would hide the mistake rather than surface it.
+      ORACLE NEGATIVE-CONTROLLED BOTH WAYS: sabotaging the PASS slot to use the constant HAL -> rc=1;
+      ticks=0 -> rc=1 with the vacuity message; restored -> rc=0.
+      NOT CLAIMED: wasmtime only, NOT the RT1176 and not Renode. The ticking read32 advances on every
+      call, so this proves the LOOP STRUCTURE - arm, wait, compute, repeat - and NOT any timing
+      property. Real rates need timer-thin owning a configured prescaler behind the gust:hal seam,
+      which is gale's documented intent.
+    tags: [dd-025, periodicity, timer, flight-loop, gale, clock-differential]
+    links:
+      - type: traces-to
+        target: DD-025
+      - type: traces-to
+        target: REQ-PIX-007
+
   - id: AFD-047
     type: ai-found-defect
     severity: major

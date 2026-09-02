@@ -1,0 +1,23 @@
+package jess:flight-loop@0.1.0;
+
+// The DD-025 structural rung: the falcon cascade driven ON A SCHEDULE rather than
+// called once. Unblocked by AFD-049 — gale's timer path works end to end once the
+// embedder supplies a ticking clock through gust:hal/mmio.
+//
+// SEPARATE FROM flight-app ON PURPOSE. flight-app's single-shot `run()` is the
+// AFD-044 regression baseline whose exact fold the composition differential pins;
+// changing its import surface to add the timer would put that baseline at risk for
+// no benefit. Two components, one seam.
+world loop {
+    import gust:os/time@0.1.0;
+    import gust:os/spawn@0.1.0;
+    import gust:os/timer@0.1.0;
+
+    import pulseengine:falcon-cascade/types@0.7.0;
+    import pulseengine:falcon-cascade/rate@0.7.0;
+    import pulseengine:falcon-cascade/mixer@0.7.0;
+
+    /// Run the cascade for `iterations` timer-paced ticks. Returns a packed result;
+    /// see src/lib.rs for the field layout.
+    export run-loop: func(iterations: u32, ticks-per-period: u32) -> u32;
+}
