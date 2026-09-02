@@ -22,6 +22,14 @@ for f in "$NANO" "$RATE" "$MIXER"; do
 done
 for t in cargo wasm-tools wac wasmtime; do command -v $t >/dev/null || fail "not on PATH: $t"; done
 
+# AFD-053 S2: verify the external artifacts against tools/deps/artifacts.pins BEFORE
+# measuring anything. Without this the oracle runs against whatever happens to be in
+# .scratch/ and reports a result that reads reproducible and is not.
+"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || {
+  "$ROOT/tools/deps/check.sh" >&2
+  fail "external artifacts do not match tools/deps/artifacts.pins (see above)"
+}
+
 for c in flight-loop gust-hal-tick gust-hal-stub; do
   ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown ) || fail "$c build"
 done
