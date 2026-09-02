@@ -12,7 +12,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/einit}"; mkdir -p "$OUT"
 PY="${PY:-python3}"
-MOD="${MOD:?set MOD to the fused, loom-optimised module the ARM object was lowered from}"
+MOD="${MOD:?set MOD to the fused, loom-optimised module}"
+SYNTH="${SYNTH:-$ROOT/.scratch/fg60/synth}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 [ -f "$MOD" ] || fail "module not found: $MOD"
 command -v wasm-tools >/dev/null || fail "wasm-tools not on PATH"
@@ -41,27 +42,49 @@ echo "== verify against independent sources =="
 "$PY" "$ROOT/tools/embedder-init/verify_init.py" "$MOD" "$OUT/init.json" "$OUT/jess_wasm_init.c" \
     || fail "extracted init does not match the module"
 
-# --- optional but NOT skippable-in-silence: if an ARM object is named, prove the
-# emitted C actually compiles for that target and links against it with nothing left
-# undefined. "the linkable form" is a claim, and this is what makes it one that fails.
-if [ -n "${OBJ:-}" ]; then
-  echo "== compile for the target and link against $OBJ =="
-  [ -f "$OBJ" ] || fail "OBJ not found: $OBJ"
-  command -v arm-none-eabi-gcc >/dev/null || fail "OBJ given but arm-none-eabi-gcc is not on PATH"
-  CPU="${CPU:--mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard}"
-  # -ffreestanding: the emitted C deliberately pulls no libc headers, because the
-  # cross toolchain may ship none (homebrew's does not).
-  arm-none-eabi-gcc -c $CPU -ffreestanding -O2 "$OUT/jess_wasm_init.c" -o "$OUT/init.o"     || fail "the emitted init does not COMPILE for this target"
+# --- S1 FIX: the object is LOWERED FROM `MOD` HERE, never accepted from outside.
+#
+# The previous version took an OBJ= path and never bound it to MOD. Clean-room
+# verification handed it a module fused with --pack-rebase and an object lowered from
+# a DIFFERENT module fused with --address-rebase — segment offsets differing by
+# 226,624 bytes — and this oracle reported PASS. Applying those tables to that image
+# would corrupt every initialised load.
+#
+# The old negative control ("a bogus object -> link failed") only ruled out GARBAGE.
+# A well-formed object from the wrong module passed, which is exactly the failure
+# class AFD-048 and AFD-049 were about. Binding by construction is the fix: an
+# externally-supplied object cannot be checked for provenance the emitted tables do
+# not carry, so it is no longer accepted.
+if [ -n "${LOWER:-}" ]; then
+  echo "== lower $MOD for $LOWER and link the init against THAT object =="
+  command -v arm-none-eabi-gcc >/dev/null || fail "LOWER given but arm-none-eabi-gcc is not on PATH"
+  [ -x "$SYNTH" ] || fail "LOWER given but synth not found at $SYNTH (set SYNTH=)"
+  "$SYNTH" compile "$MOD" -t "$LOWER" --cortex-m --relocatable \
+      --embedder-data-init --embedder-global-init -o "$OUT/lowered.o" >"$OUT/lower.log" 2>&1 \
+    || { sed -n 's/^Error: /  /p' "$OUT/lower.log" | head -2; fail "$MOD did not lower for $LOWER"; }
+  case "$LOWER" in
+    cortex-m4f)  CPU="-mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard" ;;
+    cortex-m7dp) CPU="-mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard" ;;
+    *) fail "unmapped LOWER target: $LOWER" ;;
+  esac
+  arm-none-eabi-gcc -c $CPU -ffreestanding -O2 "$OUT/jess_wasm_init.c" -o "$OUT/init.o" \
+    || fail "the emitted init does not COMPILE for $LOWER"
   LG="$(arm-none-eabi-gcc $CPU -print-libgcc-file-name)"
-  arm-none-eabi-ld -r "$OBJ" "$OUT/init.o" "$LG" -o "$OUT/linked.o"     || fail "link failed"
+  arm-none-eabi-ld -r "$OUT/lowered.o" "$OUT/init.o" "$LG" -o "$OUT/linked.o" || fail "link failed"
   left="$(arm-none-eabi-nm "$OUT/linked.o" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
   [ -z "$left" ] || fail "undefined after linking: $left"
   # An empty object also prints no undefined symbols, so count what SURVIVED.
   ntab=$(arm-none-eabi-nm "$OUT/linked.o" | grep -c 'jess_wasm_' || true)
   nstage=$(arm-none-eabi-nm "$OUT/linked.o" | grep -cE ' T .*pulseengine:falcon-cascade' || true)
-  [ "$ntab" -ge 5 ] || fail "init tables missing from the linked object ($ntab/5)"
-  [ "$nstage" -ge 1 ] || fail "no cascade stage survived the link — an empty object also shows 0 undefined"
-  echo "   compiled freestanding, linked clean: 0 undefined, $ntab init symbol(s), $nstage cascade stage(s)"
+  [ "$ntab" -ge 5 ]   || fail "init tables missing from the linked object ($ntab/5)"
+  [ "$nstage" -ge 1 ] || fail "no cascade stage survived the link"
+  echo "   lowered from THIS module, compiled freestanding, linked clean:"
+  echo "   0 undefined, $ntab init symbol(s), $nstage cascade stage(s)"
+fi
+if [ -n "${OBJ:-}" ]; then
+  fail "OBJ= is no longer accepted: an external object cannot be bound to MOD, and an
+   object from a DIFFERENT fusion once passed this oracle with offsets 226,624 bytes
+   apart. Use LOWER=cortex-m4f (or cortex-m7dp) so the object is lowered from MOD here."
 fi
 
 echo

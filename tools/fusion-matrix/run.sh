@@ -29,8 +29,14 @@ command -v varve >/dev/null || fail "varve not on PATH — the pin is how tool v
 mv="$("${MELD[@]}" --version 2>/dev/null | head -1)"; lv="$("${LOOM[@]}" --version 2>/dev/null | head -1)"
 [ -n "$mv" ] && [ -n "$lv" ] || fail "could not resolve pinned meld/loom via varve"
 sv="$("$SYNTH" --version 2>/dev/null | head -1)"
-echo "== toolchain (pinned, not PATH) =="
-echo "   $mv   $lv   $sv"
+# S5 FIX: the banner used to read "(pinned, not PATH)" over all three tools. meld and
+# loom ARE varve-dispatched; synth is NOT — it is an untracked local binary, and the
+# varve pin actually carries a DIFFERENT synth version. Printing it under a "pinned"
+# header was wrong about a third of what it displayed.
+sp="$(varve run synth --version 2>/dev/null | head -1)"
+echo "== toolchain =="
+echo "   pinned via varve : $mv   $lv"
+echo "   NOT pinned       : $sv   (from \$SYNTH=$SYNTH; the varve layer carries ${sp:-an unknown synth})"
 for f in "$RATE" "$MIXER" "$ATT" "$POS" "$IEKF"; do [ -f "$f" ] || fail "missing component: $f"; done
 [ -x "$SYNTH" ] || fail "synth not at $SYNTH"
 command -v arm-none-eabi-nm >/dev/null || fail "arm-none-eabi toolchain not on PATH"

@@ -1873,6 +1873,83 @@ artifacts:
       - type: traces-to
         target: DD-026
 
+  - id: AFD-053
+    type: ai-found-defect
+    severity: critical
+    triage-status: closed
+    detected-by: clean-room verification with a fresh-context subagent over PRs #197-#200, 2026-09-02
+    title: A GATE CERTIFIED INIT TABLES AGAINST AN IMAGE THEY DO NOT BELONG TO — offsets 226,624 bytes apart, PASS; plus a probe that could not fail, a banner that misreported a version, and a 87x-overstated byte count
+    status: resolved
+    description: >
+      2026-09-02. The second clean-room pass over four merged PRs found nine issues. Two make a
+      gate not a gate; the rest are overstatements. All are fixed here.
+      *** S1, CRITICAL - tools/embedder-init/run.sh CERTIFIED TABLES AGAINST THE WRONG IMAGE ***.
+      It accepted an OBJ= path and never bound it to MOD. Given a module fused with --pack-rebase
+      and an object lowered from a DIFFERENT module fused with --address-rebase, it reported PASS:
+        MOD segment offsets   43712, 44048, 27088, 27168
+        OBJ segment offsets  270336, 270672, 197120, 197200     delta 226,624 bytes
+      Applying those tables to that image would corrupt every initialised load. Reproduced
+      independently before fixing. The old negative control - "a bogus object -> link failed" -
+      only ruled out GARBAGE; a WELL-FORMED WRONG object sailed through. That is precisely the
+      class AFD-048 and AFD-049 were about, so this is the third instance of one shape: a control
+      that rules out the obvious failure and not the plausible one.
+      FIXED BY CONSTRUCTION, not by another check: OBJ= is REFUSED outright, and LOWER=<target>
+      lowers the object FROM MOD inside the script, so the two cannot disagree. An external object
+      carries no provenance the emitted tables could be checked against, so accepting one at all
+      was the error. Negative-controlled: the mismatched invocation now exits 1 naming the reason;
+      the bound invocation passes.
+      *** S3, HIGH - tools/timer-probe/run.sh COULD NOT FAIL ***. Its last statement was the
+      decoder heredoc, which never called sys.exit. Its status was 0 for ANY bitfield - 0/6 or 6/6 -
+      so it reported and did not gate, while AFD-049 cited "the probe is now 6/6" as evidence. It
+      now ASSERTS all six properties and that the wake fired. Negative-controlled by driving the
+      decoder with bit 5 cleared (-> "1 of 6 properties did not hold: bits [5]", rc=1) and with
+      elapsed_at zeroed (-> "the wake never fired", rc=1).
+      *** S5 - THE "PINNED, NOT PATH" BANNER WAS WRONG ABOUT A THIRD OF WHAT IT PRINTED ***.
+      fusion-matrix prints meld/loom/synth under one "(pinned, not PATH)" header. meld and loom ARE
+      varve-dispatched and genuinely differ from PATH (0.52.0 vs 0.41.3, 1.4.0 vs 1.2.0). synth is
+      an untracked local binary at .scratch/fg60/synth (0.60.0) and the varve layer carries 0.58.0.
+      Now printed in two rows, "pinned via varve" and "NOT pinned", naming what the layer carries.
+      *** S4 - "43,005 BYTES BYTE-IDENTICAL" OVERSTATED THE CHECK BY ~87x ***. Only 492 of those
+      bytes are NON-ZERO; five of thirteen segments are entirely zero (42,197 B). The verifier
+      compares against a zero-initialised reconstruction, so every zero byte compares equal whether
+      or not the extractor got it right. The check is NOT vacuous - both negative controls bite -
+      but its strength is 492 bytes plus 13 offsets, not 43,005. The tool now prints exactly that.
+      *** S6 - THE `varied` BIT EVIDENCES TWO EXECUTIONS, NOT N ***. It is set by fold != first_fold
+      for any i>0, so it flips at iteration 2 and says nothing about 3..N - the mixer saturates from
+      iteration 2, making every later fold identical. run.sh claimed "the fold varied (so the body
+      genuinely re-ran)"; it now says the bit evidences at least a second execution and cannot
+      distinguish 2 from N. For N>2 the only witness is the component's own counter, which is the
+      self-report the bit existed to corroborate.
+      *** S7 - jess REPORTED 0.52.0 RESULTS UPSTREAM WHILE CI PINS 0.41.3 ***. The AFD-045 /
+      meld#390 failure mode, one commit-cluster after the tool built to prevent it. NOT bumped
+      blind: that pin serves TEST-PIX-026's cross-path reproducibility assertion and moving it needs
+      that gate re-verified. The divergence is now documented AT the pin, with the rule - cite the
+      PINNED version upstream, never CI's.
+      S8: AFD-047 said status resolved / triage-status open. Now closed. S9: AFD-037's body withdrew
+      "zero CRC failures" as vacuous, then repeated it twelve lines later; the residual is corrected.
+      *** WHAT THE VERIFIER CONFIRMED, and it matters ***: the embedder-init verifier IS genuinely
+      independent (wasm-tools-print regex vs wasmtime instantiation and a hand-written LEB128 binary
+      parse - no shared parse); "5 DISTINCT stages" is five interfaces at five addresses, not a
+      symbol-count artifact; both flight-loop arms differ in read32 ALONE; and NO claim anywhere in
+      the repo implies jess-built code has executed on real RT1176 silicon - the scoping is
+      consistently correct and in several places conspicuously self-corrected.
+      *** S2, RECORDED NOT FIXED - none of the four oracles is in CI, and none CAN be ***: every one
+      defaults to artifacts under .scratch/, which is gitignored, with no digest pin anywhere in the
+      repo. So "against shipped gale-nano 0.7.0" and "10/10 digests verified" are asserted by
+      filename and prose, not mechanically, and nobody can reproduce these results from a clean
+      checkout. That is the largest remaining gap in jess's own machinery and needs a vendoring or
+      fetch-and-pin decision, not a script edit.
+      ALSO RECORDED: nothing tests that a wake does NOT fire BEFORE its deadline within an armed
+      period. The verifier swept run-loop deadlines (T=1..10,000 fire; T=1,000,000 and 4e9 do NOT),
+      which shows the deadline is respected and not latched - a stronger non-vacuity check than jess
+      had run. A premature-fire test would close the remaining direction.
+    tags: [clean-room, vacuous-control, well-formed-wrong, gate-potency, self-correction]
+    links:
+      - type: traces-to
+        target: DD-026
+      - type: traces-to
+        target: REQ-PIX-007
+
   - id: AFD-052
     type: ai-found-defect
     severity: major
@@ -2099,7 +2176,7 @@ artifacts:
   - id: AFD-047
     type: ai-found-defect
     severity: major
-    triage-status: open
+    triage-status: closed
     detected-by: jess exercised gale's app-timer shape against the SHIPPED gale-nano 0.7.0, 2026-08-28
     title: SUPERSEDED BY AFD-049 - the central conclusion here is WRONG. ON SHIPPED gale-nano 0.7.0 THE CLOCK DOES NOT ADVANCE — every timer semantic holds INCLUDING a negative control, but time::now() is constant (36) and an armed wake never fires in 10,000 polls; this is the DD-025 evidence gale asked for
     status: resolved
@@ -2600,7 +2677,7 @@ artifacts:
         LIVE      77,034 B  1,828 frames  1,496 crc-valid  332 unknown-msgid  (crc_BAD column withdrawn - vacuous)
       IDENTICAL valid-msgid SET on both: [0,1,30,31,32,74,105,230,241,245] - HEARTBEAT, SYS_STATUS,
       ATTITUDE, ATTITUDE_QUATERNION, LOCAL_POSITION_NED, VFR_HUD, HIGHRES_IMU, ESTIMATOR_STATUS,
-      241, EXTENDED_SYS_STATE. Zero CRC failures on both, at ~9x the frame volume live.
+      241, EXTENDED_SYS_STATE. Frame volume ~9x live vs the committed sample. (The "zero CRC failures" phrasing that stood here is a RESIDUAL of the withdrawn vacuous metric - the parser cannot emit a CRC-invalid frame, so the zero was structurally guaranteed. Withdrawn in the body above; this sentence was missed at the time and is corrected 2026-09-02, S9.)
       TWO CONSEQUENCES: (1) the decoder is validated against real silicon, not just a recording;
       (2) the committed CI fixture is CONFIRMED REPRESENTATIVE of the real board - which retroactively
       validates the board-free CI oracle that has been gating REQ-PIX-010 all along. The CI oracle

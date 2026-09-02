@@ -73,5 +73,7 @@ printf '== iteration 1 vs the established single-shot reference ==\n   got 0x%04
 
 echo
 echo "PASS — $ITERS/$ITERS periods paced by the clock, every wake fired, the fold varied"
-echo "       (so the body genuinely re-ran), iteration 1 matches the single-shot reference,"
+echo "       (evidence the body re-ran at least a second time — the mixer saturates from"
+echo "       iteration 2, so this bit cannot distinguish 2 executions from $ITERS),"
+echo "       iteration 1 matches the single-shot reference,"
 echo "       and the SAME image completes 0 iterations once the clock stops ticking."
