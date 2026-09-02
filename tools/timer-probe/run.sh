@@ -16,8 +16,19 @@ for c in timer-probe gust-hal-tick; do
   ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown ) || fail "$c build"
 done
 wasm-tools component new "$ROOT/app/timer-probe/target/wasm32-unknown-unknown/release/jess_timer_probe.wasm" -o "$OUT/probe.wasm"
-# NOTE: the tick crate keeps the stub's lib name; take the produced file, do not guess.
-wasm-tools component new "$(ls "$ROOT"/app/gust-hal-tick/target/wasm32-unknown-unknown/release/*.wasm | head -1)" -o "$OUT/hal-tick.wasm"
+# NAME THE ARTIFACT EXPLICITLY. The earlier version took `ls .../*.wasm | head -1` on the
+# assumption that the tick crate kept the stub's lib name. It does not — the package is
+# `jess-gust-hal-tick`, so cargo emits jess_gust_hal_tick.wasm. But app/gust-hal-tick was
+# created with `cp -r app/gust-hal-stub`, which copied the stub's target/ dir along with it,
+# leaving a STALE jess_gust_hal_stub.wasm that sorts FIRST alphabetically. So `head -1`
+# silently composed the CONSTANT stub every time and the ticking HAL was never once tested —
+# which is how AFD-047 concluded the clock could not be unfrozen. See AFD-049.
+TICK="$ROOT/app/gust-hal-tick/target/wasm32-unknown-unknown/release/jess_gust_hal_tick.wasm"
+[ -f "$TICK" ] || fail "ticking HAL not built at $TICK"
+# Refuse to proceed if a stale stub artifact is sitting in the tick crate's target dir.
+stale="$ROOT/app/gust-hal-tick/target/wasm32-unknown-unknown/release/jess_gust_hal_stub.wasm"
+[ -e "$stale" ] && fail "stale stub artifact in the tick crate's target dir: $stale — remove it"
+wasm-tools component new "$TICK" -o "$OUT/hal-tick.wasm"
 cp "$NANO" "$OUT/gale-nano.wasm"
 cp "$ROOT/tools/timer-probe/probe.wac" "$ROOT/tools/timer-probe/hal.wac" "$OUT/"
 
@@ -45,7 +56,7 @@ polls   = (r >> 8) & 0x3FFF
 elapsed = (r >> 22) & 0x3FF
 print(f"\n  polls made = {polls}   last slept() = {last}   elapsed_at = {elapsed}")
 if elapsed:
-    print(f"  -> the wake FIRED after {elapsed} polls")
+    print(f"  -> the wake FIRED after {elapsed} poll(s) — the timer path WORKS end to end")
 elif polls >= 9999:
     print("  -> loop ran to EXHAUSTION and the wake never fired")
     print("     (this is the DD-025 observation; it is NOT an early break)")
