@@ -1828,6 +1828,70 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-056
+    type: ai-found-defect
+    severity: critical
+    triage-status: closed
+    detected-by: jess pursuing the P06 shadow-stack measurement and finding there was no footprint to measure, 2026-09-02
+    title: NO CASCADE STAGE EXECUTES IN THE COMMITTED RT1176 IMAGE — PC only ever takes two values, both in the reset path; the ">100k instructions" assertion is satisfied entirely by a memcpy. And synth's own reset handler ANSWERS synth#1131.
+    status: resolved
+    description: >
+      2026-09-02. AFD-055 established that painting cannot measure this image's shadow stack.
+      Pursuing the correct method - a flash-vs-RAM differential - produced a much larger result:
+      THERE IS NO EXECUTION FOOTPRINT TO MEASURE, because the cascade never runs.
+      *** THREE INDEPENDENT OBSERVATIONS, ALL AGREEING ***:
+        (1) PC SAMPLED 120 TIMES across the run takes exactly TWO values: 0xa0 and 0x16c.
+            0xa0 is inside the reset handler's 53,345-iteration byte-copy loop; 0x16c is the
+            terminal spin. It NEVER reaches a stage entry - mixer#mix 0x17c, rate#tick 0x7a4,
+            attitude#tick 0x1290, position#tick 0x1d6c, ekf#estimate 0x4ebc.
+        (2) POST-RUN LINEAR MEMORY EQUALS THE INIT SOURCE BYTE-FOR-BYTE - 53,345 of 53,345,
+            100.00%. Execution left no residue anywhere in linear memory.
+        (3) THE ARM STACK IS UNTOUCHED - 0 of 512 probed bytes below the initial SP (AFD-055),
+            and both uncovered linear-memory regions read entirely zero.
+      *** WHAT THIS MEANS FOR TEST-PIX-031 ***: its ">100k instructions retired + PC inside .text"
+      assertion is satisfied ENTIRELY by the copy loop plus the spin. 213,439 instructions is about
+      what a 53,345-byte bytewise copy costs on its own. The assertion DOES discriminate "image
+      booted" from "image faulted or never started" - that much is real and was worth having - but
+      it does NOT discriminate "the cascade ran" from "the cascade never started", and the test's
+      NAME said "Fused falcon cascade executes". Renamed to "...image RUNS ITS RESET PATH...", with
+      the non-claim written into the header rather than left to be inferred.
+      *** AND A CORRECTION OWED TO relay ***: jess offered "the image executes" as partial evidence
+      for SWREQ-FALCON-OCI-P06 on 2026-09-02. That was too generous. The image boots and initialises;
+      the cascade does not execute. P06 asks for the image under load, and there is currently no
+      invocation at all. Corrected on relay#202 rather than left standing.
+      *** THE UNEXPECTED WIN - synth's OWN RESET HANDLER ANSWERS synth#1131 ***. Disassembling the
+      reset path to explain the PC values exposed the embedder register contract jess had asked
+      synth to document, in synth's own generated code:
+        0x80  r0 = 0x9cbc          init SOURCE
+        0x88  r1 = 0x20000100      init DEST
+        0x90  r2 = 53345           length
+        0xc0  sl (r10) = 0x10000   linear-memory SIZE
+        0xc8  fp (r11) = 0x20000000  LINEAR MEMORY BASE   <- the register #1131 asked about
+        0xd0  r9 = 0x20010100      GLOBALS TABLE BASE     <- the documented one
+        0xd8+ seeds the R9 table
+      So `fp` carries the linear-memory base and `sl` its size. Reported on synth#1131 as DERIVED
+      FROM THEIR OUTPUT, asking them to confirm it is the contract rather than an artifact of the
+      self-contained path - the question was raised precisely to avoid encoding a guess.
+      *** AFD-051 INDEPENDENTLY CORROBORATED ***: the reset handler seeds twelve globals whose
+      values AND SLOT ORDER match jess's extractor exactly, compared like-for-like on the same
+      module. An earlier comparison against the COMMITTED ELF showed the same twelve values in a
+      DIFFERENT permutation, which would have meant the embedder-init table seeded every global into
+      the wrong slot. It did not: the committed ELF is a different fusion. The mismatch was NOT
+      reported as a defect because the like-for-like check was run first.
+      *** ALSO CORRECTED ***: the robot documented the init source as flash 0x2ac8. That address
+      holds ARM CODE. The real source is 0x9cbc, read from r0 at Reset_Handler+0x0 and confirmed by
+      the 100% byte match. The wrong address stood in a file whose own header says it is the
+      evidence cited upstream.
+      NOT CLAIMED: none of this is a defect in synth, meld, loom or relay. The image is exactly what
+      a self-contained lowering with no invocation harness should be. The defect is in what jess's
+      oracle and jess's upstream reporting SAID about it.
+    tags: [renode, vacuous-metric, test-pix-031, synth-1131, abi, relay-p06, self-correction]
+    links:
+      - type: traces-to
+        target: REQ-PIX-005
+      - type: traces-to
+        target: REQ-PIX-021
+
   - id: AFD-055
     type: ai-found-defect
     severity: major

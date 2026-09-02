@@ -24,7 +24,9 @@ Test Setup        Boot Falcon Cascade
 #
 # WHAT THIS ASSERTS, and why each assertion can actually FAIL:
 #   A. LINEAR-MEMORY INIT — the reset handler copies 0xd061 (53,345) bytes of wasm linear
-#      memory from flash 0x2ac8 to RAM 0x20000100. The probes below are all NON-ZERO words,
+#      memory from flash 0x9cbc to RAM 0x20000100
+#      (this said 0x2ac8 until 2026-09-02; 0x2ac8 is ARM CODE, not the data blob. The real
+#      source is r0 = 0x9cbc at Reset_Handler+0x0, and post-run RAM matches it 100%. AFD-056.). The probes below are all NON-ZERO words,
 #      deliberately: RAM reads back zero when untouched, so asserting on a zero word would be
 #      VACUOUS (it could not distinguish "copied correctly" from "never executed"). Two of the
 #      probes are recognisable f32 control constants (0x3E800000 = 0.25f, 0x42480000 = 50.0f).
@@ -83,7 +85,7 @@ Fused falcon cascade initialises linear memory on the RT1176 M7
     Memory Word Should Be     0x20002238    0x3E800000
     Memory Word Should Be     0x2000223C    0x42480000
 
-Fused falcon cascade executes on the RT1176 M7 without stalling or faulting
+Fused falcon cascade image RUNS ITS RESET PATH on the RT1176 M7 without stalling or faulting
     Execute Command           emulation RunFor "0.05"
     ${ins}=     Execute Command    cpu ExecutedInstructions
     ${n}=       Convert To Integer    ${ins.strip()}    16
