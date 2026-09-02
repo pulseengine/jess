@@ -1828,6 +1828,61 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-052
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: relay asked jess to run its own kill-criterion precisely, relay#202, 2026-09-02
+    title: RELAY'S SWREQ-FALCON-OCI-P02/-P05/-P06 KILL-CRITERION IS DISCHARGED — `meld fuse --memory shared --address-rebase` ACCEPTS the fused five-stage cascade and it lowers to 5 DISTINCT stages; AFD-035's rejection is superseded
+    status: resolved
+    description: >
+      2026-09-02. relay asked jess to confirm a specific claim before promoting three requirements,
+      and explicitly refused to promote on a reading of one jess sentence - having been wrong once
+      this month by generalising from a local observation. That caution was justified and it caught
+      a real ambiguity.
+      *** THE AMBIGUITY relay CAUGHT ***: relay's kill-criterion names `--address-rebase`. jess's
+      recorded run (AFD-046) used `--pack-rebase`. Both are "fused" and both give 5/5, so the
+      sentence relay quoted was true - but it did NOT say which rebase, and jess had never run
+      relay's flag. Answering as though the flags were interchangeable would have promoted three
+      requirements on a conflation.
+      *** SO JESS RAN THE FLAG. IT PASSES. *** Fused five-stage cascade, relay v1.134.1,
+      meld 0.52.0 / loom 1.4.0 / synth 0.60.0 (pinned, dispatched via varve run, not PATH):
+        --memory shared --address-rebase          meld OK  validate OK  m7dp exit 0  5/5
+        --memory shared --pack-rebase             meld OK  validate OK  m7dp exit 0  5/5
+        --memory shared --pack-rebase --share-stack  meld OK  validate OK  m7dp exit 0  5/5
+        --memory multi                            meld OK  validate OK  m7dp exit 1  0/5
+      Confirmed identically on v1.135.0 (10/10 published digests verified before use), m7dp AND m4f.
+      FIVE DISTINCT STAGES, checked explicitly because a grep -c would pass with five symbols from
+      one stage: attitude, ekf, mixer, position, rate.
+      *** THE QUALIFICATION relay NEEDS BEFORE PROMOTING ***: m4f reaching 5/5 depends on the
+      EMBEDDER-CONTRACT path, not the plain one. On the SAME --address-rebase fused image:
+        self-contained (no --relocatable)   m7dp exit 0, 0 skips   m4f exit 1, 3 of 21 skipped
+        --relocatable + both embedder flags m7dp exit 0, 5/5       m4f exit 0, 5/5, 3 externals
+      If the requirements are about MELD ACCEPTING the fuse, discharged unconditionally. If any
+      assert m4f LOWERING, it holds only on the relocatable path with both obligations declared -
+      and those are obligations jess must then actually keep at instantiation (AFD-051 extracted and
+      verified them; nothing has yet EXECUTED on target).
+      *** SUPERSEDES AFD-035's REJECTION ***: that finding recorded `meld 0.42.0 --address-rebase`
+      REJECTING the five v1.133 stages because none of relay's components carried linking/reloc.*.
+      relay's arc since - memory.grow, then missing relocations, then the untuned 1 MB stack - is
+      closed. v1.134.1 was the first with __heap_base and relocations; meld 0.52.0 does the rest.
+      *** THE BOUNDARY, so the result is not over-generalised ***: --address-rebase working HERE does
+      not mean it works generally. meld#390 (jess-filed) shows BOTH --address-rebase and
+      --pack-rebase emit INVALID wasm when a WIRED CROSS-COMPONENT CALL CARRIES A RECORD. It does not
+      bite here because the five falcon stages are SIBLINGS - none imports another, so no such call
+      exists in this graph. A future composition that wires an application INTO the cascade is
+      exactly the failing shape, and that is what still blocks jess's composed image.
+      tools/fusion-matrix/run.sh reproduces every row, prints the PINNED tool versions rather than
+      assuming PATH (AFD-045's lesson), and ASSERTS the criterion rather than leaving it to be read
+      off. Negative-controlled: a missing component -> FAIL; substituting a non-cascade component ->
+      FAIL "did not yield 5 distinct stages (got 4)".
+    tags: [relay, meld, kill-criterion, fusion, address-rebase, m4f, m7dp, supersedes-afd-035]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-026
+
   - id: AFD-051
     type: ai-found-defect
     severity: major
