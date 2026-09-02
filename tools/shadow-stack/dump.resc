@@ -1,0 +1,39 @@
+:name: TEST-PIX-033 — shadow-stack footprint by flash-vs-RAM differential
+using sysbus
+mach create "ss"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+sysbus LoadELF @hardware/renode/cascade-m7/falcon-cascade-m7.elf
+emulation RunFor "0.05"
+pause
+echo "INSNS"
+cpu ExecutedInstructions
+echo "RAMDUMP_BEGIN"
+echo "@0x20000100 4096"
+sysbus ReadBytes 0x20000100 4096
+echo "@0x20001100 4096"
+sysbus ReadBytes 0x20001100 4096
+echo "@0x20002100 4096"
+sysbus ReadBytes 0x20002100 4096
+echo "@0x20003100 4096"
+sysbus ReadBytes 0x20003100 4096
+echo "@0x20004100 4096"
+sysbus ReadBytes 0x20004100 4096
+echo "@0x20005100 4096"
+sysbus ReadBytes 0x20005100 4096
+echo "@0x20006100 4096"
+sysbus ReadBytes 0x20006100 4096
+echo "@0x20007100 4096"
+sysbus ReadBytes 0x20007100 4096
+echo "@0x20008100 4096"
+sysbus ReadBytes 0x20008100 4096
+echo "@0x20009100 4096"
+sysbus ReadBytes 0x20009100 4096
+echo "@0x2000A100 4096"
+sysbus ReadBytes 0x2000A100 4096
+echo "@0x2000B100 4096"
+sysbus ReadBytes 0x2000B100 4096
+echo "@0x2000C100 4096"
+sysbus ReadBytes 0x2000C100 4096
+echo "@0x2000D100 97"
+sysbus ReadBytes 0x2000D100 97
+echo "RAMDUMP_END"
