@@ -58,6 +58,14 @@ row() {
   printf 'validate=OK  m7dp exit=%d stages=%s/5\n' "$?" "$(stages "$OUT/$name.o")"
 }
 
+# AFD-053 S2: verify the external artifacts against tools/deps/artifacts.pins BEFORE
+# measuring anything. Without this the oracle runs against whatever happens to be in
+# .scratch/ and reports a result that reads reproducible and is not.
+"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || {
+  "$ROOT/tools/deps/check.sh" >&2
+  fail "external artifacts do not match tools/deps/artifacts.pins (see above)"
+}
+
 echo "== fused 5-stage cascade, every memory strategy (embedder-contract lowering) =="
 row addr   --memory shared --address-rebase
 row pack   --memory shared --pack-rebase

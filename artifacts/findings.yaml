@@ -1828,6 +1828,51 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-054
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: closing AFD-053 S2, the gap the clean-room pass recorded but could not fix in place, 2026-09-02
+    title: EVERY ORACLE'S EXTERNAL INPUTS ARE NOW PINNED BY DIGEST AND CHECKED BEFORE MEASUREMENT — a swapped component halts all four; previously "verified digests" was prose
+    status: resolved
+    description: >
+      2026-09-02. AFD-053 S2 recorded the largest remaining gap in jess's own machinery: every
+      oracle defaulted to a path under .scratch/, which is GITIGNORED, and nothing in the repo
+      pinned what was supposed to be there. So "against shipped gale-nano 0.7.0" and "10/10 digests
+      verified before use" were asserted by FILENAME AND PROSE, not mechanically - and no one could
+      reproduce a single jess result from a clean checkout. It was recorded rather than patched
+      because it needed a vendoring-or-pin decision, not a script edit.
+      *** PROVENANCE VERIFIED BEFORE PINNING, because pinning a lookalike is worse than not
+      pinning ***: the five falcon components sitting in .scratch/v1341 were compared against
+      relay's PUBLISHED falcon-v1.134.1 assets. All five are BYTE-IDENTICAL. So the pins record what
+      actually produced AFD-046/-051/-052, not a local rebuild that resembles it.
+      INDEPENDENT CORROBORATION: the gale-nano pin, 546531952a5cf0ed..., is the same digest gale
+      themselves quoted for the ghcr blob on gale#224. Two parties, one artifact, one hash.
+      LANDED: tools/deps/artifacts.pins (7 artifacts - five falcon components, gale-nano 0.7.0,
+      synth 0.60.0) and tools/deps/check.sh, wired as a PREFLIGHT into all four oracles.
+      THREE EXIT CODES, because the failures are not the same failure:
+        0  every pinned artifact present and matching
+        1  present but NOT matching - the DANGEROUS case. A lookalike produces results that read
+           reproducible and are not, which is strictly worse than a missing file.
+        2  absent - the honest case; the checker names the path and the source to fetch from.
+      NEGATIVE-CONTROLLED FOUR WAYS: swapping mixer's bytes into rate's path -> rc=1 naming both
+      digests; removing gale-nano -> rc=2 distinctly; an EMPTY pin file -> rc=1 "no pins were
+      checked - an empty verification is not a pass" (the vacuity guard, since a checker with
+      nothing to check must not report green); and with the swap in place ALL FOUR oracles now
+      refuse (rc=1 each) where before they would have measured and reported.
+      *** WHAT THIS DOES NOT FIX ***: the oracles still cannot run in CI, because the artifacts are
+      still not fetched there - the pins make the inputs CHECKABLE, not PRESENT. A clean checkout
+      now gets an exact list of what is missing and where it comes from, instead of failing deep
+      inside a fusion, but wiring the fetch into CI is a further step. synth also remains pinned
+      here by digest rather than by varve, because the varve layer carries 0.58.0 while the campaign
+      runs 0.60.0 (AFD-053 S5) - the pin records that divergence rather than hiding it.
+    tags: [reproducibility, digest-pin, gate-potency, clean-room-followup, provenance]
+    links:
+      - type: traces-to
+        target: REQ-PIX-007
+      - type: traces-to
+        target: DD-026
+
   - id: AFD-053
     type: ai-found-defect
     severity: critical

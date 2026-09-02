@@ -12,6 +12,14 @@ NANO="${NANO:-$ROOT/.scratch/galenano7/gale-nano-0.7.0.wasm}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 [ -f "$NANO" ] || fail "gale-nano not found at $NANO (supplier artifact, not vendored)"
 
+# AFD-053 S2: verify the external artifacts against tools/deps/artifacts.pins BEFORE
+# measuring anything. Without this the oracle runs against whatever happens to be in
+# .scratch/ and reports a result that reads reproducible and is not.
+"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || {
+  "$ROOT/tools/deps/check.sh" >&2
+  fail "external artifacts do not match tools/deps/artifacts.pins (see above)"
+}
+
 for c in timer-probe gust-hal-tick; do
   ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown ) || fail "$c build"
 done

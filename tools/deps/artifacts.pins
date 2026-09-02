@@ -1,0 +1,28 @@
+# External artifacts the jess oracles consume, pinned by digest.
+#
+# WHY THIS FILE EXISTS (AFD-053 S2): every jess oracle defaulted to a path under
+# .scratch/, which is gitignored. Nothing in the repo pinned what was supposed to be
+# there, so 'against shipped gale-nano 0.7.0' and '10/10 digests verified' were
+# asserted by FILENAME AND PROSE, not mechanically — and no one could reproduce a
+# single result from a clean checkout. These digests make the claim checkable.
+#
+# Verified 2026-09-02: the five falcon components already in .scratch/v1341 are
+# BYTE-IDENTICAL to relay's published falcon-v1.134.1 assets, so this pins what was
+# actually used to produce AFD-046/-051/-052, not a lookalike.
+#
+# format:  <dest-path-under-.scratch>  <sha256>  <source>
+
+[falcon-v1.134.1]
+v1341/rate.wasm              43982be498c0e4a2b03ce6a56a06496cb46dcdc98fdf8bf8cbd610a1d891ae63  release:pulseengine/relay@falcon-v1.134.1
+v1341/mixer.wasm             076b8a816493e1997191f459c624c0a5b7b80fdcc0c97a4e039d7d24aaa789b3  release:pulseengine/relay@falcon-v1.134.1
+v1341/attitude.wasm          d85c325f7564145b99454a60b207d9409f6b600668cdcbde0157f329d68910d1  release:pulseengine/relay@falcon-v1.134.1
+v1341/position.wasm          32a45a53aa9fa3a4193aedf4f82cbfaa16810130df9320d0e048958d258eba5b  release:pulseengine/relay@falcon-v1.134.1
+v1341/iekf.wasm              600f9047dba73f278d80b8a0a904bb2066eea33073902fee84aea3d35bb09f0b  release:pulseengine/relay@falcon-v1.134.1
+
+[gale-nano]
+galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f  release-or-ghcr:pulseengine/gale@v0.7.0
+
+[synth]
+# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.60.0.
+# That divergence is real and is why this is pinned by digest here (AFD-053 S5).
+fg60/synth                   01dd072f1ae31dac9a1cffd0ac00ea4d343d044f2d91ff489b3844a22da33759  release:pulseengine/synth@v0.60.0

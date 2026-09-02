@@ -23,6 +23,14 @@ command -v wasm-tools >/dev/null || fail "wasm-tools not on PATH"
   "the Python module 'wasmtime' is missing for: $PY
    install:  $PY -m pip install -r $ROOT/tools/cascade-differential/requirements.txt"
 
+# AFD-053 S2: verify the external artifacts against tools/deps/artifacts.pins BEFORE
+# measuring anything. Without this the oracle runs against whatever happens to be in
+# .scratch/ and reports a result that reads reproducible and is not.
+"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || {
+  "$ROOT/tools/deps/check.sh" >&2
+  fail "external artifacts do not match tools/deps/artifacts.pins (see above)"
+}
+
 echo "== extract =="
 "$PY" "$ROOT/tools/embedder-init/extract_init.py" "$MOD" \
     --out-c "$OUT/jess_wasm_init.c" --out-manifest "$OUT/init.json" || fail "extraction failed"
