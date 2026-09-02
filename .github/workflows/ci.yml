@@ -30,6 +30,12 @@ env:
   # 771 pts / 71 edges / 0 unsound-fallback — re-verified on 0.41.3), so the bump is safe.
   # v0.41.3 carries the meld#341 fix (path-INDEPENDENT --reproducible), so TEST-PIX-026 now
   # ASSERTS cross-path reproducibility (portable attestation key), not just fixed-path.
+  # KNOWN DIVERGENCE (clean-room S7, 2026-09-02): the varve pin carries meld 0.52.0 and
+  # jess reports 0.52.0 results upstream, while THIS gate still runs 0.41.3.
+  # tools/varve/check-drift.sh flags it and exits 1. It is NOT bumped here blind because
+  # this pin serves TEST-PIX-026's cross-path reproducibility assertion; moving it needs
+  # that gate re-verified, which is a separate reviewed change, not a one-line edit.
+  # Until then: cite the PINNED version upstream, never this one.
   MELD_VERSION: v0.41.3
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the

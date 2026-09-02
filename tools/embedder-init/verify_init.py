@@ -96,8 +96,17 @@ def main():
         print(f"FAIL: reconstruction differs from wasmtime's memory at {len(diffs)} byte(s); "
               f"first at 0x{diffs[0]:X} (recon 0x{recon[diffs[0]]:02X} vs wasmtime 0x{ref[diffs[0]]:02X})")
         return 1
+    # S4: report DISCRIMINATING POWER, not just size. Most of the extracted bytes are
+    # zero, and a zero byte compares equal against a zero-initialised reconstruction
+    # whether or not the extractor got it right. "43,005 bytes byte-identical" overstates
+    # what this check can catch by ~87x; the real strength is the non-zero bytes plus the
+    # segment offsets that place them.
+    nz = sum(1 for b in blob if b)
     print(f"  data segments  OK — {len(man['segments'])} segment(s), {off} bytes, "
           f"byte-identical to wasmtime's instantiated memory ({len(ref)} B)")
+    print(f"                 discriminating bytes: {nz} non-zero of {off} "
+          f"({100.0*nz/off:.1f}%) — the {off-nz} zero bytes would compare equal regardless,"
+          f" so the real check is those {nz} plus the {len(man['segments'])} offsets")
 
     # --- globals, via the raw binary parser ---
     rg = raw_globals(module_path)

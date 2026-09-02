@@ -102,8 +102,14 @@ impl bindings::Guest for App {
 
         // The cascade carries integrator state, so a fold that VARIES across iterations
         // is positive evidence the loop genuinely re-executed rather than running once
-        // and reporting a count. A constant fold across >1 iterations would mean the
-        // body did not actually re-run — the failure this bit exists to catch.
+        // and reporting a count.
+        //
+        // HONEST LIMIT (clean-room, S6): this flips at iteration 2 and says NOTHING about
+        // iterations 3..N. The mixer saturates from iteration 2 (sum = 4.0), so every
+        // later fold is identical and `varied` cannot distinguish 2 executions from 8.
+        // For N > 2 the only witness to the count is the component's own `done` counter —
+        // which is the self-report this bit was introduced to corroborate. Treat `varied`
+        // as evidence the body re-ran AT LEAST ONCE MORE, not as evidence of N.
         let clock_moved = time::now() != t_start;
 
         (done & 0x3FF)
