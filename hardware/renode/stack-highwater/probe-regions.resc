@@ -1,0 +1,1777 @@
+:name: TEST-PIX-032 probe — WHERE does the falcon cascade actually use stack?
+:description: Paints the two regions naive stack-painting would target and reports which,
+:description: if either, execution touches. Answers a prerequisite of relay P06 rather than
+:description: assuming it: measuring the wrong region yields a misleading zero.
+
+using sysbus
+mach create "hwprobe"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+sysbus LoadELF @hardware/renode/cascade-m7/falcon-cascade-m7.elf
+
+# region A — ARM hardware stack (512 B below initial SP)
+sysbus WriteDoubleWord 0x2001FFFC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFF8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFF4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFEC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFE8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFE4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFDC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFD8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFD4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFCC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFC8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFC4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFBC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFB8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFB4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFAC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFA8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFA4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FFA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF9C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF98 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF94 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF8C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF88 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF84 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF7C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF78 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF74 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF6C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF68 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF64 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF5C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF58 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF54 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF4C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF48 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF44 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF3C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF38 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF34 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF2C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF28 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF24 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF1C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF18 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF14 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF0C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF08 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF04 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FF00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEFC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEF8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEF4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEEC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEE8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEE4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEDC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FED8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FED4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FED0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FECC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEC8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEC4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEBC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEB8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEB4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEAC 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEA8 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEA4 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FEA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE9C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE98 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE94 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE8C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE88 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE84 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE7C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE78 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE74 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE6C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE68 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE64 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE5C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE58 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE54 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE4C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE48 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE44 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE3C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE38 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE34 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE2C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE28 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE24 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE1C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE18 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE14 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE0C 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE08 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE04 0xDEADBEEF
+sysbus WriteDoubleWord 0x2001FE00 0xDEADBEEF
+
+# region B — linear-memory tail above the init copy
+sysbus WriteDoubleWord 0x2000D160 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D170 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D180 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D190 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D1A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D1B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D1C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D1D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D1E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D1F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D200 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D210 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D220 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D230 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D240 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D250 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D260 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D270 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D280 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D290 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D2A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D2B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D2C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D2D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D2E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D2F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D300 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D310 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D320 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D330 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D340 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D350 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D360 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D370 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D380 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D390 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D3A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D3B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D3C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D3D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D3E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D3F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D400 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D410 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D420 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D430 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D440 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D450 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D460 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D470 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D480 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D490 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D4A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D4B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D4C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D4D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D4E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D4F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D500 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D510 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D520 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D530 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D540 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D550 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D560 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D570 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D580 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D590 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D5A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D5B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D5C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D5D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D5E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D5F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D600 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D610 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D620 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D630 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D640 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D650 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D660 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D670 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D680 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D690 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D6A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D6B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D6C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D6D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D6E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D6F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D700 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D710 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D720 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D730 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D740 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D750 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D760 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D770 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D780 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D790 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D7A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D7B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D7C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D7D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D7E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D7F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D800 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D810 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D820 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D830 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D840 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D850 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D860 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D870 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D880 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D890 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D8A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D8B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D8C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D8D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D8E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D8F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D900 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D910 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D920 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D930 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D940 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D950 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D960 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D970 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D980 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D990 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D9A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D9B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D9C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D9D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D9E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000D9F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DA90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DAA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DAB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DAC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DAD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DAE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DAF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DB90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DBA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DBB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DBC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DBD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DBE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DBF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DC90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DCA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DCB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DCC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DCD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DCE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DCF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DD90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DDA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DDB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DDC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DDD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DDE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DDF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DE90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DEA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DEB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DEC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DED0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DEE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DEF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DF90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DFA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DFB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DFC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DFD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DFE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000DFF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E000 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E010 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E020 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E030 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E040 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E050 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E060 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E070 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E080 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E090 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E0A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E0B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E0C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E0D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E0E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E0F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E100 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E110 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E120 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E130 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E140 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E150 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E160 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E170 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E180 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E190 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E1A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E1B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E1C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E1D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E1E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E1F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E200 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E210 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E220 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E230 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E240 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E250 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E260 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E270 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E280 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E290 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E2A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E2B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E2C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E2D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E2E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E2F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E300 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E310 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E320 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E330 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E340 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E350 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E360 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E370 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E380 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E390 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E3A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E3B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E3C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E3D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E3E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E3F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E400 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E410 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E420 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E430 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E440 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E450 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E460 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E470 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E480 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E490 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E4A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E4B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E4C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E4D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E4E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E4F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E500 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E510 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E520 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E530 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E540 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E550 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E560 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E570 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E580 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E590 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E5A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E5B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E5C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E5D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E5E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E5F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E600 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E610 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E620 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E630 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E640 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E650 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E660 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E670 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E680 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E690 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E6A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E6B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E6C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E6D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E6E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E6F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E700 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E710 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E720 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E730 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E740 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E750 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E760 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E770 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E780 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E790 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E7A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E7B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E7C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E7D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E7E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E7F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E800 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E810 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E820 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E830 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E840 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E850 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E860 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E870 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E880 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E890 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E8A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E8B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E8C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E8D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E8E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E8F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E900 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E910 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E920 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E930 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E940 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E950 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E960 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E970 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E980 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E990 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E9A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E9B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E9C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E9D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E9E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000E9F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EA90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EAA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EAB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EAC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EAD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EAE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EAF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EB90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EBA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EBB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EBC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EBD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EBE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EBF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EC90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ECA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ECB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ECC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ECD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ECE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ECF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000ED90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EDA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EDB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EDC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EDD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EDE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EDF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EE90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EEA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EEB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EEC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EED0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EEE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EEF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EF90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EFA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EFB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EFC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EFD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EFE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000EFF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F000 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F010 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F020 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F030 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F040 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F050 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F060 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F070 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F080 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F090 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F0A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F0B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F0C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F0D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F0E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F0F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F100 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F110 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F120 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F130 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F140 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F150 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F160 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F170 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F180 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F190 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F1A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F1B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F1C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F1D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F1E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F1F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F200 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F210 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F220 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F230 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F240 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F250 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F260 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F270 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F280 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F290 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F2A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F2B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F2C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F2D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F2E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F2F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F300 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F310 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F320 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F330 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F340 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F350 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F360 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F370 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F380 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F390 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F3A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F3B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F3C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F3D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F3E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F3F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F400 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F410 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F420 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F430 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F440 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F450 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F460 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F470 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F480 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F490 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F4A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F4B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F4C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F4D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F4E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F4F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F500 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F510 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F520 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F530 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F540 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F550 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F560 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F570 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F580 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F590 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F5A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F5B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F5C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F5D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F5E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F5F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F600 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F610 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F620 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F630 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F640 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F650 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F660 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F670 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F680 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F690 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F6A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F6B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F6C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F6D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F6E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F6F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F700 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F710 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F720 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F730 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F740 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F750 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F760 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F770 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F780 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F790 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F7A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F7B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F7C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F7D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F7E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F7F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F800 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F810 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F820 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F830 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F840 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F850 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F860 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F870 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F880 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F890 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F8A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F8B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F8C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F8D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F8E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F8F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F900 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F910 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F920 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F930 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F940 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F950 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F960 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F970 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F980 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F990 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F9A0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F9B0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F9C0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F9D0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F9E0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000F9F0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FA90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FAA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FAB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FAC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FAD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FAE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FAF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FB90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FBA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FBB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FBC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FBD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FBE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FBF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FC90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FCA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FCB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FCC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FCD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FCE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FCF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FD90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FDA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FDB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FDC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FDD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FDE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FDF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FE90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FEA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FEB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FEC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FED0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FEE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FEF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF00 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF10 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF20 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF30 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF40 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF50 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF60 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF70 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF80 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FF90 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FFA0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FFB0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FFC0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FFD0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FFE0 0xDEADBEEF
+sysbus WriteDoubleWord 0x2000FFF0 0xDEADBEEF
+sysbus WriteDoubleWord 0x20010000 0xDEADBEEF
+sysbus WriteDoubleWord 0x20010010 0xDEADBEEF
+sysbus WriteDoubleWord 0x20010020 0xDEADBEEF
+
+emulation RunFor "0.05"
+pause
+echo "REGION_A"
+sysbus ReadDoubleWord 0x2001FFFC
+sysbus ReadDoubleWord 0x2001FFF8
+sysbus ReadDoubleWord 0x2001FFF4
+sysbus ReadDoubleWord 0x2001FFF0
+sysbus ReadDoubleWord 0x2001FFEC
+sysbus ReadDoubleWord 0x2001FFE8
+sysbus ReadDoubleWord 0x2001FFE4
+sysbus ReadDoubleWord 0x2001FFE0
+sysbus ReadDoubleWord 0x2001FFDC
+sysbus ReadDoubleWord 0x2001FFD8
+sysbus ReadDoubleWord 0x2001FFD4
+sysbus ReadDoubleWord 0x2001FFD0
+sysbus ReadDoubleWord 0x2001FFCC
+sysbus ReadDoubleWord 0x2001FFC8
+sysbus ReadDoubleWord 0x2001FFC4
+sysbus ReadDoubleWord 0x2001FFC0
+sysbus ReadDoubleWord 0x2001FFBC
+sysbus ReadDoubleWord 0x2001FFB8
+sysbus ReadDoubleWord 0x2001FFB4
+sysbus ReadDoubleWord 0x2001FFB0
+sysbus ReadDoubleWord 0x2001FFAC
+sysbus ReadDoubleWord 0x2001FFA8
+sysbus ReadDoubleWord 0x2001FFA4
+sysbus ReadDoubleWord 0x2001FFA0
+sysbus ReadDoubleWord 0x2001FF9C
+sysbus ReadDoubleWord 0x2001FF98
+sysbus ReadDoubleWord 0x2001FF94
+sysbus ReadDoubleWord 0x2001FF90
+sysbus ReadDoubleWord 0x2001FF8C
+sysbus ReadDoubleWord 0x2001FF88
+sysbus ReadDoubleWord 0x2001FF84
+sysbus ReadDoubleWord 0x2001FF80
+sysbus ReadDoubleWord 0x2001FF7C
+sysbus ReadDoubleWord 0x2001FF78
+sysbus ReadDoubleWord 0x2001FF74
+sysbus ReadDoubleWord 0x2001FF70
+sysbus ReadDoubleWord 0x2001FF6C
+sysbus ReadDoubleWord 0x2001FF68
+sysbus ReadDoubleWord 0x2001FF64
+sysbus ReadDoubleWord 0x2001FF60
+sysbus ReadDoubleWord 0x2001FF5C
+sysbus ReadDoubleWord 0x2001FF58
+sysbus ReadDoubleWord 0x2001FF54
+sysbus ReadDoubleWord 0x2001FF50
+sysbus ReadDoubleWord 0x2001FF4C
+sysbus ReadDoubleWord 0x2001FF48
+sysbus ReadDoubleWord 0x2001FF44
+sysbus ReadDoubleWord 0x2001FF40
+sysbus ReadDoubleWord 0x2001FF3C
+sysbus ReadDoubleWord 0x2001FF38
+sysbus ReadDoubleWord 0x2001FF34
+sysbus ReadDoubleWord 0x2001FF30
+sysbus ReadDoubleWord 0x2001FF2C
+sysbus ReadDoubleWord 0x2001FF28
+sysbus ReadDoubleWord 0x2001FF24
+sysbus ReadDoubleWord 0x2001FF20
+sysbus ReadDoubleWord 0x2001FF1C
+sysbus ReadDoubleWord 0x2001FF18
+sysbus ReadDoubleWord 0x2001FF14
+sysbus ReadDoubleWord 0x2001FF10
+sysbus ReadDoubleWord 0x2001FF0C
+sysbus ReadDoubleWord 0x2001FF08
+sysbus ReadDoubleWord 0x2001FF04
+sysbus ReadDoubleWord 0x2001FF00
+sysbus ReadDoubleWord 0x2001FEFC
+sysbus ReadDoubleWord 0x2001FEF8
+sysbus ReadDoubleWord 0x2001FEF4
+sysbus ReadDoubleWord 0x2001FEF0
+sysbus ReadDoubleWord 0x2001FEEC
+sysbus ReadDoubleWord 0x2001FEE8
+sysbus ReadDoubleWord 0x2001FEE4
+sysbus ReadDoubleWord 0x2001FEE0
+sysbus ReadDoubleWord 0x2001FEDC
+sysbus ReadDoubleWord 0x2001FED8
+sysbus ReadDoubleWord 0x2001FED4
+sysbus ReadDoubleWord 0x2001FED0
+sysbus ReadDoubleWord 0x2001FECC
+sysbus ReadDoubleWord 0x2001FEC8
+sysbus ReadDoubleWord 0x2001FEC4
+sysbus ReadDoubleWord 0x2001FEC0
+sysbus ReadDoubleWord 0x2001FEBC
+sysbus ReadDoubleWord 0x2001FEB8
+sysbus ReadDoubleWord 0x2001FEB4
+sysbus ReadDoubleWord 0x2001FEB0
+sysbus ReadDoubleWord 0x2001FEAC
+sysbus ReadDoubleWord 0x2001FEA8
+sysbus ReadDoubleWord 0x2001FEA4
+sysbus ReadDoubleWord 0x2001FEA0
+sysbus ReadDoubleWord 0x2001FE9C
+sysbus ReadDoubleWord 0x2001FE98
+sysbus ReadDoubleWord 0x2001FE94
+sysbus ReadDoubleWord 0x2001FE90
+sysbus ReadDoubleWord 0x2001FE8C
+sysbus ReadDoubleWord 0x2001FE88
+sysbus ReadDoubleWord 0x2001FE84
+sysbus ReadDoubleWord 0x2001FE80
+sysbus ReadDoubleWord 0x2001FE7C
+sysbus ReadDoubleWord 0x2001FE78
+sysbus ReadDoubleWord 0x2001FE74
+sysbus ReadDoubleWord 0x2001FE70
+sysbus ReadDoubleWord 0x2001FE6C
+sysbus ReadDoubleWord 0x2001FE68
+sysbus ReadDoubleWord 0x2001FE64
+sysbus ReadDoubleWord 0x2001FE60
+sysbus ReadDoubleWord 0x2001FE5C
+sysbus ReadDoubleWord 0x2001FE58
+sysbus ReadDoubleWord 0x2001FE54
+sysbus ReadDoubleWord 0x2001FE50
+sysbus ReadDoubleWord 0x2001FE4C
+sysbus ReadDoubleWord 0x2001FE48
+sysbus ReadDoubleWord 0x2001FE44
+sysbus ReadDoubleWord 0x2001FE40
+sysbus ReadDoubleWord 0x2001FE3C
+sysbus ReadDoubleWord 0x2001FE38
+sysbus ReadDoubleWord 0x2001FE34
+sysbus ReadDoubleWord 0x2001FE30
+sysbus ReadDoubleWord 0x2001FE2C
+sysbus ReadDoubleWord 0x2001FE28
+sysbus ReadDoubleWord 0x2001FE24
+sysbus ReadDoubleWord 0x2001FE20
+sysbus ReadDoubleWord 0x2001FE1C
+sysbus ReadDoubleWord 0x2001FE18
+sysbus ReadDoubleWord 0x2001FE14
+sysbus ReadDoubleWord 0x2001FE10
+sysbus ReadDoubleWord 0x2001FE0C
+sysbus ReadDoubleWord 0x2001FE08
+sysbus ReadDoubleWord 0x2001FE04
+sysbus ReadDoubleWord 0x2001FE00
+echo "REGION_B"
+sysbus ReadDoubleWord 0x2000D160
+sysbus ReadDoubleWord 0x2000D170
+sysbus ReadDoubleWord 0x2000D180
+sysbus ReadDoubleWord 0x2000D190
+sysbus ReadDoubleWord 0x2000D1A0
+sysbus ReadDoubleWord 0x2000D1B0
+sysbus ReadDoubleWord 0x2000D1C0
+sysbus ReadDoubleWord 0x2000D1D0
+sysbus ReadDoubleWord 0x2000D1E0
+sysbus ReadDoubleWord 0x2000D1F0
+sysbus ReadDoubleWord 0x2000D200
+sysbus ReadDoubleWord 0x2000D210
+sysbus ReadDoubleWord 0x2000D220
+sysbus ReadDoubleWord 0x2000D230
+sysbus ReadDoubleWord 0x2000D240
+sysbus ReadDoubleWord 0x2000D250
+sysbus ReadDoubleWord 0x2000D260
+sysbus ReadDoubleWord 0x2000D270
+sysbus ReadDoubleWord 0x2000D280
+sysbus ReadDoubleWord 0x2000D290
+sysbus ReadDoubleWord 0x2000D2A0
+sysbus ReadDoubleWord 0x2000D2B0
+sysbus ReadDoubleWord 0x2000D2C0
+sysbus ReadDoubleWord 0x2000D2D0
+sysbus ReadDoubleWord 0x2000D2E0
+sysbus ReadDoubleWord 0x2000D2F0
+sysbus ReadDoubleWord 0x2000D300
+sysbus ReadDoubleWord 0x2000D310
+sysbus ReadDoubleWord 0x2000D320
+sysbus ReadDoubleWord 0x2000D330
+sysbus ReadDoubleWord 0x2000D340
+sysbus ReadDoubleWord 0x2000D350
+sysbus ReadDoubleWord 0x2000D360
+sysbus ReadDoubleWord 0x2000D370
+sysbus ReadDoubleWord 0x2000D380
+sysbus ReadDoubleWord 0x2000D390
+sysbus ReadDoubleWord 0x2000D3A0
+sysbus ReadDoubleWord 0x2000D3B0
+sysbus ReadDoubleWord 0x2000D3C0
+sysbus ReadDoubleWord 0x2000D3D0
+sysbus ReadDoubleWord 0x2000D3E0
+sysbus ReadDoubleWord 0x2000D3F0
+sysbus ReadDoubleWord 0x2000D400
+sysbus ReadDoubleWord 0x2000D410
+sysbus ReadDoubleWord 0x2000D420
+sysbus ReadDoubleWord 0x2000D430
+sysbus ReadDoubleWord 0x2000D440
+sysbus ReadDoubleWord 0x2000D450
+sysbus ReadDoubleWord 0x2000D460
+sysbus ReadDoubleWord 0x2000D470
+sysbus ReadDoubleWord 0x2000D480
+sysbus ReadDoubleWord 0x2000D490
+sysbus ReadDoubleWord 0x2000D4A0
+sysbus ReadDoubleWord 0x2000D4B0
+sysbus ReadDoubleWord 0x2000D4C0
+sysbus ReadDoubleWord 0x2000D4D0
+sysbus ReadDoubleWord 0x2000D4E0
+sysbus ReadDoubleWord 0x2000D4F0
+sysbus ReadDoubleWord 0x2000D500
+sysbus ReadDoubleWord 0x2000D510
+sysbus ReadDoubleWord 0x2000D520
+sysbus ReadDoubleWord 0x2000D530
+sysbus ReadDoubleWord 0x2000D540
+sysbus ReadDoubleWord 0x2000D550
+sysbus ReadDoubleWord 0x2000D560
+sysbus ReadDoubleWord 0x2000D570
+sysbus ReadDoubleWord 0x2000D580
+sysbus ReadDoubleWord 0x2000D590
+sysbus ReadDoubleWord 0x2000D5A0
+sysbus ReadDoubleWord 0x2000D5B0
+sysbus ReadDoubleWord 0x2000D5C0
+sysbus ReadDoubleWord 0x2000D5D0
+sysbus ReadDoubleWord 0x2000D5E0
+sysbus ReadDoubleWord 0x2000D5F0
+sysbus ReadDoubleWord 0x2000D600
+sysbus ReadDoubleWord 0x2000D610
+sysbus ReadDoubleWord 0x2000D620
+sysbus ReadDoubleWord 0x2000D630
+sysbus ReadDoubleWord 0x2000D640
+sysbus ReadDoubleWord 0x2000D650
+sysbus ReadDoubleWord 0x2000D660
+sysbus ReadDoubleWord 0x2000D670
+sysbus ReadDoubleWord 0x2000D680
+sysbus ReadDoubleWord 0x2000D690
+sysbus ReadDoubleWord 0x2000D6A0
+sysbus ReadDoubleWord 0x2000D6B0
+sysbus ReadDoubleWord 0x2000D6C0
+sysbus ReadDoubleWord 0x2000D6D0
+sysbus ReadDoubleWord 0x2000D6E0
+sysbus ReadDoubleWord 0x2000D6F0
+sysbus ReadDoubleWord 0x2000D700
+sysbus ReadDoubleWord 0x2000D710
+sysbus ReadDoubleWord 0x2000D720
+sysbus ReadDoubleWord 0x2000D730
+sysbus ReadDoubleWord 0x2000D740
+sysbus ReadDoubleWord 0x2000D750
+sysbus ReadDoubleWord 0x2000D760
+sysbus ReadDoubleWord 0x2000D770
+sysbus ReadDoubleWord 0x2000D780
+sysbus ReadDoubleWord 0x2000D790
+sysbus ReadDoubleWord 0x2000D7A0
+sysbus ReadDoubleWord 0x2000D7B0
+sysbus ReadDoubleWord 0x2000D7C0
+sysbus ReadDoubleWord 0x2000D7D0
+sysbus ReadDoubleWord 0x2000D7E0
+sysbus ReadDoubleWord 0x2000D7F0
+sysbus ReadDoubleWord 0x2000D800
+sysbus ReadDoubleWord 0x2000D810
+sysbus ReadDoubleWord 0x2000D820
+sysbus ReadDoubleWord 0x2000D830
+sysbus ReadDoubleWord 0x2000D840
+sysbus ReadDoubleWord 0x2000D850
+sysbus ReadDoubleWord 0x2000D860
+sysbus ReadDoubleWord 0x2000D870
+sysbus ReadDoubleWord 0x2000D880
+sysbus ReadDoubleWord 0x2000D890
+sysbus ReadDoubleWord 0x2000D8A0
+sysbus ReadDoubleWord 0x2000D8B0
+sysbus ReadDoubleWord 0x2000D8C0
+sysbus ReadDoubleWord 0x2000D8D0
+sysbus ReadDoubleWord 0x2000D8E0
+sysbus ReadDoubleWord 0x2000D8F0
+sysbus ReadDoubleWord 0x2000D900
+sysbus ReadDoubleWord 0x2000D910
+sysbus ReadDoubleWord 0x2000D920
+sysbus ReadDoubleWord 0x2000D930
+sysbus ReadDoubleWord 0x2000D940
+sysbus ReadDoubleWord 0x2000D950
+sysbus ReadDoubleWord 0x2000D960
+sysbus ReadDoubleWord 0x2000D970
+sysbus ReadDoubleWord 0x2000D980
+sysbus ReadDoubleWord 0x2000D990
+sysbus ReadDoubleWord 0x2000D9A0
+sysbus ReadDoubleWord 0x2000D9B0
+sysbus ReadDoubleWord 0x2000D9C0
+sysbus ReadDoubleWord 0x2000D9D0
+sysbus ReadDoubleWord 0x2000D9E0
+sysbus ReadDoubleWord 0x2000D9F0
+sysbus ReadDoubleWord 0x2000DA00
+sysbus ReadDoubleWord 0x2000DA10
+sysbus ReadDoubleWord 0x2000DA20
+sysbus ReadDoubleWord 0x2000DA30
+sysbus ReadDoubleWord 0x2000DA40
+sysbus ReadDoubleWord 0x2000DA50
+sysbus ReadDoubleWord 0x2000DA60
+sysbus ReadDoubleWord 0x2000DA70
+sysbus ReadDoubleWord 0x2000DA80
+sysbus ReadDoubleWord 0x2000DA90
+sysbus ReadDoubleWord 0x2000DAA0
+sysbus ReadDoubleWord 0x2000DAB0
+sysbus ReadDoubleWord 0x2000DAC0
+sysbus ReadDoubleWord 0x2000DAD0
+sysbus ReadDoubleWord 0x2000DAE0
+sysbus ReadDoubleWord 0x2000DAF0
+sysbus ReadDoubleWord 0x2000DB00
+sysbus ReadDoubleWord 0x2000DB10
+sysbus ReadDoubleWord 0x2000DB20
+sysbus ReadDoubleWord 0x2000DB30
+sysbus ReadDoubleWord 0x2000DB40
+sysbus ReadDoubleWord 0x2000DB50
+sysbus ReadDoubleWord 0x2000DB60
+sysbus ReadDoubleWord 0x2000DB70
+sysbus ReadDoubleWord 0x2000DB80
+sysbus ReadDoubleWord 0x2000DB90
+sysbus ReadDoubleWord 0x2000DBA0
+sysbus ReadDoubleWord 0x2000DBB0
+sysbus ReadDoubleWord 0x2000DBC0
+sysbus ReadDoubleWord 0x2000DBD0
+sysbus ReadDoubleWord 0x2000DBE0
+sysbus ReadDoubleWord 0x2000DBF0
+sysbus ReadDoubleWord 0x2000DC00
+sysbus ReadDoubleWord 0x2000DC10
+sysbus ReadDoubleWord 0x2000DC20
+sysbus ReadDoubleWord 0x2000DC30
+sysbus ReadDoubleWord 0x2000DC40
+sysbus ReadDoubleWord 0x2000DC50
+sysbus ReadDoubleWord 0x2000DC60
+sysbus ReadDoubleWord 0x2000DC70
+sysbus ReadDoubleWord 0x2000DC80
+sysbus ReadDoubleWord 0x2000DC90
+sysbus ReadDoubleWord 0x2000DCA0
+sysbus ReadDoubleWord 0x2000DCB0
+sysbus ReadDoubleWord 0x2000DCC0
+sysbus ReadDoubleWord 0x2000DCD0
+sysbus ReadDoubleWord 0x2000DCE0
+sysbus ReadDoubleWord 0x2000DCF0
+sysbus ReadDoubleWord 0x2000DD00
+sysbus ReadDoubleWord 0x2000DD10
+sysbus ReadDoubleWord 0x2000DD20
+sysbus ReadDoubleWord 0x2000DD30
+sysbus ReadDoubleWord 0x2000DD40
+sysbus ReadDoubleWord 0x2000DD50
+sysbus ReadDoubleWord 0x2000DD60
+sysbus ReadDoubleWord 0x2000DD70
+sysbus ReadDoubleWord 0x2000DD80
+sysbus ReadDoubleWord 0x2000DD90
+sysbus ReadDoubleWord 0x2000DDA0
+sysbus ReadDoubleWord 0x2000DDB0
+sysbus ReadDoubleWord 0x2000DDC0
+sysbus ReadDoubleWord 0x2000DDD0
+sysbus ReadDoubleWord 0x2000DDE0
+sysbus ReadDoubleWord 0x2000DDF0
+sysbus ReadDoubleWord 0x2000DE00
+sysbus ReadDoubleWord 0x2000DE10
+sysbus ReadDoubleWord 0x2000DE20
+sysbus ReadDoubleWord 0x2000DE30
+sysbus ReadDoubleWord 0x2000DE40
+sysbus ReadDoubleWord 0x2000DE50
+sysbus ReadDoubleWord 0x2000DE60
+sysbus ReadDoubleWord 0x2000DE70
+sysbus ReadDoubleWord 0x2000DE80
+sysbus ReadDoubleWord 0x2000DE90
+sysbus ReadDoubleWord 0x2000DEA0
+sysbus ReadDoubleWord 0x2000DEB0
+sysbus ReadDoubleWord 0x2000DEC0
+sysbus ReadDoubleWord 0x2000DED0
+sysbus ReadDoubleWord 0x2000DEE0
+sysbus ReadDoubleWord 0x2000DEF0
+sysbus ReadDoubleWord 0x2000DF00
+sysbus ReadDoubleWord 0x2000DF10
+sysbus ReadDoubleWord 0x2000DF20
+sysbus ReadDoubleWord 0x2000DF30
+sysbus ReadDoubleWord 0x2000DF40
+sysbus ReadDoubleWord 0x2000DF50
+sysbus ReadDoubleWord 0x2000DF60
+sysbus ReadDoubleWord 0x2000DF70
+sysbus ReadDoubleWord 0x2000DF80
+sysbus ReadDoubleWord 0x2000DF90
+sysbus ReadDoubleWord 0x2000DFA0
+sysbus ReadDoubleWord 0x2000DFB0
+sysbus ReadDoubleWord 0x2000DFC0
+sysbus ReadDoubleWord 0x2000DFD0
+sysbus ReadDoubleWord 0x2000DFE0
+sysbus ReadDoubleWord 0x2000DFF0
+sysbus ReadDoubleWord 0x2000E000
+sysbus ReadDoubleWord 0x2000E010
+sysbus ReadDoubleWord 0x2000E020
+sysbus ReadDoubleWord 0x2000E030
+sysbus ReadDoubleWord 0x2000E040
+sysbus ReadDoubleWord 0x2000E050
+sysbus ReadDoubleWord 0x2000E060
+sysbus ReadDoubleWord 0x2000E070
+sysbus ReadDoubleWord 0x2000E080
+sysbus ReadDoubleWord 0x2000E090
+sysbus ReadDoubleWord 0x2000E0A0
+sysbus ReadDoubleWord 0x2000E0B0
+sysbus ReadDoubleWord 0x2000E0C0
+sysbus ReadDoubleWord 0x2000E0D0
+sysbus ReadDoubleWord 0x2000E0E0
+sysbus ReadDoubleWord 0x2000E0F0
+sysbus ReadDoubleWord 0x2000E100
+sysbus ReadDoubleWord 0x2000E110
+sysbus ReadDoubleWord 0x2000E120
+sysbus ReadDoubleWord 0x2000E130
+sysbus ReadDoubleWord 0x2000E140
+sysbus ReadDoubleWord 0x2000E150
+sysbus ReadDoubleWord 0x2000E160
+sysbus ReadDoubleWord 0x2000E170
+sysbus ReadDoubleWord 0x2000E180
+sysbus ReadDoubleWord 0x2000E190
+sysbus ReadDoubleWord 0x2000E1A0
+sysbus ReadDoubleWord 0x2000E1B0
+sysbus ReadDoubleWord 0x2000E1C0
+sysbus ReadDoubleWord 0x2000E1D0
+sysbus ReadDoubleWord 0x2000E1E0
+sysbus ReadDoubleWord 0x2000E1F0
+sysbus ReadDoubleWord 0x2000E200
+sysbus ReadDoubleWord 0x2000E210
+sysbus ReadDoubleWord 0x2000E220
+sysbus ReadDoubleWord 0x2000E230
+sysbus ReadDoubleWord 0x2000E240
+sysbus ReadDoubleWord 0x2000E250
+sysbus ReadDoubleWord 0x2000E260
+sysbus ReadDoubleWord 0x2000E270
+sysbus ReadDoubleWord 0x2000E280
+sysbus ReadDoubleWord 0x2000E290
+sysbus ReadDoubleWord 0x2000E2A0
+sysbus ReadDoubleWord 0x2000E2B0
+sysbus ReadDoubleWord 0x2000E2C0
+sysbus ReadDoubleWord 0x2000E2D0
+sysbus ReadDoubleWord 0x2000E2E0
+sysbus ReadDoubleWord 0x2000E2F0
+sysbus ReadDoubleWord 0x2000E300
+sysbus ReadDoubleWord 0x2000E310
+sysbus ReadDoubleWord 0x2000E320
+sysbus ReadDoubleWord 0x2000E330
+sysbus ReadDoubleWord 0x2000E340
+sysbus ReadDoubleWord 0x2000E350
+sysbus ReadDoubleWord 0x2000E360
+sysbus ReadDoubleWord 0x2000E370
+sysbus ReadDoubleWord 0x2000E380
+sysbus ReadDoubleWord 0x2000E390
+sysbus ReadDoubleWord 0x2000E3A0
+sysbus ReadDoubleWord 0x2000E3B0
+sysbus ReadDoubleWord 0x2000E3C0
+sysbus ReadDoubleWord 0x2000E3D0
+sysbus ReadDoubleWord 0x2000E3E0
+sysbus ReadDoubleWord 0x2000E3F0
+sysbus ReadDoubleWord 0x2000E400
+sysbus ReadDoubleWord 0x2000E410
+sysbus ReadDoubleWord 0x2000E420
+sysbus ReadDoubleWord 0x2000E430
+sysbus ReadDoubleWord 0x2000E440
+sysbus ReadDoubleWord 0x2000E450
+sysbus ReadDoubleWord 0x2000E460
+sysbus ReadDoubleWord 0x2000E470
+sysbus ReadDoubleWord 0x2000E480
+sysbus ReadDoubleWord 0x2000E490
+sysbus ReadDoubleWord 0x2000E4A0
+sysbus ReadDoubleWord 0x2000E4B0
+sysbus ReadDoubleWord 0x2000E4C0
+sysbus ReadDoubleWord 0x2000E4D0
+sysbus ReadDoubleWord 0x2000E4E0
+sysbus ReadDoubleWord 0x2000E4F0
+sysbus ReadDoubleWord 0x2000E500
+sysbus ReadDoubleWord 0x2000E510
+sysbus ReadDoubleWord 0x2000E520
+sysbus ReadDoubleWord 0x2000E530
+sysbus ReadDoubleWord 0x2000E540
+sysbus ReadDoubleWord 0x2000E550
+sysbus ReadDoubleWord 0x2000E560
+sysbus ReadDoubleWord 0x2000E570
+sysbus ReadDoubleWord 0x2000E580
+sysbus ReadDoubleWord 0x2000E590
+sysbus ReadDoubleWord 0x2000E5A0
+sysbus ReadDoubleWord 0x2000E5B0
+sysbus ReadDoubleWord 0x2000E5C0
+sysbus ReadDoubleWord 0x2000E5D0
+sysbus ReadDoubleWord 0x2000E5E0
+sysbus ReadDoubleWord 0x2000E5F0
+sysbus ReadDoubleWord 0x2000E600
+sysbus ReadDoubleWord 0x2000E610
+sysbus ReadDoubleWord 0x2000E620
+sysbus ReadDoubleWord 0x2000E630
+sysbus ReadDoubleWord 0x2000E640
+sysbus ReadDoubleWord 0x2000E650
+sysbus ReadDoubleWord 0x2000E660
+sysbus ReadDoubleWord 0x2000E670
+sysbus ReadDoubleWord 0x2000E680
+sysbus ReadDoubleWord 0x2000E690
+sysbus ReadDoubleWord 0x2000E6A0
+sysbus ReadDoubleWord 0x2000E6B0
+sysbus ReadDoubleWord 0x2000E6C0
+sysbus ReadDoubleWord 0x2000E6D0
+sysbus ReadDoubleWord 0x2000E6E0
+sysbus ReadDoubleWord 0x2000E6F0
+sysbus ReadDoubleWord 0x2000E700
+sysbus ReadDoubleWord 0x2000E710
+sysbus ReadDoubleWord 0x2000E720
+sysbus ReadDoubleWord 0x2000E730
+sysbus ReadDoubleWord 0x2000E740
+sysbus ReadDoubleWord 0x2000E750
+sysbus ReadDoubleWord 0x2000E760
+sysbus ReadDoubleWord 0x2000E770
+sysbus ReadDoubleWord 0x2000E780
+sysbus ReadDoubleWord 0x2000E790
+sysbus ReadDoubleWord 0x2000E7A0
+sysbus ReadDoubleWord 0x2000E7B0
+sysbus ReadDoubleWord 0x2000E7C0
+sysbus ReadDoubleWord 0x2000E7D0
+sysbus ReadDoubleWord 0x2000E7E0
+sysbus ReadDoubleWord 0x2000E7F0
+sysbus ReadDoubleWord 0x2000E800
+sysbus ReadDoubleWord 0x2000E810
+sysbus ReadDoubleWord 0x2000E820
+sysbus ReadDoubleWord 0x2000E830
+sysbus ReadDoubleWord 0x2000E840
+sysbus ReadDoubleWord 0x2000E850
+sysbus ReadDoubleWord 0x2000E860
+sysbus ReadDoubleWord 0x2000E870
+sysbus ReadDoubleWord 0x2000E880
+sysbus ReadDoubleWord 0x2000E890
+sysbus ReadDoubleWord 0x2000E8A0
+sysbus ReadDoubleWord 0x2000E8B0
+sysbus ReadDoubleWord 0x2000E8C0
+sysbus ReadDoubleWord 0x2000E8D0
+sysbus ReadDoubleWord 0x2000E8E0
+sysbus ReadDoubleWord 0x2000E8F0
+sysbus ReadDoubleWord 0x2000E900
+sysbus ReadDoubleWord 0x2000E910
+sysbus ReadDoubleWord 0x2000E920
+sysbus ReadDoubleWord 0x2000E930
+sysbus ReadDoubleWord 0x2000E940
+sysbus ReadDoubleWord 0x2000E950
+sysbus ReadDoubleWord 0x2000E960
+sysbus ReadDoubleWord 0x2000E970
+sysbus ReadDoubleWord 0x2000E980
+sysbus ReadDoubleWord 0x2000E990
+sysbus ReadDoubleWord 0x2000E9A0
+sysbus ReadDoubleWord 0x2000E9B0
+sysbus ReadDoubleWord 0x2000E9C0
+sysbus ReadDoubleWord 0x2000E9D0
+sysbus ReadDoubleWord 0x2000E9E0
+sysbus ReadDoubleWord 0x2000E9F0
+sysbus ReadDoubleWord 0x2000EA00
+sysbus ReadDoubleWord 0x2000EA10
+sysbus ReadDoubleWord 0x2000EA20
+sysbus ReadDoubleWord 0x2000EA30
+sysbus ReadDoubleWord 0x2000EA40
+sysbus ReadDoubleWord 0x2000EA50
+sysbus ReadDoubleWord 0x2000EA60
+sysbus ReadDoubleWord 0x2000EA70
+sysbus ReadDoubleWord 0x2000EA80
+sysbus ReadDoubleWord 0x2000EA90
+sysbus ReadDoubleWord 0x2000EAA0
+sysbus ReadDoubleWord 0x2000EAB0
+sysbus ReadDoubleWord 0x2000EAC0
+sysbus ReadDoubleWord 0x2000EAD0
+sysbus ReadDoubleWord 0x2000EAE0
+sysbus ReadDoubleWord 0x2000EAF0
+sysbus ReadDoubleWord 0x2000EB00
+sysbus ReadDoubleWord 0x2000EB10
+sysbus ReadDoubleWord 0x2000EB20
+sysbus ReadDoubleWord 0x2000EB30
+sysbus ReadDoubleWord 0x2000EB40
+sysbus ReadDoubleWord 0x2000EB50
+sysbus ReadDoubleWord 0x2000EB60
+sysbus ReadDoubleWord 0x2000EB70
+sysbus ReadDoubleWord 0x2000EB80
+sysbus ReadDoubleWord 0x2000EB90
+sysbus ReadDoubleWord 0x2000EBA0
+sysbus ReadDoubleWord 0x2000EBB0
+sysbus ReadDoubleWord 0x2000EBC0
+sysbus ReadDoubleWord 0x2000EBD0
+sysbus ReadDoubleWord 0x2000EBE0
+sysbus ReadDoubleWord 0x2000EBF0
+sysbus ReadDoubleWord 0x2000EC00
+sysbus ReadDoubleWord 0x2000EC10
+sysbus ReadDoubleWord 0x2000EC20
+sysbus ReadDoubleWord 0x2000EC30
+sysbus ReadDoubleWord 0x2000EC40
+sysbus ReadDoubleWord 0x2000EC50
+sysbus ReadDoubleWord 0x2000EC60
+sysbus ReadDoubleWord 0x2000EC70
+sysbus ReadDoubleWord 0x2000EC80
+sysbus ReadDoubleWord 0x2000EC90
+sysbus ReadDoubleWord 0x2000ECA0
+sysbus ReadDoubleWord 0x2000ECB0
+sysbus ReadDoubleWord 0x2000ECC0
+sysbus ReadDoubleWord 0x2000ECD0
+sysbus ReadDoubleWord 0x2000ECE0
+sysbus ReadDoubleWord 0x2000ECF0
+sysbus ReadDoubleWord 0x2000ED00
+sysbus ReadDoubleWord 0x2000ED10
+sysbus ReadDoubleWord 0x2000ED20
+sysbus ReadDoubleWord 0x2000ED30
+sysbus ReadDoubleWord 0x2000ED40
+sysbus ReadDoubleWord 0x2000ED50
+sysbus ReadDoubleWord 0x2000ED60
+sysbus ReadDoubleWord 0x2000ED70
+sysbus ReadDoubleWord 0x2000ED80
+sysbus ReadDoubleWord 0x2000ED90
+sysbus ReadDoubleWord 0x2000EDA0
+sysbus ReadDoubleWord 0x2000EDB0
+sysbus ReadDoubleWord 0x2000EDC0
+sysbus ReadDoubleWord 0x2000EDD0
+sysbus ReadDoubleWord 0x2000EDE0
+sysbus ReadDoubleWord 0x2000EDF0
+sysbus ReadDoubleWord 0x2000EE00
+sysbus ReadDoubleWord 0x2000EE10
+sysbus ReadDoubleWord 0x2000EE20
+sysbus ReadDoubleWord 0x2000EE30
+sysbus ReadDoubleWord 0x2000EE40
+sysbus ReadDoubleWord 0x2000EE50
+sysbus ReadDoubleWord 0x2000EE60
+sysbus ReadDoubleWord 0x2000EE70
+sysbus ReadDoubleWord 0x2000EE80
+sysbus ReadDoubleWord 0x2000EE90
+sysbus ReadDoubleWord 0x2000EEA0
+sysbus ReadDoubleWord 0x2000EEB0
+sysbus ReadDoubleWord 0x2000EEC0
+sysbus ReadDoubleWord 0x2000EED0
+sysbus ReadDoubleWord 0x2000EEE0
+sysbus ReadDoubleWord 0x2000EEF0
+sysbus ReadDoubleWord 0x2000EF00
+sysbus ReadDoubleWord 0x2000EF10
+sysbus ReadDoubleWord 0x2000EF20
+sysbus ReadDoubleWord 0x2000EF30
+sysbus ReadDoubleWord 0x2000EF40
+sysbus ReadDoubleWord 0x2000EF50
+sysbus ReadDoubleWord 0x2000EF60
+sysbus ReadDoubleWord 0x2000EF70
+sysbus ReadDoubleWord 0x2000EF80
+sysbus ReadDoubleWord 0x2000EF90
+sysbus ReadDoubleWord 0x2000EFA0
+sysbus ReadDoubleWord 0x2000EFB0
+sysbus ReadDoubleWord 0x2000EFC0
+sysbus ReadDoubleWord 0x2000EFD0
+sysbus ReadDoubleWord 0x2000EFE0
+sysbus ReadDoubleWord 0x2000EFF0
+sysbus ReadDoubleWord 0x2000F000
+sysbus ReadDoubleWord 0x2000F010
+sysbus ReadDoubleWord 0x2000F020
+sysbus ReadDoubleWord 0x2000F030
+sysbus ReadDoubleWord 0x2000F040
+sysbus ReadDoubleWord 0x2000F050
+sysbus ReadDoubleWord 0x2000F060
+sysbus ReadDoubleWord 0x2000F070
+sysbus ReadDoubleWord 0x2000F080
+sysbus ReadDoubleWord 0x2000F090
+sysbus ReadDoubleWord 0x2000F0A0
+sysbus ReadDoubleWord 0x2000F0B0
+sysbus ReadDoubleWord 0x2000F0C0
+sysbus ReadDoubleWord 0x2000F0D0
+sysbus ReadDoubleWord 0x2000F0E0
+sysbus ReadDoubleWord 0x2000F0F0
+sysbus ReadDoubleWord 0x2000F100
+sysbus ReadDoubleWord 0x2000F110
+sysbus ReadDoubleWord 0x2000F120
+sysbus ReadDoubleWord 0x2000F130
+sysbus ReadDoubleWord 0x2000F140
+sysbus ReadDoubleWord 0x2000F150
+sysbus ReadDoubleWord 0x2000F160
+sysbus ReadDoubleWord 0x2000F170
+sysbus ReadDoubleWord 0x2000F180
+sysbus ReadDoubleWord 0x2000F190
+sysbus ReadDoubleWord 0x2000F1A0
+sysbus ReadDoubleWord 0x2000F1B0
+sysbus ReadDoubleWord 0x2000F1C0
+sysbus ReadDoubleWord 0x2000F1D0
+sysbus ReadDoubleWord 0x2000F1E0
+sysbus ReadDoubleWord 0x2000F1F0
+sysbus ReadDoubleWord 0x2000F200
+sysbus ReadDoubleWord 0x2000F210
+sysbus ReadDoubleWord 0x2000F220
+sysbus ReadDoubleWord 0x2000F230
+sysbus ReadDoubleWord 0x2000F240
+sysbus ReadDoubleWord 0x2000F250
+sysbus ReadDoubleWord 0x2000F260
+sysbus ReadDoubleWord 0x2000F270
+sysbus ReadDoubleWord 0x2000F280
+sysbus ReadDoubleWord 0x2000F290
+sysbus ReadDoubleWord 0x2000F2A0
+sysbus ReadDoubleWord 0x2000F2B0
+sysbus ReadDoubleWord 0x2000F2C0
+sysbus ReadDoubleWord 0x2000F2D0
+sysbus ReadDoubleWord 0x2000F2E0
+sysbus ReadDoubleWord 0x2000F2F0
+sysbus ReadDoubleWord 0x2000F300
+sysbus ReadDoubleWord 0x2000F310
+sysbus ReadDoubleWord 0x2000F320
+sysbus ReadDoubleWord 0x2000F330
+sysbus ReadDoubleWord 0x2000F340
+sysbus ReadDoubleWord 0x2000F350
+sysbus ReadDoubleWord 0x2000F360
+sysbus ReadDoubleWord 0x2000F370
+sysbus ReadDoubleWord 0x2000F380
+sysbus ReadDoubleWord 0x2000F390
+sysbus ReadDoubleWord 0x2000F3A0
+sysbus ReadDoubleWord 0x2000F3B0
+sysbus ReadDoubleWord 0x2000F3C0
+sysbus ReadDoubleWord 0x2000F3D0
+sysbus ReadDoubleWord 0x2000F3E0
+sysbus ReadDoubleWord 0x2000F3F0
+sysbus ReadDoubleWord 0x2000F400
+sysbus ReadDoubleWord 0x2000F410
+sysbus ReadDoubleWord 0x2000F420
+sysbus ReadDoubleWord 0x2000F430
+sysbus ReadDoubleWord 0x2000F440
+sysbus ReadDoubleWord 0x2000F450
+sysbus ReadDoubleWord 0x2000F460
+sysbus ReadDoubleWord 0x2000F470
+sysbus ReadDoubleWord 0x2000F480
+sysbus ReadDoubleWord 0x2000F490
+sysbus ReadDoubleWord 0x2000F4A0
+sysbus ReadDoubleWord 0x2000F4B0
+sysbus ReadDoubleWord 0x2000F4C0
+sysbus ReadDoubleWord 0x2000F4D0
+sysbus ReadDoubleWord 0x2000F4E0
+sysbus ReadDoubleWord 0x2000F4F0
+sysbus ReadDoubleWord 0x2000F500
+sysbus ReadDoubleWord 0x2000F510
+sysbus ReadDoubleWord 0x2000F520
+sysbus ReadDoubleWord 0x2000F530
+sysbus ReadDoubleWord 0x2000F540
+sysbus ReadDoubleWord 0x2000F550
+sysbus ReadDoubleWord 0x2000F560
+sysbus ReadDoubleWord 0x2000F570
+sysbus ReadDoubleWord 0x2000F580
+sysbus ReadDoubleWord 0x2000F590
+sysbus ReadDoubleWord 0x2000F5A0
+sysbus ReadDoubleWord 0x2000F5B0
+sysbus ReadDoubleWord 0x2000F5C0
+sysbus ReadDoubleWord 0x2000F5D0
+sysbus ReadDoubleWord 0x2000F5E0
+sysbus ReadDoubleWord 0x2000F5F0
+sysbus ReadDoubleWord 0x2000F600
+sysbus ReadDoubleWord 0x2000F610
+sysbus ReadDoubleWord 0x2000F620
+sysbus ReadDoubleWord 0x2000F630
+sysbus ReadDoubleWord 0x2000F640
+sysbus ReadDoubleWord 0x2000F650
+sysbus ReadDoubleWord 0x2000F660
+sysbus ReadDoubleWord 0x2000F670
+sysbus ReadDoubleWord 0x2000F680
+sysbus ReadDoubleWord 0x2000F690
+sysbus ReadDoubleWord 0x2000F6A0
+sysbus ReadDoubleWord 0x2000F6B0
+sysbus ReadDoubleWord 0x2000F6C0
+sysbus ReadDoubleWord 0x2000F6D0
+sysbus ReadDoubleWord 0x2000F6E0
+sysbus ReadDoubleWord 0x2000F6F0
+sysbus ReadDoubleWord 0x2000F700
+sysbus ReadDoubleWord 0x2000F710
+sysbus ReadDoubleWord 0x2000F720
+sysbus ReadDoubleWord 0x2000F730
+sysbus ReadDoubleWord 0x2000F740
+sysbus ReadDoubleWord 0x2000F750
+sysbus ReadDoubleWord 0x2000F760
+sysbus ReadDoubleWord 0x2000F770
+sysbus ReadDoubleWord 0x2000F780
+sysbus ReadDoubleWord 0x2000F790
+sysbus ReadDoubleWord 0x2000F7A0
+sysbus ReadDoubleWord 0x2000F7B0
+sysbus ReadDoubleWord 0x2000F7C0
+sysbus ReadDoubleWord 0x2000F7D0
+sysbus ReadDoubleWord 0x2000F7E0
+sysbus ReadDoubleWord 0x2000F7F0
+sysbus ReadDoubleWord 0x2000F800
+sysbus ReadDoubleWord 0x2000F810
+sysbus ReadDoubleWord 0x2000F820
+sysbus ReadDoubleWord 0x2000F830
+sysbus ReadDoubleWord 0x2000F840
+sysbus ReadDoubleWord 0x2000F850
+sysbus ReadDoubleWord 0x2000F860
+sysbus ReadDoubleWord 0x2000F870
+sysbus ReadDoubleWord 0x2000F880
+sysbus ReadDoubleWord 0x2000F890
+sysbus ReadDoubleWord 0x2000F8A0
+sysbus ReadDoubleWord 0x2000F8B0
+sysbus ReadDoubleWord 0x2000F8C0
+sysbus ReadDoubleWord 0x2000F8D0
+sysbus ReadDoubleWord 0x2000F8E0
+sysbus ReadDoubleWord 0x2000F8F0
+sysbus ReadDoubleWord 0x2000F900
+sysbus ReadDoubleWord 0x2000F910
+sysbus ReadDoubleWord 0x2000F920
+sysbus ReadDoubleWord 0x2000F930
+sysbus ReadDoubleWord 0x2000F940
+sysbus ReadDoubleWord 0x2000F950
+sysbus ReadDoubleWord 0x2000F960
+sysbus ReadDoubleWord 0x2000F970
+sysbus ReadDoubleWord 0x2000F980
+sysbus ReadDoubleWord 0x2000F990
+sysbus ReadDoubleWord 0x2000F9A0
+sysbus ReadDoubleWord 0x2000F9B0
+sysbus ReadDoubleWord 0x2000F9C0
+sysbus ReadDoubleWord 0x2000F9D0
+sysbus ReadDoubleWord 0x2000F9E0
+sysbus ReadDoubleWord 0x2000F9F0
+sysbus ReadDoubleWord 0x2000FA00
+sysbus ReadDoubleWord 0x2000FA10
+sysbus ReadDoubleWord 0x2000FA20
+sysbus ReadDoubleWord 0x2000FA30
+sysbus ReadDoubleWord 0x2000FA40
+sysbus ReadDoubleWord 0x2000FA50
+sysbus ReadDoubleWord 0x2000FA60
+sysbus ReadDoubleWord 0x2000FA70
+sysbus ReadDoubleWord 0x2000FA80
+sysbus ReadDoubleWord 0x2000FA90
+sysbus ReadDoubleWord 0x2000FAA0
+sysbus ReadDoubleWord 0x2000FAB0
+sysbus ReadDoubleWord 0x2000FAC0
+sysbus ReadDoubleWord 0x2000FAD0
+sysbus ReadDoubleWord 0x2000FAE0
+sysbus ReadDoubleWord 0x2000FAF0
+sysbus ReadDoubleWord 0x2000FB00
+sysbus ReadDoubleWord 0x2000FB10
+sysbus ReadDoubleWord 0x2000FB20
+sysbus ReadDoubleWord 0x2000FB30
+sysbus ReadDoubleWord 0x2000FB40
+sysbus ReadDoubleWord 0x2000FB50
+sysbus ReadDoubleWord 0x2000FB60
+sysbus ReadDoubleWord 0x2000FB70
+sysbus ReadDoubleWord 0x2000FB80
+sysbus ReadDoubleWord 0x2000FB90
+sysbus ReadDoubleWord 0x2000FBA0
+sysbus ReadDoubleWord 0x2000FBB0
+sysbus ReadDoubleWord 0x2000FBC0
+sysbus ReadDoubleWord 0x2000FBD0
+sysbus ReadDoubleWord 0x2000FBE0
+sysbus ReadDoubleWord 0x2000FBF0
+sysbus ReadDoubleWord 0x2000FC00
+sysbus ReadDoubleWord 0x2000FC10
+sysbus ReadDoubleWord 0x2000FC20
+sysbus ReadDoubleWord 0x2000FC30
+sysbus ReadDoubleWord 0x2000FC40
+sysbus ReadDoubleWord 0x2000FC50
+sysbus ReadDoubleWord 0x2000FC60
+sysbus ReadDoubleWord 0x2000FC70
+sysbus ReadDoubleWord 0x2000FC80
+sysbus ReadDoubleWord 0x2000FC90
+sysbus ReadDoubleWord 0x2000FCA0
+sysbus ReadDoubleWord 0x2000FCB0
+sysbus ReadDoubleWord 0x2000FCC0
+sysbus ReadDoubleWord 0x2000FCD0
+sysbus ReadDoubleWord 0x2000FCE0
+sysbus ReadDoubleWord 0x2000FCF0
+sysbus ReadDoubleWord 0x2000FD00
+sysbus ReadDoubleWord 0x2000FD10
+sysbus ReadDoubleWord 0x2000FD20
+sysbus ReadDoubleWord 0x2000FD30
+sysbus ReadDoubleWord 0x2000FD40
+sysbus ReadDoubleWord 0x2000FD50
+sysbus ReadDoubleWord 0x2000FD60
+sysbus ReadDoubleWord 0x2000FD70
+sysbus ReadDoubleWord 0x2000FD80
+sysbus ReadDoubleWord 0x2000FD90
+sysbus ReadDoubleWord 0x2000FDA0
+sysbus ReadDoubleWord 0x2000FDB0
+sysbus ReadDoubleWord 0x2000FDC0
+sysbus ReadDoubleWord 0x2000FDD0
+sysbus ReadDoubleWord 0x2000FDE0
+sysbus ReadDoubleWord 0x2000FDF0
+sysbus ReadDoubleWord 0x2000FE00
+sysbus ReadDoubleWord 0x2000FE10
+sysbus ReadDoubleWord 0x2000FE20
+sysbus ReadDoubleWord 0x2000FE30
+sysbus ReadDoubleWord 0x2000FE40
+sysbus ReadDoubleWord 0x2000FE50
+sysbus ReadDoubleWord 0x2000FE60
+sysbus ReadDoubleWord 0x2000FE70
+sysbus ReadDoubleWord 0x2000FE80
+sysbus ReadDoubleWord 0x2000FE90
+sysbus ReadDoubleWord 0x2000FEA0
+sysbus ReadDoubleWord 0x2000FEB0
+sysbus ReadDoubleWord 0x2000FEC0
+sysbus ReadDoubleWord 0x2000FED0
+sysbus ReadDoubleWord 0x2000FEE0
+sysbus ReadDoubleWord 0x2000FEF0
+sysbus ReadDoubleWord 0x2000FF00
+sysbus ReadDoubleWord 0x2000FF10
+sysbus ReadDoubleWord 0x2000FF20
+sysbus ReadDoubleWord 0x2000FF30
+sysbus ReadDoubleWord 0x2000FF40
+sysbus ReadDoubleWord 0x2000FF50
+sysbus ReadDoubleWord 0x2000FF60
+sysbus ReadDoubleWord 0x2000FF70
+sysbus ReadDoubleWord 0x2000FF80
+sysbus ReadDoubleWord 0x2000FF90
+sysbus ReadDoubleWord 0x2000FFA0
+sysbus ReadDoubleWord 0x2000FFB0
+sysbus ReadDoubleWord 0x2000FFC0
+sysbus ReadDoubleWord 0x2000FFD0
+sysbus ReadDoubleWord 0x2000FFE0
+sysbus ReadDoubleWord 0x2000FFF0
+sysbus ReadDoubleWord 0x20010000
+sysbus ReadDoubleWord 0x20010010
+sysbus ReadDoubleWord 0x20010020
+echo "REGIONS_END"
+echo "INSNS"
+cpu ExecutedInstructions
+echo "PC"
+cpu PC

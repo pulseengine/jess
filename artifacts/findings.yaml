@@ -1828,6 +1828,57 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-055
+    type: ai-found-defect
+    severity: major
+    triage-status: open
+    detected-by: jess taking relay's SWREQ-FALCON-OCI-P06 and probing WHERE the stack actually is, 2026-09-02
+    title: THE OBVIOUS WAY TO MEASURE relay's P06 STACK BUDGET RETURNS A CONFIDENT ZERO — the ARM hardware stack is UNTOUCHED (0 of 512 B); the wasm shadow stack lives inside the region init overwrites
+    status: open
+    description: >
+      2026-09-02. relay promoted SWREQ-FALCON-OCI-P02 and -P05 to verified on jess's fusion matrix
+      (AFD-052) and correctly HELD -P06, whose criterion is "the shared stack region fits the target
+      budget AND THE IMAGE EXECUTES". Four of relay's per-stage bounds - iekf, position, attitude,
+      mixer - are BORROWED FROM SCRY rather than measured, and relay's stated worry is a stage
+      under-reserved by a few hundred bytes: lowers perfectly, traps on the first deep call.
+      jess took P06 and started with stack painting, which needs no export-invocation machinery and
+      is therefore NOT blocked on synth#1131. It does not work on this image, and the reason is
+      worth more than the number would have been.
+      *** THE OBVIOUS METHOD RETURNS A CONFIDENT ZERO ***, measured on the committed
+      falcon-cascade-m7.elf under Renode 1.16.1:
+        image ran            213,439 instructions retired, PC 0x16c (the post-return spin)
+        region A             128 probes over the 512 B below the initial SP (0x20020000)
+                             -> 0 touched. The ARM HARDWARE STACK IS ENTIRELY UNUSED.
+        region B             749 probes over the linear-memory tail above the init copy
+                             -> 1 touched. Not the stack either.
+      SP is back at 0x20020000 after the run, so the image did execute and unwound. A naive
+      high-water oracle painting the ARM stack would have reported ~0 BYTES USED and passed - and
+      that number would have gone to relay as evidence for a safety budget.
+      *** WHY: A synth-LOWERED WASM IMAGE KEEPS ITS STACK IN LINEAR MEMORY ***. The shadow stack
+      lives INSIDE the region the reset handler initialises (0x20000100 + 53,345 B copied from
+      flash 0x2ac8), which is precisely why painting cannot reach it: init overwrites the paint
+      before execution begins. So P06's "shared stack region" is a wasm-level region, not the
+      Cortex-M hardware stack, and the two are not interchangeable.
+      *** THE CORRECT METHOD, not yet run ***: a FLASH-vs-RAM DIFFERENTIAL. The init source bytes
+      are still in flash at 0x2ac8; after the run, any word in linear memory that DIFFERS from its
+      flash source was written by EXECUTION rather than by init. That bounds the shadow stack
+      without needing to paint anything, and it is the next rung.
+      WHAT LANDED: hardware/renode/stack-highwater/ - a probe that paints both candidate regions
+      and REPORTS WHICH, IF EITHER, execution touches. It deliberately does NOT emit a high-water,
+      because on this image neither region is the answer and printing "0 bytes used" from an
+      untouched paint is exactly the vacuous metric this campaign keeps finding in its own checkers.
+      It asserts the image RAN (>100,000 instructions) before trusting any "untouched" reading -
+      negative-controlled by shortening the run to 10 instructions, where the guard fires.
+      REPORTED TO relay: the measurement is not yet delivered, but the method correction is, because
+      relay would otherwise reasonably expect a stack number from the obvious place and a zero from
+      the wrong region is worse than no number at all.
+    tags: [relay, p06, stack-budget, renode, shadow-stack, vacuous-metric, method-correction]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-023
+
   - id: AFD-054
     type: ai-found-defect
     severity: major
