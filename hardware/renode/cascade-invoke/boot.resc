@@ -1,0 +1,22 @@
+:name: TEST-PIX-034 — invoke falcon rate@0.7.0#tick on emulated RT1176 Cortex-M7
+:description: Boots the harness, which applies the embedder obligations and calls the
+:description: cascade stage, then parks the returned torque at 0x20011000 for the oracle.
+
+using sysbus
+mach create "invoke"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+sysbus LoadELF @.scratch/invoke/invoke.elf
+emulation RunFor "0.2"
+pause
+echo "INVOKE_BEGIN"
+sysbus ReadDoubleWord 0x20011000
+sysbus ReadDoubleWord 0x20011004
+sysbus ReadDoubleWord 0x20011008
+sysbus ReadDoubleWord 0x2001100C
+sysbus ReadDoubleWord 0x20011010
+sysbus ReadDoubleWord 0x20011014
+echo "INVOKE_END"
+echo "PC"
+cpu PC
+echo "INSNS"
+cpu ExecutedInstructions
