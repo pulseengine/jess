@@ -1828,6 +1828,55 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-060
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: jess chaining a second stage now that invocation and the ABI are settled, 2026-09-03
+    title: A TWO-STAGE FALCON CHAIN (rate -> mixer) EXECUTES ON EMULATED RT1176 — both stages bit-exact from ONE invocation, and the ABI asymmetry meld#393 is stuck on is exercised on target
+    status: resolved
+    description: >
+      2026-09-03. AFD-057 executed a single stage. This chains a second, with the data flowing
+      between them ON TARGET rather than being re-supplied by the harness.
+      *** RESULT, emulated RT1176 Cortex-M7 ***:
+        stage 1  rate@0.7.0#tick   tx 0x3F800000  ty 0x3EF1EC81  tz 0xBE168816  thrust 0x3F000000
+        stage 2  mixer@0.7.0#mix   m1 0  m2 0  m3 0x3EB2AF18  m4 0x3F800000   sum 1.34899211
+      Stage 1 is bit-exact against relay's SIL reference; stage 2 is bit-exact against jess's own
+      wasmtime differential. Both from a SINGLE rate#tick invocation.
+      *** THIS EXERCISES THE EXACT ABI ASYMMETRY meld#393 IS STUCK ON ***. rate#tick takes a POINTER
+      (18 scalars exceeds the Canonical ABI flattening limit); mixer#mix takes FOUR FLATTENED f32s
+      (4 does not). The harness reads the torque back from rate's return area and passes it
+      flattened. That asymmetry is what meld's same-memory bridge cannot yet reconcile - and here it
+      is, working, when a native harness marshals it instead of a fused adapter. Useful evidence that
+      the shapes themselves are sound; the gap is in the fusion path, not the ABI.
+      *** TWO BUGS OF JESS'S OWN, BOTH CAUGHT BY THE REFERENCE RATHER THAN BY INSPECTION ***:
+        (1) The first attempt left the original result-parking block in place after the new chain
+            code, so RESULT was overwritten with r0 = ARGOFF and the "torque" read back was the
+            ARGUMENT VECTOR - tx=1 was qw, not torque. The reference mismatch is what exposed it.
+        (2) The first attempt called rate#tick TWICE - once directly, once inside the chain. The
+            cascade INTEGRATES, so the second call returns a different torque than the first, and
+            the chain was mixing tick 2 while the differential pins tick 1. This is AFD-048's
+            statefulness trap arriving in new code: the harness now parks the intermediate torque
+            from the SAME call rather than re-invoking to observe it.
+      Neither bug was visible in the code; both were visible the moment the answer was compared to
+      a known-good value. A harness that only reported "it ran" would have shipped both.
+      *** AND AN ORACLE CORRECTLY REFUSED ***: the restructure moved the completion sentinel from
+      RESULT+20 to CHAIN+20. measure-stack.sh read the old address and REFUSED with "completion
+      sentinel absent - the harness did not finish, so an untouched paint would only mean the stage
+      never ran", rather than reporting its zero. That guard was written for exactly this and this is
+      the first time it fired for real. Fixed by correcting the address, not by loosening the guard.
+      Footprint unchanged: still ZERO shadow-stack words touched with 1792 of 1792 painted words
+      intact - the two-stage chain is still leaf-shaped in linear memory.
+      NOT CLAIMED: Renode, not silicon. Two of five stages. One input vector, one invocation, no
+      soak. The remaining three stages (ekf, position, attitude) are unexercised and have no jess-side
+      reference to check against yet.
+    tags: [renode, rt1176, cascade-chain, canonical-abi, meld-393, statefulness, self-correction]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-026
+
   - id: AFD-059
     type: ai-found-defect
     severity: major

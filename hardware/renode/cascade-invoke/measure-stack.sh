@@ -11,6 +11,9 @@
 # TWO THINGS MUST BOTH HOLD or the measurement means nothing:
 #   (a) the paint must still be present somewhere — otherwise "nothing touched" is
 #       indistinguishable from "never painted";
+# The sentinel address moved when the harness became a two-stage chain, and this oracle
+# REFUSED rather than reporting a zero — which is the behaviour it exists for. Fixed here
+# rather than by loosening the guard.
 #   (b) the stage must have produced the CORRECT torque — otherwise "nothing touched"
 #       is indistinguishable from "never ran".
 # Both are asserted below. This is the failure mode AFD-055 and AFD-056 were about.
