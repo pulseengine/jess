@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TEST-PIX-035 — measure rate@0.7.0#tick's LINEAR-MEMORY footprint on emulated RT1176.
+# TEST-PIX-034 — measure rate@0.7.0#tick's LINEAR-MEMORY footprint on emulated RT1176.
 #
 # relay holds SWREQ-FALCON-OCI-P06 on "the shared stack region fits the budget AND the
 # image executes". Four of their per-stage bounds are borrowed from scry, not measured.

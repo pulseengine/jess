@@ -1,4 +1,4 @@
-/* TEST-PIX-034 harness — apply the embedder obligations, then invoke a cascade stage.
+/* TEST-PIX-032 harness — apply the embedder obligations, then invoke a cascade stage.
  *
  * FREESTANDING: no libc headers (the cross toolchain may ship none — AFD-051).
  */
@@ -18,7 +18,11 @@ extern const jess_usize jess_wasm_global_count;
 #define LINMEM   ((volatile jess_u8  *)0x20000000u)
 #define GLOBALS  ((volatile jess_u32 *)0x20010100u)
 #define ARGOFF   0x0000E000u
-#define PAINT_LO 0x00000400u   /* above the static data the segments occupy */
+/* NOT above the static data: __data_end is 0x45A1 and a data segment spans [0x290,0x22B1),
+ * so this band overlaps ~7 KiB of applied segment data. Painting is safe only because those
+ * bytes are zero and never read — build.sh asserts that against the actual module rather
+ * than trusting this comment. (Clean-room finding; the previous comment was wrong.) */
+#define PAINT_LO 0x00000400u
 #define PAINT_HI 0x00002000u   /* the shadow-stack pointer's initial value (global 0) */
 
 /* The canonical ABI of the export, from the WIT and the lowered signature:
@@ -112,4 +116,58 @@ int jess_call_chain(int arg)
     r[0] = (jess_u32)t; r[1] = w[0]; r[2] = w[1]; r[3] = w[2]; r[4] = w[3];
 
     return jess_mixer_mix(q[0], q[1], q[2], q[3]);
+}
+
+/* ---------------------------------------------------------------------------
+ * TEST-PIX-033 — the N-TICK SOAK.
+ *
+ * AFD-060 executed ONE invocation. One invocation cannot distinguish a correctly
+ * lowered integrator from one whose state update was dropped: both produce the same
+ * first tick. This runs the chain N times and folds every motor-pwm word, so the
+ * evolution itself is the observable.
+ *
+ * The soak gets its OWN image (boot-soak.S). The chain image has already advanced the
+ * cascade one tick by the time it returns, so appending a soak to it would offset every
+ * tick against the wasmtime reference by one — the same class of mistake as calling
+ * rate#tick twice in AFD-060.
+ *
+ * The fold is FNV-1a over the four pwm words of EVERY tick, in order. It is
+ * order-sensitive and cheap, and tools/cascade-differential/soak_ref.py computes it with
+ * the identical constants so a divergence is a lowering defect, not a fold difference.
+ *
+ * NON-VACUITY, established in wasmtime BEFORE this was written: tick 1 is a large
+ * transient (m1 0x00000000) and ticks 2..N drift monotonically (m1 0x3ED9565C ->
+ * 0x3ED89353 over 64). A build that froze the integrator would repeat tick 2 forever and
+ * the fold would diverge. Both endpoints are parked so that is visible, not just folded. */
+#define SOAK_BASE 0x20011200u
+#define FNV_OFF   2166136261u
+#define FNV_PRIME 16777619u
+
+void jess_call_soak(int arg, int n)
+{
+    volatile jess_u32 *o = (volatile jess_u32 *)SOAK_BASE;
+    jess_u32 h = FNV_OFF;
+    jess_u32 iters = 0;          /* the TRIP COUNT, incremented inside the loop */
+
+    for (int i = 1; i <= n; ++i) {
+        ++iters;
+        int t = jess_rate_tick(arg);
+        const volatile float *q = (const volatile float *)(LINMEM + (unsigned)t);
+        int p = jess_mixer_mix(q[0], q[1], q[2], q[3]);
+        const volatile jess_u32 *w = (const volatile jess_u32 *)(LINMEM + (unsigned)p);
+
+        for (int k = 0; k < 4; ++k) { h ^= w[k]; h *= FNV_PRIME; }
+
+        if (i == 1) { o[1] = w[0]; o[2] = w[1]; o[3] = w[2]; o[4] = w[3]; }
+        if (i == n) { o[5] = w[0]; o[6] = w[1]; o[7] = w[2]; o[8] = w[3]; }
+    }
+    /* o[0] is the OBSERVED trip count, not the requested n. Writing n before the loop
+     * (as this did originally) proves only that the constant was passed — a soak that
+     * ran once would report 64. Clean-room verification caught that, and also showed a
+     * STATIC "does jess_call_soak contain a backward branch" check cannot distinguish
+     * the outer soak loop from the inner 4-word fold loop. A counter the loop itself
+     * increments is the only form of this evidence that -O2 cannot restructure away. */
+    o[0]  = iters;
+    o[9]  = h;
+    o[10] = 0x1E55B0A5u;   /* completion sentinel — distinct from the chain's */
 }
