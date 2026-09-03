@@ -3072,3 +3072,45 @@ artifacts:
         target: EXTERNALANCHOR-008
       - type: traces-to
         target: REQ-PIX-007
+
+  - id: AFD-061
+    type: ai-found-defect
+    title: spar 0.40.0 ACCEPTS UNDECLARED PROPERTY SETS SILENTLY — the register-contract property synth#1136 wants to add is accepted today and read by nothing, and jess's first reading of this was VACUOUS until the negative control
+    status: resolved
+    description: |-
+      2026-09-03. Answering synth#1136 (make AADL the source of truth for the memory/register layout
+      contract) required writing a user-defined property set. Testing whether spar would READ it found
+      that it does not check whether it EXISTS.
+      *** DEFECT (spar 0.40.0, filed pulseengine/spar#445) ***: property associations from property sets
+      that were NEVER DECLARED and never imported are accepted on both `memory` and `processor`
+      declarations with rc=0 and NO diagnostic. Undeclared property sets are invalid AADL.
+        Case A (memory):    Nonsense_Properties::Not_A_Real_Thing => 16#DEADBEEF#;   -> rc=0
+        Case B (processor): Totally_Fake::Reserved_Registers => "R9 R10 R11 R12";    -> rc=0
+      POSITIVE CONTROL, so this is not "spar skipped the file": a real syntax error in the SAME
+      declaration is caught at 55:15 `expected SEMICOLON`, rc=1. The parser reaches the property block
+      and CHOOSES to accept the undeclared namespace.
+      *** THE FIRST READING WAS VACUOUS AND THE CONTROL CAUGHT IT ***. The initial probe added the REAL
+      standard properties (Memory_Properties::Base_Address / Memory_Size / Word_Size) and spar exited 0 —
+      which I was one step from reporting as "spar accepts Base_Address". The negative control proves
+      that reading meant nothing: spar exits 0 for ANY property, real or invented. Same failure class as
+      AFD-048/AFD-053 — confirm the failing case can be OBSERVED before reporting a pass.
+      *** SECOND RESULT, not a defect ***: with the real Base_Address/Memory_Size/Word_Size properties
+      present, generated WIT is BYTE-IDENTICAL to the run without them (diff -rq clean). That is correct
+      behaviour — WIT is an interface language with no memory model. The CONSEQUENCE is architectural and
+      was reported to synth#1136: the AADL -> WIT path CANNOT carry a layout contract by construction, so
+      RQ-62-ARCHMODEL needs a SECOND codegen target (linker script / embedder header), not the WIT path
+      that feature-loop step 2 means today.
+      *** JESS OWES A FIX ***: hardware/pixhawk6x-rt.aadl writes its RT1176 memory map as COMMENTS
+      (`memory DTCM end DTCM; -- 256 KB @ 0x20000000`) with ZERO Base_Address properties in 440 lines.
+      That is the same hand-reconstruction defect synth#1136 was filed against, sitting in the model jess
+      calls a single source of truth. DEFERRED deliberately until spar#445 lands: until spar rejects
+      undeclared property sets, a converted model cannot be distinguished from one with a typo in it.
+    tags: [spar, aadl, synth-1136, vacuous-check-caught, negative-control, property-sets, source-of-truth]
+    fields:
+      detected-by: jess attempting to answer synth#1136 by writing the register property set, 2026-09-03
+      severity: major
+      triage-status: accepted
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T10:58:58Z
