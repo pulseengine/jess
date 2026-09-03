@@ -1,0 +1,11 @@
+using sysbus
+mach create "hw2"
+machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
+sysbus LoadELF @.scratch/invoke/invoke.elf
+emulation RunFor "0.2"
+pause
+echo "SENT"
+sysbus ReadDoubleWord 0x20011014
+echo "PAINT_BEGIN"
+sysbus ReadBytes 0x20000400 7168
+echo "PAINT_END"
