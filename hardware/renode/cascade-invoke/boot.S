@@ -21,7 +21,8 @@
     .equ LINSIZE, 0x00010000        @ sl — linear memory size
     .equ GLOBALS, 0x20010100        @ r9 — globals table base
     .equ ARGOFF,  0x0000E000        @ scratch, above the data top (0xd161), below linmem end
-    .equ RESULT,  0x20011000        @ where the harness parks observables for the oracle
+    .equ RESULT,  0x20011000        @ torque, from the SINGLE rate#tick of the chain
+    .equ CHAIN,   0x20011100        @ motor-pwm, from the mixer fed by that same call        @ where the harness parks observables for the oracle
 
     .section .vectors, "a"
     .word _stack_top
@@ -52,22 +53,27 @@ _reset:
 
     @ r0 = the argument's WASM OFFSET. The canonical ABI for rate@0.7.0#tick is
     @ (param i32) -> (result i32): a pointer in, a pointer out, both linmem offsets.
+    @ ONE rate#tick invocation, feeding mixer. NOT two calls: the cascade carries
+    @ integrator state, so a second rate#tick returns a DIFFERENT torque than the first —
+    @ which is precisely the statefulness that made AFD-048's negative control vacuous.
+    @ jess_call_chain parks the intermediate torque itself so both stages stay observable
+    @ from a single pass.
     ldr   r0, =ARGOFF
-    bl    jess_call_rate
+    bl    jess_call_chain
 
-    @ r0 now holds the RESULT offset. Park it and the four torque words where the
-    @ oracle can read them without needing symbol lookup.
-    ldr   r1, =RESULT
-    str   r0, [r1]                  @ [RESULT+0]  = returned offset
+    @ r0 now holds the motor-pwm offset from mixer. Park it and the four pwm words.
+    @ (jess_call_chain has already parked the intermediate torque at RESULT.)
+    ldr   r1, =CHAIN
+    str   r0, [r1]                  @ [CHAIN+0]  = motor-pwm offset
     add   r2, r11, r0               @ ARM address = linmem base + offset
     ldr   r3, [r2, #0]
-    str   r3, [r1, #4]              @ [RESULT+4]  = tx
+    str   r3, [r1, #4]              @ [CHAIN+4]  = m1
     ldr   r3, [r2, #4]
-    str   r3, [r1, #8]              @ [RESULT+8]  = ty
+    str   r3, [r1, #8]              @ [CHAIN+8]  = m2
     ldr   r3, [r2, #8]
-    str   r3, [r1, #12]             @ [RESULT+12] = tz
+    str   r3, [r1, #12]             @ [CHAIN+12] = m3
     ldr   r3, [r2, #12]
-    str   r3, [r1, #16]             @ [RESULT+16] = thrust
+    str   r3, [r1, #16]             @ [CHAIN+16] = m4
     ldr   r3, =0x1E55D09E
     str   r3, [r1, #20]             @ [RESULT+20] = a completion sentinel
 

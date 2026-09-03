@@ -30,13 +30,16 @@ MOD="$OUT/c.loom.wasm" PY="$PY" OUT="$OUT/einit" "$ROOT/tools/embedder-init/run.
   || { tail -3 "$OUT/einit.log" >&2; fail "embedder-init"; }
 
 echo "== 3. rename the export ('@' begins an ARM comment, so an asm label truncates it) =="
-arm-none-eabi-objcopy --redefine-sym \
-  'pulseengine:falcon-cascade/rate@0.7.0#tick=jess_rate_tick' "$OUT/cascade.o" "$OUT/cascade_named.o" \
-  || fail "objcopy"
+arm-none-eabi-objcopy \
+  --redefine-sym 'pulseengine:falcon-cascade/rate@0.7.0#tick=jess_rate_tick' \
+  --redefine-sym 'pulseengine:falcon-cascade/mixer@0.7.0#mix=jess_mixer_mix' \
+  "$OUT/cascade.o" "$OUT/cascade_named.o" || fail "objcopy"
 # ASSERT the rename landed — a silent no-op would leave an unresolved reference and the
 # only symptom would be a link error three steps later.
-arm-none-eabi-nm "$OUT/cascade_named.o" | grep -qE ' T jess_rate_tick$' \
-  || fail "objcopy --redefine-sym did not produce jess_rate_tick"
+for sym in jess_rate_tick jess_mixer_mix; do
+  arm-none-eabi-nm "$OUT/cascade_named.o" | grep -qE " T $sym\$" \
+    || fail "objcopy --redefine-sym did not produce $sym"
+done
 
 echo "== 4. compile + link =="
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot.S"    -o "$OUT/boot.o"    || fail "boot.S"
@@ -61,8 +64,8 @@ arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/harness.o" "$OUT/init.o" "$
 left="$(arm-none-eabi-nm "$OUT/invoke.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
 [ -z "$left" ] || fail "undefined after link: $left"
 # An empty ELF also shows no undefined symbols, so count what survived.
-n=$(arm-none-eabi-nm "$OUT/invoke.elf" | grep -cE ' T (jess_rate_tick|_reset|jess_init)$')
-[ "$n" -ge 3 ] || fail "expected symbols missing from the image ($n/3)"
+n=$(arm-none-eabi-nm "$OUT/invoke.elf" | grep -cE ' T (jess_rate_tick|jess_mixer_mix|_reset|jess_init|jess_call_chain)$')
+[ "$n" -ge 5 ] || fail "expected symbols missing from the image ($n/5)"
 # ASSERT the reservation held: no harness object may WRITE r9/r10/r11. Checked on the emitted
 # code rather than trusting the flag, because a flag that silently stopped applying would look
 # exactly like a flag that is working.
@@ -73,7 +76,7 @@ for o in "$OUT/harness.o" "$OUT/init.o"; do
 done
 echo "   embedder registers r9/r10/r11 not written by any harness object"
 
-echo "   linked: $(stat -f%z "$OUT/invoke.elf" 2>/dev/null || stat -c%s "$OUT/invoke.elf") B, 0 undefined, $n/3 key symbols"
+echo "   linked: $(stat -f%z "$OUT/invoke.elf" 2>/dev/null || stat -c%s "$OUT/invoke.elf") B, 0 undefined, $n/5 key symbols"
 
 echo "== 5. build the two negative-control images =="
 # NC1 — perturb wy in the argument vector. The torque MUST move; a stage returning a

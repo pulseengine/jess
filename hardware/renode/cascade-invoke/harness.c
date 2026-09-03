@@ -33,6 +33,16 @@ extern const jess_usize jess_wasm_global_count;
  * landed, so a silent objcopy no-op cannot leave an unresolved reference. */
 extern int jess_rate_tick(int arg);
 
+/* mixer@0.7.0#mix : (param f32 f32 f32 f32) -> (result i32)
+ *
+ * NOTE THE ASYMMETRY, which is the point of this stage of the harness: rate#tick takes a
+ * POINTER (18 scalars exceeds the Canonical ABI flattening limit) while mixer#mix takes
+ * FOUR FLATTENED f32s (4 does not). Assuming a uniform pointer-in convention here passes
+ * garbage silently rather than erroring — jess recorded that asymmetry months ago in
+ * cascade_ref.py and it is exactly what meld#393's bridge is stuck on.
+ * Renamed by objcopy for the same '@'-begins-a-comment reason as rate. */
+extern int jess_mixer_mix(float tx, float ty, float tz, float thrust);
+
 /* The SIL reference vector — byte-identical to tools/cascade-differential/cascade_ref.py.
  * Sharing it is the point: the ARM result is then directly comparable to the number
  * wasmtime already produces, so a wrong embedder register shows up as a wrong torque
@@ -82,3 +92,24 @@ void jess_init(void)
 }
 
 int jess_call_rate(int arg) { return jess_rate_tick(arg); }
+
+/* The two-stage chain: rate -> mixer, with the data flowing between them ON TARGET rather
+ * than being re-supplied by the harness. Returns the wasm offset of the motor-pwm record.
+ *
+ * The torque is read back from rate's return area at LINMEM + off, then passed FLATTENED,
+ * which is the whole reason this is a distinct rung from the single-stage call. */
+int jess_call_chain(int arg)
+{
+    int t = jess_rate_tick(arg);
+    const volatile float *q = (const volatile float *)(LINMEM + (unsigned)t);
+
+    /* Park the INTERMEDIATE torque here, from this same single invocation. Calling
+     * rate#tick a second time to observe it would return a DIFFERENT value — the cascade
+     * integrates, so tick 2 != tick 1. That is the statefulness that made AFD-048's
+     * negative control measure the wrong property. */
+    volatile jess_u32 *r = (volatile jess_u32 *)0x20011000u;
+    const volatile jess_u32 *w = (const volatile jess_u32 *)(LINMEM + (unsigned)t);
+    r[0] = (jess_u32)t; r[1] = w[0]; r[2] = w[1]; r[3] = w[2]; r[4] = w[3];
+
+    return jess_mixer_mix(q[0], q[1], q[2], q[3]);
+}
