@@ -1828,6 +1828,59 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-059
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: synth answered #1131 with a written contract that contradicted jess's method, 2026-09-03
+    title: THE EMBEDDER ABI IS NOW A DOCUMENTED CONTRACT, NOT A DISASSEMBLY — jess's harness conforms, but it did so BY LUCK on two counts, and both are now structural
+    status: resolved
+    description: >
+      2026-09-03. synth answered #1131 with docs/embedder-abi-relocatable-arm.md - the full register
+      and layout contract, every fact cited to the emitting file:line, pinned in claims.yaml so an
+      emitter change that invalidates a sentence turns a required CI job red. They verified that
+      gate is potent by making the emitter disagree and watching it fail.
+      *** THE CONTRACT ***: R11 = linear-memory base, R10 = linear-memory SIZE IN BYTES, R9 = globals
+      table base. The REGISTER ASSIGNMENT is fixed by synth; the VALUES are the embedder's to choose.
+      Set before any export runs. R9 and R11 are independent regions - place them anywhere disjoint,
+      4-byte aligned. R12 is synth's scratch, clobbered freely. Anything the object calls out to must
+      PRESERVE R9/R10/R11 (AAPCS callee-saved, so stock libgcc AEABI helpers comply).
+      *** JESS WAS RIGHT BY LUCK, TWICE. Both are now fixed structurally. ***
+      LUCK 1 - THE VALUES. AFD-056 claimed the reset handler "answers" #1131. synth's doc lists
+      exactly that method as CATEGORY (c) INCIDENTAL: the handler agrees with the relocatable
+      contract for R9/R10/R11 today, but the SAME IMAGE also carries OPTIMIZED_LINMEM_BASE =
+      0x2000_0100 - 0x100 ABOVE that handler's R11. There were two bases in that binary and jess read
+      one. It happened to be the right one. AFD-056's framing is corrected in place.
+      LUCK 2 - REGISTER PRESERVATION. jess's C shim jess_call_rate sits between boot.S setting the
+      registers and synth's code reading them. GCC is free to allocate R11 as a frame pointer there.
+      It did not - the shim compiled to a bare `b.w` tail-branch, so nothing was clobbered. That is
+      an optimisation outcome, not conformance: the moment the shim grows a body (a soak loop, a log
+      line) the guarantee evaporates SILENTLY, and the symptom would be a wrong torque rather than a
+      build error.
+      FIXED: every C translation unit in the harness now compiles with -ffixed-r9 -ffixed-r10
+      -ffixed-r11, so GCC cannot allocate them at all. And build.sh ASSERTS the reservation held by
+      disassembling each harness object and refusing any write to r9/r10/r11 - checked on the emitted
+      code rather than trusting the flag, because a flag that silently stopped applying would look
+      exactly like a flag that is working. NEGATIVE-CONTROLLED: the detector fires on a deliberately
+      clobbering object (mov.w fp / ldr.w fp / str.w fp all caught).
+      RESULT UNCHANGED after the hardening: rate#tick still returns relay's SIL reference bit-exact,
+      both invocation negative controls still fire, and the stack measurement still reports zero
+      shadow-stack usage with the paint intact.
+      ALSO LEARNED, and jess had it right: R10 IS NOT IGNORABLE. A module with no memory.size, no
+      bulk-memory ops and default --safety-bounds never reads it, so an unset R10 "works" for exactly
+      as long as the module keeps that shape. jess set it from the start, for the wrong reason (the
+      handler did) rather than the right one (the contract says to).
+      *** THE GENERAL LESSON, which is the campaign's recurring one in a new place ***: the harness
+      WORKED and produced a bit-exact reference match. That was not evidence the ABI reading was
+      correct - only that it was not detectably wrong on this graph. Asking synth rather than
+      shipping the inference is what surfaced both strokes of luck; the working result would not have.
+    tags: [synth-1131, embedder-abi, conformance, luck-not-method, self-correction, arm]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-026
+
   - id: AFD-058
     type: ai-found-defect
     severity: major
@@ -1963,7 +2016,16 @@ artifacts:
       for SWREQ-FALCON-OCI-P06 on 2026-09-02. That was too generous. The image boots and initialises;
       the cascade does not execute. P06 asks for the image under load, and there is currently no
       invocation at all. Corrected on relay#202 rather than left standing.
-      *** THE UNEXPECTED WIN - synth's OWN RESET HANDLER ANSWERS synth#1131 ***. Disassembling the
+      *** CORRECTED 2026-09-03 (AFD-059): "synth's OWN RESET HANDLER ANSWERS synth#1131" IS THE
+      WRONG FRAMING. *** synth has since published docs/embedder-abi-relocatable-arm.md and lists
+      "reading the contract off the self-contained reset handler at all" as CATEGORY (c) INCIDENTAL -
+      observed, guaranteed by nothing. The handler happens to agree with the relocatable contract for
+      R9/R10/R11 today, but the same image also carries OPTIMIZED_LINMEM_BASE = 0x2000_0100, which is
+      0x100 ABOVE that handler's R11. jess read one of two bases and got the right one. The values
+      below are jess's own layout CHOICE (which the contract permits), not a derivation of the ABI.
+      Retained as written because it is what was believed; read AFD-059 for the contract.
+      *** THE FIND, correctly framed - the reset handler CORROBORATED an ABI jess then had to ask
+      for ***. Disassembling the
       reset path to explain the PC values exposed the embedder register contract jess had asked
       synth to document, in synth's own generated code:
         0x80  r0 = 0x9cbc          init SOURCE

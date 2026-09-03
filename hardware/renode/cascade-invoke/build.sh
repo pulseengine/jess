@@ -40,8 +40,20 @@ arm-none-eabi-nm "$OUT/cascade_named.o" | grep -qE ' T jess_rate_tick$' \
 
 echo "== 4. compile + link =="
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot.S"    -o "$OUT/boot.o"    || fail "boot.S"
-arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 "$D/harness.c" -o "$OUT/harness.o" || fail "harness.c"
-arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 "$OUT/einit/jess_wasm_init.c" -o "$OUT/init.o" || fail "init.c"
+# -ffixed-r9/-r10/-r11: the synth --relocatable ABI (synth#1131, docs/embedder-abi-relocatable-arm.md)
+# RESERVES these three for the embedder — R11 linmem base, R10 linmem size, R9 globals base — and
+# anything the object calls out to must PRESERVE them. GCC would otherwise be free to allocate R11
+# as a frame pointer inside the C shim, which would hand synth's code a frame pointer where it
+# expects the linear-memory base.
+#
+# Today jess_call_rate happens to compile to a bare `b.w` tail-branch, so nothing is clobbered and
+# the harness works. That is luck, not conformance: the moment the shim grows a body (a soak loop,
+# a log line) the guarantee evaporates silently and the symptom would be a wrong torque, not a
+# build error. Reserving the registers makes it structural.
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 \
+    -ffixed-r9 -ffixed-r10 -ffixed-r11 "$D/harness.c" -o "$OUT/harness.o" || fail "harness.c"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 \
+    -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/einit/jess_wasm_init.c" -o "$OUT/init.o" || fail "init.c"
 LG="$(arm-none-eabi-gcc -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -print-libgcc-file-name)"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
     -o "$OUT/invoke.elf" || fail "link"
@@ -51,6 +63,16 @@ left="$(arm-none-eabi-nm "$OUT/invoke.elf" | awk '$1=="U"||$2=="U"{print $NF}' |
 # An empty ELF also shows no undefined symbols, so count what survived.
 n=$(arm-none-eabi-nm "$OUT/invoke.elf" | grep -cE ' T (jess_rate_tick|_reset|jess_init)$')
 [ "$n" -ge 3 ] || fail "expected symbols missing from the image ($n/3)"
+# ASSERT the reservation held: no harness object may WRITE r9/r10/r11. Checked on the emitted
+# code rather than trusting the flag, because a flag that silently stopped applying would look
+# exactly like a flag that is working.
+for o in "$OUT/harness.o" "$OUT/init.o"; do
+  bad="$(arm-none-eabi-objdump -d "$o" 2>/dev/null \
+    | grep -oE '\b(mov|ldr|add|sub|str)[a-z.]*\s+(r9|sl|r10|fp|r11),' | sort -u)"
+  [ -z "$bad" ] || fail "$(basename "$o") WRITES an embedder-reserved register: $bad"
+done
+echo "   embedder registers r9/r10/r11 not written by any harness object"
+
 echo "   linked: $(stat -f%z "$OUT/invoke.elf" 2>/dev/null || stat -c%s "$OUT/invoke.elf") B, 0 undefined, $n/3 key symbols"
 
 echo "== 5. build the two negative-control images =="
@@ -58,7 +80,7 @@ echo "== 5. build the two negative-control images =="
 # constant would match the reference forever.
 sed 's/0xBE19999Au,/0xBE4CCCCDu,/' "$D/harness.c" > "$OUT/nc1.c"
 cmp -s "$D/harness.c" "$OUT/nc1.c" && fail "NC1 edit changed nothing — the perturbation did not apply"
-arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 "$OUT/nc1.c" -o "$OUT/nc1.o" || fail "nc1 compile"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/nc1.c" -o "$OUT/nc1.o" || fail "nc1 compile"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc1.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc1.elf" || fail "nc1 link"
 
 # NC2 — keep the argument but SKIP the data-segment and globals init. synth emits
@@ -66,6 +88,6 @@ arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc1.o" "$OUT/init.o" "$OUT/
 # show the promises are load-bearing rather than ceremonial.
 sed 's/^    for (jess_usize s = 0/    return; for (jess_usize s = 0/' "$D/harness.c" > "$OUT/nc2.c"
 cmp -s "$D/harness.c" "$OUT/nc2.c" && fail "NC2 edit changed nothing"
-arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -Wno-unreachable-code "$OUT/nc2.c" -o "$OUT/nc2.o" || fail "nc2 compile"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -Wno-unreachable-code -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/nc2.c" -o "$OUT/nc2.o" || fail "nc2 compile"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc2.elf" || fail "nc2 link"
 echo "   nc1.elf (perturbed input) and nc2.elf (no embedder init) built"
