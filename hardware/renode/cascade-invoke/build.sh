@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the TEST-PIX-034 cascade-invocation image.
+# Build the TEST-PIX-032 cascade-invocation image.
 #
 # Links a synth --relocatable falcon cascade object with a harness that keeps the two
 # embedder promises (AFD-051) and then actually CALLS rate@0.7.0#tick — the thing
@@ -78,6 +78,39 @@ echo "   embedder registers r9/r10/r11 not written by any harness object"
 
 echo "   linked: $(stat -f%z "$OUT/invoke.elf" 2>/dev/null || stat -c%s "$OUT/invoke.elf") B, 0 undefined, $n/5 key symbols"
 
+echo "== 4b. build the N-TICK SOAK image (TEST-PIX-033) =="
+# A SEPARATE image on purpose: the chain image has already advanced the cascade one tick by
+# the time it parks its result, so a soak appended to it would be offset by one against the
+# wasmtime reference — the same class of error as AFD-060's double rate#tick.
+#
+# This is also the case the -ffixed-r9/-r10/-r11 reservation above was added FOR. jess_call_soak
+# has a real loop body, so GCC now has genuine register pressure where jess_call_rate had none
+# and compiled to a bare tail-branch. The emitted-code assertion below is what turns that from
+# luck into a checked property.
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot-soak.S" -o "$OUT/boot_soak.o" || fail "boot-soak.S"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_soak.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/soak.elf" || fail "soak link"
+left="$(arm-none-eabi-nm "$OUT/soak.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
+[ -z "$left" ] || fail "undefined after soak link: $left"
+ns=$(arm-none-eabi-nm "$OUT/soak.elf" | grep -cE ' T (jess_rate_tick|jess_mixer_mix|_reset|jess_init|jess_call_soak)$')
+[ "$ns" -ge 5 ] || fail "soak image missing expected symbols ($ns/5)"
+# Re-assert on the SOAK image specifically. harness.o is shared, but the check is cheap and the
+# failure it guards (a frame pointer handed to synth where it expects the linmem base) is silent.
+bad="$(arm-none-eabi-objdump -d "$OUT/harness.o" 2>/dev/null \
+  | grep -oE '\b(mov|ldr|add|sub|str)[a-z.]*\s+(r9|sl|r10|fp|r11),' | sort -u)"
+[ -z "$bad" ] || fail "harness.o (with the soak loop) WRITES an embedder-reserved register: $bad"
+# The soak loop must actually be a LOOP. -O2 could in principle unroll or, worse, hoist the call
+# out if it were wrongly assumed pure; a straight-line body would silently soak once.
+arm-none-eabi-objdump -d "$OUT/soak.elf" --disassemble=jess_call_soak 2>/dev/null > "$OUT/soak.dis" || true
+grep -qE '\b(b|bne|bcc|blt|bgt|cbnz)[a-z.]*\s+[0-9a-f]+ <jess_call_soak' "$OUT/soak.dis" \
+  || fail "jess_call_soak has no backward branch — the soak would run straight through"
+echo "   soak image: $(stat -f%z "$OUT/soak.elf" 2>/dev/null || stat -c%s "$OUT/soak.elf") B, 0 undefined, $ns/5 symbols, loop present"
+
+# The soak's own negative control: the same 64-tick run with the data-segment and globals
+# init short-circuited (nc2.o). It must complete — sentinel and all — yet fold DIFFERENTLY.
+# Built here so the oracle cannot silently skip it. Note this image is linked AFTER nc2.o
+# exists, so the ordering in step 5 matters; the assert below catches a reorder.
+
 echo "== 5. build the two negative-control images =="
 # NC1 — perturb wy in the argument vector. The torque MUST move; a stage returning a
 # constant would match the reference forever.
@@ -94,3 +127,11 @@ cmp -s "$D/harness.c" "$OUT/nc2.c" && fail "NC2 edit changed nothing"
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -Wno-unreachable-code -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/nc2.c" -o "$OUT/nc2.o" || fail "nc2 compile"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc2.elf" || fail "nc2 link"
 echo "   nc1.elf (perturbed input) and nc2.elf (no embedder init) built"
+
+echo "== 6. the SOAK negative control (init skipped, same N) =="
+[ -f "$OUT/nc2.o" ] || fail "nc2.o missing — step 5 must run before the soak control is linked"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_soak.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/soak_nc2.elf" || fail "soak_nc2 link"
+cmp -s "$OUT/soak.elf" "$OUT/soak_nc2.elf" && fail "soak_nc2.elf is byte-identical to soak.elf — the control is inert"
+echo "   soak_nc2.elf linked and differs from soak.elf"
+

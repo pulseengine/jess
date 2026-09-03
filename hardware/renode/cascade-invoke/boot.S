@@ -1,4 +1,4 @@
-@ TEST-PIX-034 — invoke a falcon cascade stage on emulated RT1176 Cortex-M7.
+@ TEST-PIX-032 — invoke a falcon cascade stage on emulated RT1176 Cortex-M7.
 @
 @ AFD-056 established that the SELF-CONTAINED image never enters a stage: it inits and
 @ spins. This harness exists to actually CALL one. It follows the DD-018 tcb-link pattern

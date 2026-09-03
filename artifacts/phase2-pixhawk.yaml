@@ -1347,3 +1347,96 @@ artifacts:
         target: REQ-PIX-015
       - type: traces-to
         target: REQ-PIX-012
+
+  - id: TEST-PIX-032
+    type: test-spec
+    title: A falcon cascade stage EXECUTES on emulated RT1176 Cortex-M7 and reproduces relay's SIL reference bit-exact — single invocation, two negative controls
+    status: valid
+    description: |-
+      The single-invocation rung: a falcon cascade stage is CALLED on emulated RT1176 Cortex-M7 and the
+      value it returns is compared against relay's SIL reference, rather than against the fact of running.
+      Executed via hardware/renode/cascade-invoke/run-oracle.sh (Renode 1.16.1). rate@0.7.0#tick returns
+      tx 0x3F800000 ty 0x3EF1EC81 tz 0xBE168816 thrust 0x3F000000, bit-exact; the chained mixer@0.7.0#mix
+      returns m1 0 m2 0 m3 0x3EB2AF18 m4 0x3F800000 from that SAME single invocation.
+      TWO NEGATIVE CONTROLS, both required and both observed to fire: (1) perturbing wy in the argument
+      vector moves the torque - a stage returning a constant would match forever; (2) short-circuiting the
+      data-segment and globals init makes the result WRONG, which is the only way to show AFD-051's
+      embedder promises are load-bearing, since synth emits byte-identical code with or without the
+      --embedder-data-init / --embedder-global-init flags.
+      Recorded retroactively: the harness has carried the TEST-PIX-034 identifier in its source since
+      AFD-057, but no rivet artifact existed, so the right side of the V was open for the campaign's
+      first on-target execution. Found and closed while adding TEST-PIX-035 (AFD-063).
+    tags: [renode, rt1176, cortex-m7, falcon, cascade, on-target, oracle, negative-controlled, sil-differential]
+    fields:
+      release: v0.7.0
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T18:52:06Z
+
+  - id: TEST-PIX-033
+    type: test-spec
+    title: The falcon rate->mixer chain runs 64 TICKS on emulated RT1176 and tracks the wasmtime reference bit-exact across the whole run — four controls, including on-target discrimination
+    status: valid
+    description: |-
+      The N-TICK SOAK: the falcon rate->mixer chain runs 64 consecutive ticks on emulated RT1176
+      Cortex-M7 and tracks an independent wasmtime reference across the WHOLE run.
+      WHY IT IS A DISTINCT RUNG FROM TEST-PIX-032: one invocation cannot distinguish a correctly lowered
+      integrator from one whose state update was dropped - both produce the same first tick. The cascade
+      carries state, so tick i depends on ticks 1..i-1.
+      NOT A SIMULATOR (lane discipline): the input vector is held CONSTANT across all 64 ticks and no
+      vehicle model is integrated. What evolves is the cascade's own integrator state. Closing a loop
+      around a plant is relay's SIL; jess proves the lowered code still tracks it (DD-026 P2).
+      RESULT, emulated RT1176 Cortex-M7 (Renode 1.16.1), synth 0.60.0 --relocatable:
+        tick 1   pwm 0x00000000 0x00000000 0x3EB2AF18 0x3F800000   (equals TEST-PIX-032's value)
+        tick 64  pwm 0x3ED89353 0x3EB9A587 0x3F176935 0x3F1F7A5F
+        fold     0x3466E91F   FNV-1a over all 256 motor-pwm words, in order
+      All three match tools/cascade-differential/soak_ref.py run over the SAME c.loom.wasm.
+      FOUR CONTROLS, all observed to fire:
+        1 COMPLETION - the image writes sentinel 0x1E55B0A5 only after tick N, so a truncated run cannot
+          be mistaken for a lowering defect (RUNFOR is otherwise a guess).
+        2 N-SENSITIVITY - fold(63) 0xD1EDC289 != fold(64) 0x3466E91F, so the fold is not inert.
+        3 ENDPOINT MOTION - tick1 != tickN. soak_ref.py REFUSES to emit a reference where they are equal,
+          and that refusal has its own --self-test so the guard is known to be reachable.
+        4 ON-TARGET DISCRIMINATION - the same soak with the embedder init short-circuited COMPLETES
+          (sentinel present) and folds 0xE6A1D1C5, differing. Without this, nothing shows the oracle can
+          fail on target.
+      Executed via hardware/renode/cascade-invoke/run-soak-oracle.sh.
+    tags: [renode, rt1176, cortex-m7, falcon, cascade, soak, n-tick, integrator, on-target, oracle, negative-controlled]
+    fields:
+      release: v0.7.0
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T18:52:26Z
+
+  - id: TEST-PIX-034
+    type: test-spec
+    title: rate@0.7.0#tick's LINEAR-MEMORY footprint measured on emulated RT1176 — 67 bytes, zero shadow stack
+    status: valid
+    description: |-
+      Measures rate@0.7.0#tick's LINEAR-MEMORY footprint on emulated RT1176 Cortex-M7 by painting the
+      region between the static data top and the shadow-stack pointer with 0xDEADBEEF, invoking the
+      stage, and reporting the high-water mark of what was disturbed.
+      RESULT (AFD-058): 67 bytes touched, ZERO shadow-stack usage. Executed via
+      hardware/renode/cascade-invoke/measure-stack.sh (Renode 1.16.1).
+      Recorded retroactively. The script carried the hand-invented identifier TEST-PIX-035 in its source,
+      which (a) was never a rivet ID and (b) COLLIDED with the identifier the N-tick soak was about to
+      use for a different test. Both were reconciled to rivet-allocated IDs while adding the soak
+      (AFD-063); rivet's next-id is the only source of truth for these.
+    tags: [renode, rt1176, cortex-m7, falcon, footprint, linear-memory, shadow-stack, on-target]
+    fields:
+      release: v0.7.0
+    links:
+      - type: verifies
+        target: REQ-PIX-001
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T18:52:56Z

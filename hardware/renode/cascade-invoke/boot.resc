@@ -1,4 +1,4 @@
-:name: TEST-PIX-034 — invoke falcon rate@0.7.0#tick on emulated RT1176 Cortex-M7
+:name: TEST-PIX-032 — invoke falcon rate@0.7.0#tick on emulated RT1176 Cortex-M7
 :description: Boots the harness, which applies the embedder obligations and calls the
 :description: cascade stage, then parks the returned torque at 0x20011000 for the oracle.
 

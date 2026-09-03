@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TEST-PIX-034 — falcon rate@0.7.0#tick EXECUTES on emulated RT1176 Cortex-M7 and
+# TEST-PIX-032 — falcon rate@0.7.0#tick EXECUTES on emulated RT1176 Cortex-M7 and
 # reproduces relay's SIL reference torque bit-exact.
 #
 # AFD-056 showed the self-contained image never enters a stage: it inits and spins. This

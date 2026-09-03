@@ -3173,3 +3173,63 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T11:09:24Z
+
+  - id: AFD-063
+    type: ai-found-defect
+    title: The falcon chain now runs 64 TICKS on emulated RT1176 bit-exact — and closing the V found that the campaign's on-target test IDs were hand-invented, never rivet IDs, and one was doubly claimed
+    status: resolved
+    description: |-
+      2026-09-03. AFD-060 executed ONE invocation of the rate->mixer chain. One invocation cannot
+      distinguish a correctly lowered integrator from one whose state update was DROPPED - both produce
+      the same first tick. This runs 64 consecutive ticks and folds every motor-pwm word, so the
+      state evolution itself is the observable.
+      *** RESULT, emulated RT1176 Cortex-M7 (Renode 1.16.1), synth 0.60.0 --relocatable ***:
+        tick 1   pwm 0x00000000 0x00000000 0x3EB2AF18 0x3F800000   (equals AFD-060's single-tick value)
+        tick 64  pwm 0x3ED89353 0x3EB9A587 0x3F176935 0x3F1F7A5F
+        fold     0x3466E91F   FNV-1a over all 256 motor-pwm words, in order
+      All three match tools/cascade-differential/soak_ref.py over the SAME c.loom.wasm. One module, two
+      backends: a divergence is a lowering defect, not a modelling difference (DD-026 P2).
+      *** NOT A SIMULATOR ***. The input vector is held CONSTANT across all 64 ticks and no vehicle model
+      is integrated; what evolves is the cascade's own integrator state. Closing a loop around a plant is
+      relay's SIL. jess proves the lowered code still tracks it.
+      *** NON-VACUITY ESTABLISHED BEFORE THE HARNESS WAS WRITTEN ***, not after: a wasmtime probe showed
+      tick 1 is a large transient and ticks 2..64 drift monotonically (m1 0x3ED9565C -> 0x3ED89353). Had
+      the cascade saturated to a constant, the soak would have been reproducible by a build with a frozen
+      integrator and the whole feature would have been worthless. That check was the go/no-go.
+      *** FOUR CONTROLS, ALL OBSERVED TO FIRE ***:
+        1 COMPLETION - sentinel 0x1E55B0A5 is written only after tick N, so a truncated run cannot be
+          mistaken for a lowering defect. RUNFOR is otherwise a guess.
+        2 N-SENSITIVITY - fold(63) 0xD1EDC289 != fold(64) 0x3466E91F. An inert fold would pass for any N.
+        3 ENDPOINT MOTION - tick1 != tickN. soak_ref.py REFUSES to emit a reference where they are equal,
+          and that guard has its own --self-test, so it is known to be reachable rather than assumed.
+        4 ON-TARGET DISCRIMINATION - the identical soak with the embedder init short-circuited COMPLETES
+          (sentinel present) and folds 0xE6A1D1C5. Without this, nothing showed the oracle could fail ON
+          TARGET; everything else only compares one target run to a reference. This is also what keeps
+          AFD-051's embedder promises load-bearing across a whole run, since synth emits BYTE-IDENTICAL
+          code with or without --embedder-data-init / --embedder-global-init.
+      *** THE SOAK IS A SEPARATE IMAGE ON PURPOSE ***. The chain image has already advanced the cascade
+      one tick by the time it parks its result, so appending a soak would offset every tick against the
+      reference by one - the same class of error as AFD-060's accidental double rate#tick.
+      *** THE -ffixed-r9/-r10/-r11 RESERVATION EARNED ITS KEEP ***. build.sh's own comment predicted this
+      case verbatim: "the moment the shim grows a body (a soak loop, a log line) the guarantee evaporates
+      silently". jess_call_soak has a real loop body where jess_call_rate compiled to a bare tail-branch,
+      so GCC now faces genuine register pressure. The emitted-code assertion (objdump, not the flag)
+      passes, and a new assertion checks jess_call_soak actually contains a BACKWARD BRANCH - -O2 could
+      otherwise unroll or hoist the body and the soak would silently run once.
+      *** A TRACEABILITY DEFECT FOUND WHILE CLOSING THE V ***: the harness has carried hand-invented
+      identifiers TEST-PIX-034 / TEST-PIX-035 in its source since AFD-057, and NEITHER was ever a rivet
+      ID - rivet's next free test-spec id was 032. Worse, TEST-PIX-035 was DOUBLY CLAIMED: measure-stack.sh
+      (the AFD-058 footprint measurement) and the new soak both used it for different tests. Three
+      test-spec artifacts now exist and the source is reconciled to them: TEST-PIX-032 single invocation,
+      TEST-PIX-033 the 64-tick soak, TEST-PIX-034 the linear-memory footprint. The campaign's first
+      on-target execution had an OPEN right side of the V for a week. rivet next-id is the only source of
+      truth for these; a hand-typed identifier in a comment is not traceability.
+    tags: [renode, rt1176, soak, n-tick, integrator, on-target, sil-differential, negative-control, traceability, test-ids, milestone]
+    fields:
+      detected-by: jess extending the single-invocation chain to an N-tick soak, 2026-09-03
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T18:54:07Z
