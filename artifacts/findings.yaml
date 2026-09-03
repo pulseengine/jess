@@ -1828,6 +1828,54 @@ artifacts:
       - type: traces-to
         target: REQ-PIX-007
 
+  - id: AFD-058
+    type: ai-found-defect
+    severity: major
+    triage-status: closed
+    detected-by: jess measuring relay's P06 footprint once AFD-057 made a stage actually execute, 2026-09-03
+    title: rate#tick's LINEAR-MEMORY FOOTPRINT MEASURED ON EMULATED RT1176 — 67 bytes total and ZERO shadow stack; AFD-055's "painting cannot work here" is now false because the harness owns the sequence
+    status: resolved
+    description: >
+      2026-09-03. AFD-055 concluded that painting could not measure this image's shadow stack,
+      because the reset handler's copy overwrites the paint before execution. That was true of the
+      SELF-CONTAINED image, where jess did not own the boot sequence. AFD-057's harness does own it -
+      init, THEN paint, THEN call - so the measurement AFD-055 called impossible is now available.
+      Recording the reversal explicitly: AFD-055's method conclusion was correct for the artifact it
+      examined and is superseded for this one.
+      *** MEASURED, one rate@0.7.0#tick invocation, Renode 1.16.1 ***:
+        linear-memory bytes written by the stage   67
+        clusters                                   0x001DA..0x002A7 (66 B) and one byte at 0x022B0
+        returned pointer                           0x298 - INSIDE the first cluster, so those 67
+                                                   bytes include the 16 B return area
+        shadow stack 0x0400..0x2000                ZERO of 1792 painted words touched
+      *** THE ZERO IS A REAL ZERO, AND HERE IS WHY IT IS NOT AN ABSENCE OF EVIDENCE ***. Two
+      independent conditions are asserted before it is reported, because "nothing touched" is
+      otherwise indistinguishable from "never painted" and from "never ran":
+        (a) 1792 of 1792 words STILL CARRY 0xDEADBEEF - the paint demonstrably applied;
+        (b) the SAME run returned the bit-exact SIL torque and its completion sentinel - the stage
+            demonstrably executed.
+      Both hold. So rate#tick genuinely does not descend into the shadow stack; it is effectively a
+      leaf whose whole linear-memory footprint is a return/scratch area near 0x200.
+      A FURTHER CORROBORATION fell out of it: painting 7,168 bytes of the shadow-stack region did
+      NOT perturb the result. The torque stayed bit-exact with 0xDEADBEEF written across
+      0x0400..0x2000, which independently confirms the stage depends on nothing there.
+      *** WHAT THIS IS AND IS NOT FOR relay's P06 ***. It is the first MEASURED footprint for any
+      falcon stage on the target architecture, replacing one of four scry-borrowed bounds with an
+      observation. It is NOT the cascade: one stage, one invocation, one input vector. The other
+      four stages are unmeasured, a nested five-stage call chain will use more than a leaf does, and
+      nothing here is a soak. P06 should stay held.
+      METHOD NOTE for whoever measures the remaining stages: the difference-based method used first
+      (post-run linear memory vs the post-init image) gives a LOWER BOUND only - a store that writes
+      a value already present is invisible to it. It reported the same 67 bytes, which agrees, but
+      the painted measurement is the one that can distinguish "not touched" from "touched with the
+      same value". Use the paint.
+    tags: [relay, p06, shadow-stack, renode, rt1176, measurement, supersedes-afd-055-method]
+    links:
+      - type: traces-to
+        target: REQ-PIX-021
+      - type: traces-to
+        target: DD-023
+
   - id: AFD-057
     type: ai-found-defect
     severity: major

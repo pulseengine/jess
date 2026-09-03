@@ -18,6 +18,8 @@ extern const jess_usize jess_wasm_global_count;
 #define LINMEM   ((volatile jess_u8  *)0x20000000u)
 #define GLOBALS  ((volatile jess_u32 *)0x20010100u)
 #define ARGOFF   0x0000E000u
+#define PAINT_LO 0x00000400u   /* above the static data the segments occupy */
+#define PAINT_HI 0x00002000u   /* the shadow-stack pointer's initial value (global 0) */
 
 /* The canonical ABI of the export, from the WIT and the lowered signature:
  *     rate@0.7.0#tick : (param i32) -> (result i32)
@@ -56,6 +58,23 @@ void jess_init(void)
      * reset handler seeds them in, verified like-for-like on this module (AFD-056). */
     for (jess_usize i = 0; i < jess_wasm_global_count; ++i)
         GLOBALS[i] = jess_wasm_global_init[i];
+
+    /* PAINT THE SHADOW-STACK REGION — after init, before the call.
+     *
+     * AFD-055 concluded painting could not measure this image's stack because the reset
+     * handler's copy overwrites the paint. That was true of the SELF-CONTAINED image,
+     * where jess had no control over the sequence. Here the harness owns it: init runs
+     * first, then the paint, then the call. So a true high-water becomes measurable.
+     *
+     * The region painted is [PAINT_LO, PAINT_HI) — below the shadow-stack pointer's
+     * initial value (global 0 = 8192 = 0x2000) and above the static data top, which is
+     * where a downward-growing shadow stack must land.
+     *
+     * 0xDEADBEEF and not zero: a difference-based measurement cannot see a store that
+     * writes a value already present, so it yields a LOWER BOUND. A distinctive pattern
+     * makes "was this byte touched" answerable rather than inferable. */
+    for (jess_u32 a = PAINT_LO; a < PAINT_HI; a += 4)
+        *(volatile jess_u32 *)(LINMEM + a) = 0xDEADBEEFu;
 
     /* the argument vector, at the offset boot.S passes in r0 */
     volatile jess_u32 *a = (volatile jess_u32 *)(LINMEM + ARGOFF);
