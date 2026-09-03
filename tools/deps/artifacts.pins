@@ -10,19 +10,41 @@
 # BYTE-IDENTICAL to relay's published falcon-v1.134.1 assets, so this pins what was
 # actually used to produce AFD-046/-051/-052, not a lookalike.
 #
-# format:  <dest-path-under-.scratch>  <sha256>  <source>
+# format:  <dest-path-under-.scratch>  <sha256>  <locator>
+#
+# The locator is what tools/deps/fetch.sh uses to RECONSTRUCT the byte from a clean
+# checkout. Until 2026-09-04 these said only which release the artifact came from, which
+# is not enough to fetch it — the upstream NAMES differ from the local ones. Two facts
+# cost real time to establish and are recorded here so nobody re-derives them:
+#
+#   * The falcon stages are NOT standalone release assets. They live inside
+#     falcon-components-v1.134.tar.gz and are named falcon-<stage>-v1.134.wasm upstream.
+#     The mapping below was established BY DIGEST, not by guessing names.
+#   * gale-nano is in NO gale release (checked v0.7.0/v0.7.1/v0.8.0 — the release carries
+#     only the msgq/mutex/sem primitives). It is an OCI artifact at
+#     ghcr.io/pulseengine/gale-nano:0.7.0, where its name is fused-gustos.component.wasm.
+#
+# grammar:
+#   release:<owner>/<repo>@<tag>!<asset>[!<member-inside-tarball>]
+#   oci:<ref>!<file-in-artifact>
+#
+# PLATFORM CAVEAT: fg60/synth is a Mach-O arm64 BINARY. Its digest is satisfiable only on
+# aarch64-apple-darwin, so `platform=` records which host the pin is for and check.sh's
+# green means nothing about a linux runner. Any CI use must verify against the release's
+# own signed SHA256SUMS.txt instead. This is why the on-target oracles are not yet a CI
+# gate (AFD-064 D4).
 
 [falcon-v1.134.1]
-v1341/rate.wasm              43982be498c0e4a2b03ce6a56a06496cb46dcdc98fdf8bf8cbd610a1d891ae63  release:pulseengine/relay@falcon-v1.134.1
-v1341/mixer.wasm             076b8a816493e1997191f459c624c0a5b7b80fdcc0c97a4e039d7d24aaa789b3  release:pulseengine/relay@falcon-v1.134.1
-v1341/attitude.wasm          d85c325f7564145b99454a60b207d9409f6b600668cdcbde0157f329d68910d1  release:pulseengine/relay@falcon-v1.134.1
-v1341/position.wasm          32a45a53aa9fa3a4193aedf4f82cbfaa16810130df9320d0e048958d258eba5b  release:pulseengine/relay@falcon-v1.134.1
-v1341/iekf.wasm              600f9047dba73f278d80b8a0a904bb2066eea33073902fee84aea3d35bb09f0b  release:pulseengine/relay@falcon-v1.134.1
+v1341/rate.wasm              43982be498c0e4a2b03ce6a56a06496cb46dcdc98fdf8bf8cbd610a1d891ae63  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-rate-v1.134.wasm
+v1341/mixer.wasm             076b8a816493e1997191f459c624c0a5b7b80fdcc0c97a4e039d7d24aaa789b3  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-mixer-v1.134.wasm
+v1341/attitude.wasm          d85c325f7564145b99454a60b207d9409f6b600668cdcbde0157f329d68910d1  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-attitude-v1.134.wasm
+v1341/position.wasm          32a45a53aa9fa3a4193aedf4f82cbfaa16810130df9320d0e048958d258eba5b  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-position-v1.134.wasm
+v1341/iekf.wasm              600f9047dba73f278d80b8a0a904bb2066eea33073902fee84aea3d35bb09f0b  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-iekf-v1.134.wasm
 
 [gale-nano]
-galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f  release-or-ghcr:pulseengine/gale@v0.7.0
+galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f  oci:ghcr.io/pulseengine/gale-nano:0.7.0!fused-gustos.component.wasm
 
 [synth]
 # NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.60.0.
 # That divergence is real and is why this is pinned by digest here (AFD-053 S5).
-fg60/synth                   01dd072f1ae31dac9a1cffd0ac00ea4d343d044f2d91ff489b3844a22da33759  release:pulseengine/synth@v0.60.0
+fg60/synth                   01dd072f1ae31dac9a1cffd0ac00ea4d343d044f2d91ff489b3844a22da33759  release:pulseengine/synth@v0.60.0!synth-v0.60.0-{PLATFORM}.tar.gz!synth  platform=aarch64-apple-darwin

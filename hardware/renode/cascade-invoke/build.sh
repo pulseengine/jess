@@ -10,8 +10,12 @@
 # and four confusing errors.
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
-OUT="${OUT:-$ROOT/.scratch/invoke}"; mkdir -p "$OUT"
-SYNTH="${SYNTH:-$ROOT/.scratch/fg60/synth}"
+# SCRATCH is the tree tools/deps/fetch.sh populates and tools/deps/check.sh verifies.
+# Overridable so a CLEAN CHECKOUT can build from freshly fetched, digest-verified inputs
+# rather than from whatever happens to be in .scratch (AFD-065).
+SCRATCH="${SCRATCH:-$ROOT/.scratch}"
+OUT="${OUT:-$SCRATCH/invoke}"; mkdir -p "$OUT"
+SYNTH="${SYNTH:-$SCRATCH/fg60/synth}"
 PY="${PY:-python3}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
@@ -19,7 +23,7 @@ command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 "$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || fail "external artifacts do not match tools/deps/artifacts.pins"
 
 echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
-varve run meld fuse "$ROOT"/.scratch/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+varve run meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
     --memory shared --pack-rebase -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
 varve run loom optimize "$OUT/c.wasm" -o "$OUT/c.loom.wasm" >"$OUT/loom.log" 2>&1 || fail "loom"
 "$SYNTH" compile "$OUT/c.loom.wasm" -t cortex-m7dp --cortex-m --relocatable \
