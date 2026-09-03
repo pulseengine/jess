@@ -19,6 +19,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PY_BIN="${PY_BIN:-python3}"
 SCHEMA="${SCHEMA:-$ROOT/schemas/common.yaml}"
 ARTIFACTS="${ARTIFACTS:-$ROOT/artifacts}"
 
@@ -29,20 +30,60 @@ NON_TERMINAL="open scoping confirmed confirmed-upstream reported-upstream filed-
 [ -f "$SCHEMA" ] || { echo "FAIL(3): no schema at $SCHEMA"; exit 3; }
 [ -d "$ARTIFACTS" ] || { echo "FAIL(3): no artifacts dir at $ARTIFACTS"; exit 3; }
 
-allowed="$(python3 - "$SCHEMA" <<'PY'
+# Defined as a function rather than inlined as `$(python3 - <<'"'"'PY'"'"' ... )`: a heredoc
+# nested inside a command substitution is parsed by bash'"'"'s substitution scanner and breaks
+# on quoting in the embedded source. Hit while fixing this very script.
+read_vocab() {
+  "$PY_BIN" - "$SCHEMA" <<'PY'
 import re,sys
 s=open(sys.argv[1]).read()
-m=re.search(r'- name: triage-status\b.*?allowed-values:\s*\[(.*?)\]', s, re.S)
+# Bound the search to the triage-status field's OWN block. Without the bound this regex
+# happily crosses into the NEXT field and returns ITS allowed-values — clean-room
+# verification produced "red green blue" that way from a schema where triage-status had
+# no allowed-values at all.
+blk = re.search(r'- name: triage-status\b(.*?)(?=\n\s*- name: |\Z)', s, re.S)
+if not blk:
+    sys.stderr.write("could not locate the triage-status field in schema\n"); sys.exit(3)
+m = re.search(r'allowed-values:\s*\[(.*?)\]', blk.group(1), re.S)
 if not m:
-    sys.stderr.write("could not locate triage-status allowed-values in schema\n"); sys.exit(3)
+    sys.stderr.write("triage-status has no allowed-values in schema\n"); sys.exit(3)
 print(" ".join(v.strip() for v in m.group(1).replace("\n"," ").split(",") if v.strip()))
 PY
-)" || { echo "FAIL(3): could not read vocabulary from schema"; exit 3; }
+}
+allowed="$(read_vocab)" || { echo "FAIL(3): could not read vocabulary from schema"; exit 3; }
 
 [ -n "$allowed" ] || { echo "FAIL(3): vocabulary parsed EMPTY — refusing to pass vacuously"; exit 3; }
 
 # Refuse to pass on an empty corpus: a gate over nothing is not a green gate.
-total=$( { grep -rho "triage-status: *[A-Za-z-]*" "$ARTIFACTS" 2>/dev/null || true; } | wc -l | tr -d ' ')
+# Extract the WHOLE value. The obvious grep -o "triage-status: *[A-Za-z-]*" truncates at
+# the first non-letter, so 'open9', 'open.x' and 'resolved2' all pass as their legal
+# prefix — clean-room verification demonstrated exactly that. Quotes are stripped so the
+# legal spelling `triage-status: "open"` is not reported as an empty value.
+extract() {   # $1 = dir ; emits "<file> <value>" per occurrence
+  "$PY_BIN" - "$1" <<'EOX'
+import os, re, sys
+root = sys.argv[1]
+# YAML only starts a comment at '#' preceded by whitespace, so 'closed#' is a valid
+# scalar and must NOT be silently trimmed to 'closed'.
+# Anchored at line start, and the value must be a single bare token. Without the anchor
+# the pattern matches PROSE — an artifact description quoting `grep -o "triage-status: ..."`
+# was reported as an out-of-vocabulary field. A gate that fires on its own documentation is
+# a false positive, and false positives get gates switched off.
+pat = re.compile(r'^[ \t]*triage-status:[ \t]*(\S+)(?:[ \t]+#.*)?[ \t]*$')
+for dp, _, fns in os.walk(root):
+    for fn in fns:
+        p = os.path.join(dp, fn)
+        try:
+            for line in open(p, errors="replace"):
+                m = pat.match(line.rstrip("\n"))
+                if m:
+                    v = m.group(1).strip().strip('"').strip("'").strip()
+                    print(f"{p} {v if v else '<empty>'}")
+        except (OSError, UnicodeError):
+            pass
+EOX
+}
+total=$(extract "$ARTIFACTS" | wc -l | tr -d ' ')
 [ "$total" -gt 0 ] || { echo "FAIL(3): found ZERO triage-status fields — gate would be vacuous"; exit 3; }
 
 echo "vocabulary (from $(basename "$SCHEMA")): $allowed"
@@ -54,8 +95,7 @@ while read -r file val; do
     *" $val "*) : ;;
     *) echo "  OUT-OF-VOCABULARY: '$val' in $file"; bad=$((bad+1)) ;;
   esac
-done < <( { grep -rHo "triage-status: *[A-Za-z-]*" "$ARTIFACTS" 2>/dev/null || true; } \
-         | sed 's/:triage-status: */ /' )
+done < <(extract "$ARTIFACTS")
 
 # Assert the non-terminal list is itself a subset of the vocabulary — otherwise
 # a rename in the schema silently makes a non-terminal state unreachable.
@@ -68,7 +108,7 @@ done
 
 live=0
 for nt in $NON_TERMINAL; do
-  n=$( { grep -rho "triage-status: *$nt\$" "$ARTIFACTS" 2>/dev/null || true; } | wc -l | tr -d ' ')
+  n=$(extract "$ARTIFACTS" | awk -v v="$nt" '$NF==v' | wc -l | tr -d ' ')
   [ "$n" -gt 0 ] && { echo "  live($nt): $n"; live=$((live+n)); }
 done
 echo "non-terminal (still live) defects: $live"

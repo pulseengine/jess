@@ -29,6 +29,11 @@ N="${N:-64}"                      # MUST match SOAK_N in boot-soak.S; asserted b
 RUNFOR="${RUNFOR:-4.0}"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# A per-run temp file. These were fixed paths named after the HAND-INVENTED ids
+# (tp34/tp35) that were never rivet ids; two concurrent oracle runs also clobbered
+# each other's script. Both found by clean-room verification.
+RESC="$(mktemp -t jess-oracle.XXXXXX).resc"
+trap 'rm -f "$RESC"' EXIT
 [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
 [ -f "$E" ]   || fail "soak image missing — run build.sh first"
 [ -f "$MOD" ] || fail "module missing — run build.sh first"
@@ -41,7 +46,7 @@ SRC_N="$(grep -oE '^\s*\.equ\s+SOAK_N,\s*[0-9]+' "$D/boot-soak.S" | grep -oE '[0
 [ "$SRC_N" = "$N" ] || fail "SOAK_N in boot-soak.S is $SRC_N but the oracle is checking N=$N"
 
 read_soak() {   # $1 = elf ; echoes 11 hex words
-cat > /tmp/tp35.resc <<EOF
+cat > $RESC <<EOF
 using sysbus
 mach create "t35"
 machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
@@ -62,7 +67,7 @@ sysbus ReadDoubleWord 0x20011224
 sysbus ReadDoubleWord 0x20011228
 echo "E"
 EOF
-( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @/tmp/tp35.resc
+( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @$RESC
 quit" 2>&1 ) | perl -pe 's/\e\[[0-9;]*m//g' | "$PY" -c '
 import sys,re
 g=False;out=[]
@@ -85,9 +90,12 @@ W=( $(read_soak "$E") )
 norm() { printf '0x%08X' "$1"; }
 sent="$(norm "${W[10]}")"
 [ "$sent" = "0x1E55B0A5" ] || fail "completion sentinel is $sent, not 0x1E55B0A5 — the soak did not finish all $N ticks (raise RUNFOR)"
+# o[0] is the loop's OWN trip count, written after the loop — not the requested N. Writing
+# n before the loop would prove only that the constant was passed; a soak that ran once
+# would still report 64. (Clean-room finding.)
 ran="$(norm "${W[0]}")"
-[ "$ran" = "$(printf '0x%08X' "$N")" ] || fail "image reports N=$ran, expected $N"
-echo "   sentinel 0x1E55B0A5 present, N=$N ticks completed"
+[ "$ran" = "$(printf '0x%08X' "$N")" ] || fail "the loop ran $ran iterations, expected $N"
+echo "   sentinel 0x1E55B0A5 present; loop reports $N iterations actually run"
 
 echo "== 2. independent wasmtime reference over the SAME module and N =="
 REF="$("$PY" "$ROOT/tools/cascade-differential/soak_ref.py" "$MOD" "$N" --format json)" \
@@ -123,23 +131,42 @@ echo "   fold($((N-1)))=$r_fm != fold($N)=$r_f (the fold tracks tick count)"
 "$PY" "$ROOT/tools/cascade-differential/soak_ref.py" --self-test > /dev/null || fail "soak_ref.py self-test failed"
 echo "   soak_ref.py vacuity guard self-test PASS"
 
-# CONTROL 4 — ON-TARGET DISCRIMINATION. Everything above compares one target run to a
-# reference; none of it shows the comparison can FAIL on target. This runs the identical
-# soak with the data-segment and globals init short-circuited. It must still COMPLETE
-# (sentinel present, so the difference is a wrong answer and not a truncated run) and its
-# fold must DIFFER. This is what makes AFD-051's embedder promises load-bearing across a
-# whole run rather than at tick 1 only — synth emits byte-identical code with or without
-# the --embedder-* flags, so nothing else would tell us.
-NCE="$ROOT/.scratch/invoke/soak_nc2.elf"
-if [ -f "$NCE" ]; then
-  NW=( $(read_soak "$NCE") )
-  [ "${#NW[@]}" -eq 11 ] || fail "soak control returned ${#NW[@]} words, expected 11"
-  nc_sent="$(norm "${NW[10]}")"; nc_fold="$(norm "${NW[9]}")"
-  [ "$nc_sent" = "0x1E55B0A5" ] || fail "soak control did not COMPLETE (sentinel $nc_sent) — a truncated run is not evidence of discrimination"
-  [ "$nc_fold" != "$r_f" ] || fail "soak control folded to $nc_fold, IDENTICAL to the reference — skipping the embedder init changed nothing, so this oracle cannot fail on target"
-  echo "   init-skipped control completed and folded $nc_fold != $r_f (the oracle discriminates on target)"
+# CONTROL 4 — ON-TARGET ATTRIBUTION. Everything above compares one target run to a
+# reference; none of it shows a WRONG-BUT-PLAUSIBLE target result would be caught.
+# soak_nc1 perturbs wy in the argument vector and keeps the embedder init ENTIRELY, so a
+# divergence is attributable to the computation rather than to nothing having run.
+NC1E="$ROOT/.scratch/invoke/soak_nc1.elf"
+[ -f "$NC1E" ] || fail "soak_nc1.elf missing — run build.sh; without it nothing shows this oracle catches a plausible wrong answer"
+N1=( $(read_soak "$NC1E") )
+[ "${#N1[@]}" -eq 11 ] || fail "soak_nc1 returned ${#N1[@]} words, expected 11"
+[ "$(norm "${N1[10]}")" = "0x1E55B0A5" ] || fail "soak_nc1 did not COMPLETE — a crashed control is not evidence"
+n1_fold="$(norm "${N1[9]}")"
+[ "$n1_fold" != "$r_f" ] || fail "perturbing wy did not change the fold — the soak is insensitive to its input"
+# ...and it must be a PLAUSIBLE wrong answer, not a collapse. NULL_FOLD is FNV-1a over
+# 4*N zero words: the value any image that produces no output at all will report.
+NULL_FOLD="$("$PY" -c "
+h=2166136261
+for _ in range($N*4): h=((h^0)*16777619)&0xFFFFFFFF
+print('0x%08X'%h)")"
+[ "$n1_fold" != "$NULL_FOLD" ] || fail "soak_nc1 folded to the ALL-ZERO value $NULL_FOLD — it collapsed instead of computing a wrong answer, so it attributes nothing"
+echo "   perturbed-input control completed, folded $n1_fold != $r_f and != null $NULL_FOLD"
+echo "   (a wrong-but-plausible on-target result IS caught)"
+
+# CONTROL 5 — LIVENESS ONLY, and labelled as such. The init-skipped image tells us
+# something ran and produced nothing; it does NOT attribute the failure to the embedder
+# promises. Clean-room verification built a third image that KEEPS the promises and drops
+# only the argument write, and it folds identically to this one. So the assertion here is
+# the precise one: it must equal the all-zero fold.
+NC2E="$ROOT/.scratch/invoke/soak_nc2.elf"
+if [ -f "$NC2E" ]; then
+  N2=( $(read_soak "$NC2E") )
+  [ "${#N2[@]}" -eq 11 ] || fail "soak_nc2 returned ${#N2[@]} words, expected 11"
+  n2_fold="$(norm "${N2[9]}")"
+  [ "$(norm "${N2[10]}")" = "0x1E55B0A5" ] || fail "soak_nc2 did not complete (sentinel $(norm "${N2[10]}"))"
+  [ "$n2_fold" = "$NULL_FOLD" ] || fail "soak_nc2 folded $n2_fold, expected the all-zero fold $NULL_FOLD — its meaning has changed and the label 'liveness' no longer describes it"
+  echo "   init-skipped control completed and folded exactly the all-zero value (liveness only, attributes nothing)"
 else
-  fail "soak_nc2.elf missing — run build.sh; without it nothing shows this oracle can fail"
+  fail "soak_nc2.elf missing — run build.sh"
 fi
 
 echo

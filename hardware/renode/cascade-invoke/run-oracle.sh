@@ -18,11 +18,16 @@ D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
 RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
 E="$ROOT/.scratch/invoke/invoke.elf"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# A per-run temp file. These were fixed paths named after the HAND-INVENTED ids
+# (tp34/tp35) that were never rivet ids; two concurrent oracle runs also clobbered
+# each other's script. Both found by clean-room verification.
+RESC="$(mktemp -t jess-oracle.XXXXXX).resc"
+trap 'rm -f "$RESC"' EXIT
 [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
 [ -f "$E" ] || fail "image missing — run build.sh first"
 
 read_words() {   # $1 = elf
-  cat > /tmp/tp34.resc <<EOF
+  cat > $RESC <<EOF
 using sysbus
 mach create "t34"
 machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
@@ -43,7 +48,7 @@ sysbus ReadDoubleWord 0x20011110
 sysbus ReadDoubleWord 0x20011114
 echo "E"
 EOF
-  ( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @/tmp/tp34.resc
+  ( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @$RESC
 quit" 2>&1 ) | perl -pe 's/\e\[[0-9;]*m//g' | python3 -c '
 import sys,re
 g=False;out=[]

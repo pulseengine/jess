@@ -1367,8 +1367,6 @@ artifacts:
       AFD-057, but no rivet artifact existed, so the right side of the V was open for the campaign's
       first on-target execution. Found and closed while adding TEST-PIX-035 (AFD-063).
     tags: [renode, rt1176, cortex-m7, falcon, cascade, on-target, oracle, negative-controlled, sil-differential]
-    fields:
-      release: v0.7.0
     links:
       - type: verifies
         target: REQ-PIX-001
@@ -1376,6 +1374,7 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T18:52:06Z
+    release: v0.7.0
 
   - id: TEST-PIX-033
     type: test-spec
@@ -1383,31 +1382,46 @@ artifacts:
     status: valid
     description: |-
       The N-TICK SOAK: the falcon rate->mixer chain runs 64 consecutive ticks on emulated RT1176
-      Cortex-M7 and tracks an independent wasmtime reference across the WHOLE run.
+      Cortex-M7 and tracks a wasmtime reference across the WHOLE run.
       WHY IT IS A DISTINCT RUNG FROM TEST-PIX-032: one invocation cannot distinguish a correctly lowered
       integrator from one whose state update was dropped - both produce the same first tick. The cascade
       carries state, so tick i depends on ticks 1..i-1.
       NOT A SIMULATOR (lane discipline): the input vector is held CONSTANT across all 64 ticks and no
       vehicle model is integrated. What evolves is the cascade's own integrator state. Closing a loop
       around a plant is relay's SIL; jess proves the lowered code still tracks it (DD-026 P2).
+      SCOPE OF THE DIFFERENTIAL - stated precisely because the first draft overstated it. Both sides run
+      the SAME c.loom.wasm (post meld fuse --pack-rebase + loom optimize). The reference is an independent
+      BACKEND, not an independent artifact: this covers SYNTH'S LOWERING ONLY. A defect in falcon's
+      source, in meld's fusion, or in loom's optimisation is invisible here, because both backends would
+      agree on it.
       RESULT, emulated RT1176 Cortex-M7 (Renode 1.16.1), synth 0.60.0 --relocatable:
         tick 1   pwm 0x00000000 0x00000000 0x3EB2AF18 0x3F800000   (equals TEST-PIX-032's value)
         tick 64  pwm 0x3ED89353 0x3EB9A587 0x3F176935 0x3F1F7A5F
         fold     0x3466E91F   FNV-1a over all 256 motor-pwm words, in order
-      All three match tools/cascade-differential/soak_ref.py run over the SAME c.loom.wasm.
-      FOUR CONTROLS, all observed to fire:
-        1 COMPLETION - the image writes sentinel 0x1E55B0A5 only after tick N, so a truncated run cannot
-          be mistaken for a lowering defect (RUNFOR is otherwise a guess).
-        2 N-SENSITIVITY - fold(63) 0xD1EDC289 != fold(64) 0x3466E91F, so the fold is not inert.
+      FIVE CONTROLS:
+        1 COMPLETION + TRIP COUNT - the image writes the loop's OWN iteration count (incremented inside
+          the loop, written after it) plus sentinel 0x1E55B0A5. Writing the requested N before the loop -
+          as the first draft did - would prove only that the constant was passed; a soak that ran once
+          would still report 64.
+        2 N-SENSITIVITY - fold(63) 0xD1EDC289 != fold(64) 0x3466E91F. Computed inside the reference, so
+          it establishes the fold is N-sensitive, not that the target is.
         3 ENDPOINT MOTION - tick1 != tickN. soak_ref.py REFUSES to emit a reference where they are equal,
-          and that refusal has its own --self-test so the guard is known to be reachable.
-        4 ON-TARGET DISCRIMINATION - the same soak with the embedder init short-circuited COMPLETES
-          (sentinel present) and folds 0xE6A1D1C5, differing. Without this, nothing shows the oracle can
-          fail on target.
+          and that guard has its own --self-test calling the SAME function the real path calls.
+        4 ON-TARGET ATTRIBUTION - soak_nc1 perturbs wy and keeps the embedder init ENTIRELY. It completes
+          and folds 0x511234FF: different from the reference AND different from the all-zero fold, so it
+          is a PLAUSIBLE wrong answer. This is the control that shows a wrong-but-plausible on-target
+          result is caught.
+        5 LIVENESS ONLY - soak_nc2 skips the init, completes, and folds 0xE6A1D1C5, which is exactly
+          FNV-1a over 256 ZERO words. It shows something ran and produced nothing. It does NOT attribute
+          the failure to the embedder promises: clean-room verification built a third image that KEEPS
+          the promises and drops only the argument write, and it folds IDENTICALLY. The oracle therefore
+          asserts this control equals the all-zero fold, so its meaning cannot drift.
+      NOT A CI GATE. This oracle is run locally and is EVIDENCE, not enforcement. ci.yml's renode-smoke
+      job runs six .robot tests and none of the cascade-invoke oracles; the workflow installs neither
+      arm-none-eabi-gcc nor the synth binary they need. Promoting run-oracle.sh to a renode-test .robot is
+      an open item in hardware/renode/tcb-link/README.md.
       Executed via hardware/renode/cascade-invoke/run-soak-oracle.sh.
     tags: [renode, rt1176, cortex-m7, falcon, cascade, soak, n-tick, integrator, on-target, oracle, negative-controlled]
-    fields:
-      release: v0.7.0
     links:
       - type: verifies
         target: REQ-PIX-001
@@ -1415,6 +1429,7 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T18:52:26Z
+    release: v0.7.0
 
   - id: TEST-PIX-034
     type: test-spec
@@ -1431,8 +1446,6 @@ artifacts:
       use for a different test. Both were reconciled to rivet-allocated IDs while adding the soak
       (AFD-063); rivet's next-id is the only source of truth for these.
     tags: [renode, rt1176, cortex-m7, falcon, footprint, linear-memory, shadow-stack, on-target]
-    fields:
-      release: v0.7.0
     links:
       - type: verifies
         target: REQ-PIX-001
@@ -1440,3 +1453,4 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T18:52:56Z
+    release: v0.7.0

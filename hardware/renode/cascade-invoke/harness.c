@@ -18,7 +18,11 @@ extern const jess_usize jess_wasm_global_count;
 #define LINMEM   ((volatile jess_u8  *)0x20000000u)
 #define GLOBALS  ((volatile jess_u32 *)0x20010100u)
 #define ARGOFF   0x0000E000u
-#define PAINT_LO 0x00000400u   /* above the static data the segments occupy */
+/* NOT above the static data: __data_end is 0x45A1 and a data segment spans [0x290,0x22B1),
+ * so this band overlaps ~7 KiB of applied segment data. Painting is safe only because those
+ * bytes are zero and never read — build.sh asserts that against the actual module rather
+ * than trusting this comment. (Clean-room finding; the previous comment was wrong.) */
+#define PAINT_LO 0x00000400u
 #define PAINT_HI 0x00002000u   /* the shadow-stack pointer's initial value (global 0) */
 
 /* The canonical ABI of the export, from the WIT and the lowered signature:
@@ -143,9 +147,10 @@ void jess_call_soak(int arg, int n)
 {
     volatile jess_u32 *o = (volatile jess_u32 *)SOAK_BASE;
     jess_u32 h = FNV_OFF;
+    jess_u32 iters = 0;          /* the TRIP COUNT, incremented inside the loop */
 
-    o[0] = (jess_u32)n;
     for (int i = 1; i <= n; ++i) {
+        ++iters;
         int t = jess_rate_tick(arg);
         const volatile float *q = (const volatile float *)(LINMEM + (unsigned)t);
         int p = jess_mixer_mix(q[0], q[1], q[2], q[3]);
@@ -156,6 +161,13 @@ void jess_call_soak(int arg, int n)
         if (i == 1) { o[1] = w[0]; o[2] = w[1]; o[3] = w[2]; o[4] = w[3]; }
         if (i == n) { o[5] = w[0]; o[6] = w[1]; o[7] = w[2]; o[8] = w[3]; }
     }
+    /* o[0] is the OBSERVED trip count, not the requested n. Writing n before the loop
+     * (as this did originally) proves only that the constant was passed — a soak that
+     * ran once would report 64. Clean-room verification caught that, and also showed a
+     * STATIC "does jess_call_soak contain a backward branch" check cannot distinguish
+     * the outer soak loop from the inner 4-word fold loop. A counter the loop itself
+     * increments is the only form of this evidence that -O2 cannot restructure away. */
+    o[0]  = iters;
     o[9]  = h;
     o[10] = 0x1E55B0A5u;   /* completion sentinel — distinct from the chain's */
 }

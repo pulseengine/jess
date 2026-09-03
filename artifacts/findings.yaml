@@ -3233,3 +3233,78 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T18:54:07Z
+
+  - id: AFD-064
+    type: ai-found-defect
+    title: Clean-room verification of the N-tick soak found FIVE defects BEFORE merge — including a degenerate control whose claim was false, and a vacuous acceptance hole in the gate shipped hours earlier
+    status: resolved
+    description: |-
+      2026-09-03. Clean-room verification (fresh-context subagent, no inherited framing) over AFD-061..063
+      and the campaign machinery, run BEFORE the PR was merged. It found five defects. Four are in
+      CHECKERS rather than in the code being checked - the campaign's standing pattern - and one is a
+      false claim in a safety artifact, which is the AFD-048 pattern recurring.
+      *** D1 (WORST): AFD-063's "control 4" was DEGENERATE and its claim was FALSE. ***
+      The init-skipped soak folds 0xE6A1D1C5, which is exactly FNV-1a over 256 ZERO WORDS - the image
+      produced NO output for 64 ticks. The clean-room built a third image keeping the embedder promises
+      ENTIRELY and dropping only the argument write: it folds IDENTICALLY. Three materially different
+      breakages, one indistinguishable fold. So the control did NOT show "the embedder promises are
+      load-bearing across a whole run"; it showed only that something ran and produced nothing.
+      FIX: added soak_nc1 - perturb wy, keep the init entirely - which completes and folds 0x511234FF,
+      different from the reference AND from the all-zero fold, i.e. a PLAUSIBLE wrong answer. That is the
+      control that actually attributes. The init-skipped image is kept, relabelled LIVENESS ONLY, and the
+      oracle now asserts it equals the all-zero fold so its meaning cannot silently drift.
+      *** D2: the "jess_call_soak has a backward branch" build assertion was VACUOUS. ***
+      The grep matched ANY intra-function branch and was satisfied by the forward early-exit -O2 emits.
+      An address-comparing rewrite was ALSO vacuous - satisfied by the INNER 4-word fold loop with the
+      outer soak loop removed. Both attempts were verified vacuous by building a straight-line soak.
+      FIX: the static check is DELETED, with the reason recorded in build.sh. Replaced by a DYNAMIC trip
+      counter the loop increments and writes after the loop, which -O2 cannot restructure away. This also
+      fixes a related overstatement: o[0] previously held the REQUESTED n written before the loop, so a
+      soak that ran once would still have reported 64.
+      *** D3: tools/rivet/triage-gate.sh - shipped in AFD-062 the same day - ACCEPTED bad values. ***
+      Its extractor `grep -o "triage-status: *[A-Za-z-]*"` truncates at the first non-letter, so open9,
+      open.x and resolved2 all passed as their legal prefix. It ALSO rejected the legal quoted spelling
+      "open", and its schema regex could cross into the NEXT field and return that field's allowed-values
+      (the clean-room got "red green blue" out of it).
+      FIX: python extractor taking the whole value, YAML-correct comment stripping (a comment needs
+      whitespace before '#', so 'closed#' is a valid scalar and is now REJECTED), and the schema search
+      bounded to the triage-status field's own block. All five cases verified failing/passing correctly.
+      Fixing it also hit a bash trap worth recording: a heredoc nested inside $( ) is parsed by bash's
+      substitution scanner and broke the script; the vocabulary read is now a function.
+      *** D4: NONE of the cascade-invoke oracles run in CI. ***
+      ci.yml's renode-smoke job runs six .robot tests; run-oracle.sh, run-soak-oracle.sh and
+      measure-stack.sh are not among them, and the workflow installs neither arm-none-eabi-gcc nor the
+      synth binary they need. TEST-PIX-032/033/034 are LOCAL-ONLY EVIDENCE, NOT GATES. Recorded in each
+      spec rather than quietly implied. Promotion to a renode-test .robot is an open item in
+      hardware/renode/tcb-link/README.md.
+      *** D5: the PR that fixed one vacuous-gate instance introduced another. ***
+      TEST-PIX-032/033/034 were created with `--field release=v0.7.0`, but `release` is a TOP-LEVEL key on
+      test-spec, not a schema field. rivet reported it as INFO with exit 0 - weaker even than the WARN
+      that AFD-062 was about - so nothing went red. FIXED via --set-release plus removal of the duplicate
+      fields.release. NOTE: rivet has NO unset-field flag, so removing a wrongly-added field cannot be
+      done with rivet's own mutation commands; that is friction to report.
+      *** ALSO: the paint band claim in harness.c was FALSE. *** PAINT_LO 0x400 was documented as "above
+      the static data the segments occupy". __data_end is 0x45A1 and a segment spans [0x290,0x22B1), so
+      the paint overwrites ~7 KiB of applied segment data. It is harmless only because those bytes are
+      zero and never read - a property of today's module, not a guarantee. The comment is corrected and
+      build.sh now ASSERTS [0x400,0x2000) is all-zero after instantiation.
+      *** ALSO: the oracles wrote fixed /tmp/tp34.resc and /tmp/tp35.resc *** - named after the
+      hand-invented ids AFD-063 had just reconciled away, and clobbering each other on concurrent runs.
+      Now mktemp with a trap.
+      *** SCOPE CORRECTION carried into TEST-PIX-033 ***: both sides of the soak differential run the SAME
+      c.loom.wasm, so the reference is an independent BACKEND, not an independent artifact. It covers
+      SYNTH'S LOWERING ONLY - a defect in falcon's source, meld's fusion or loom's optimisation would be
+      invisible because both backends would agree on it. The commit headline read stronger than the
+      evidence and has been corrected.
+      WHAT THIS ROUND CONFIRMS: holding the merge for the clean-room was the right call. Every one of
+      these would otherwise have landed in main, and D1 would have been a false attribution claim inside a
+      merged safety artifact - exactly what AFD-048 recorded and what this campaign keeps re-learning.
+    tags: [clean-room, verification, vacuous-control, vacuous-gate, soak, triage-gate, ci-coverage, self-correction, rivet-friction]
+    fields:
+      detected-by: clean-room verification subagent with no inherited context, 2026-09-03
+      severity: critical
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T19:15:47Z
