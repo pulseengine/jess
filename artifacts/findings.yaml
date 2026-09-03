@@ -3114,3 +3114,62 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T10:58:58Z
+
+  - id: AFD-062
+    type: ai-found-defect
+    title: jess's CORE CI GATE could not fail on a schema violation — 60% of ai-found-defect artifacts carried a triage-status 'rivet add' REFUSES to write, while 'rivet validate' warned and exited 0
+    status: resolved
+    description: |-
+      2026-09-03. Found while adding AFD-061: `rivet add --field triage-status=closed` was REJECTED as a
+      hard error, copying a value from the artifact directly above it in the same file.
+      *** DEFECT (rivet 0.34.0, filed pulseengine/rivet#885) ***: the SAME schema allowed-values
+      constraint is enforced at two severities depending on the command.
+        rivet add      -> hard ERROR, non-zero exit, artifact not written
+        rivet validate -> WARNING, "Result: PASS", exit 0
+      MEASURED IN JESS: 61 ai-found-defect artifacts; schema allows [open, accepted, rejected,
+      deduplicated]; 37 of 61 (60%) carry a value `rivet add` REFUSES to write — closed(21), resolved(5),
+      confirmed-upstream(4), scoping(2), confirmed(2), resolved-upstream, reported-upstream,
+      filed-upstream. `rivet validate` exits 0 with 268 warnings over them.
+      *** THE GATE THIS BLINDED ***: .github/workflows/ci.yml runs a job whose stated purpose is "the
+      rivet artifact spine is jess's substance - this is the core gate", executing bare `rivet validate`
+      and gating on its exit code. That gate is STRUCTURALLY INCAPABLE of failing on a schema-value
+      violation. 60% of the artifacts it guards were non-conforming and it had never gone red. Same
+      vacuous-gate class as AFD-048/AFD-053/AFD-061 - a check whose failing case cannot be observed.
+      *** A SECOND, SHARPER HAZARD ***: the schema documents "The `ai-defects-open` oracle gates release
+      on this field." jess references that oracle NOWHERE (verified bare, not through a pipe). And the
+      vocabulary has no notion of non-terminal-but-not-open: AFD-028 sits in `scoping` - genuinely
+      unresolved, jess must still confirm MPU ownership of the linear-memory region per synth#377 - and
+      any gate reading only `triage-status == open` would count it as done.
+      *** FIX, jess side ***: vendored schemas/common.yaml at rivet tag v0.34.0 (the version in use;
+      `rivet schema sources` now reports common as on-disk, and this also PINS the schema, which is
+      otherwise "compiled into rivet - changes on upgrade"). CONTROL: the vendored copy before any edit
+      reproduced "Result: PASS (268 warnings)" EXACTLY, proving equivalence to the embedded schema.
+      Then widened triage-status to jess's real 12-value vocabulary with an explicit NON-TERMINAL /
+      TERMINAL split documented in the schema. 268 -> 231 warnings, exactly 37 cleared. `rivet add
+      --field triage-status=closed` now succeeds.
+      The vocabulary was WIDENED rather than the artifacts flattened, deliberately: the campaign reports
+      most of its defects to OTHER repos, and collapsing confirmed-upstream/filed-upstream onto `accepted`
+      would erase which repo it went to and whether they acted. rivet's own diagnostic help offers this
+      ("widen the schema only if the value is legitimate").
+      *** NEW ORACLE ***: tools/rivet/triage-gate.sh, wired into CI beside rivet validate. It reads the
+      allowed set FROM the schema (never hardcoded - a second copy is a second thing to drift), refuses to
+      pass on an empty corpus or an unparseable vocabulary, and asserts the NON_TERMINAL list is a subset
+      of the schema vocabulary so a rename cannot silently make a state unreachable.
+      CONTROLS, all four observed: bogus value -> rc=2 with the offending value named; empty corpus ->
+      rc=3 "gate would be vacuous"; unparseable schema -> rc=3; real corpus -> rc=0, 61/61 in vocabulary,
+      33 non-terminal reported.
+      *** TWO HARNESS BUGS THE CONTROLS CAUGHT, both in the CHECKER ***: (1) the first negative control
+      did not inject at all - BSD sed has no `0,/re/` address form - and the run reported PASS; caught only
+      because the script printed the injection count. (2) `set -euo pipefail` made the empty-corpus guard
+      UNREACHABLE: `grep` returns 1 on no match, killing the script with rc=1 and no message before the
+      vacuity check could fire - the guard was absent in exactly the case it guarded. Both fixed; controls
+      re-run green. Continues the pattern that jess's defects are in its CHECKERS, not its subjects.
+    tags: [rivet, rivet-885, vacuous-gate, schema, triage-status, ci-gate, negative-control, checker-bug, schema-pinning]
+    fields:
+      detected-by: rivet add refusing a value 21 committed artifacts already carried, while rivet validate passed over it, 2026-09-03
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T11:09:24Z

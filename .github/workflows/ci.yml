@@ -77,6 +77,14 @@ jobs:
           rivet validate
         env:
           GH_TOKEN: ${{ github.token }}
+      # `rivet validate` reports an out-of-vocabulary field value as a WARNING and
+      # exits 0, so the step above CANNOT go red on one — 37 of 61 ai-found-defect
+      # artifacts (60%) were out of vocabulary and this job stayed green (AFD-062,
+      # pulseengine/rivet#885). This converts that warning into an error. Retire it
+      # when rivet ships `validate --strict`.
+      - name: triage-status vocabulary gate (AFD-062)
+        working-directory: jess
+        run: tools/rivet/triage-gate.sh
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so
