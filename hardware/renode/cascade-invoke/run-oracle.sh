@@ -16,7 +16,8 @@
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
 RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
-E="$ROOT/.scratch/invoke/invoke.elf"
+SCRATCH="${SCRATCH:-$ROOT/.scratch}"
+E="$SCRATCH/invoke/invoke.elf"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # A per-run temp file. These were fixed paths named after the HAND-INVENTED ids
 # (tp34/tp35) that were never rivet ids; two concurrent oracle runs also clobbered
@@ -92,16 +93,16 @@ echo "   NOTE both stages come from ONE rate#tick invocation — the cascade int
 echo "   second call to observe the intermediate would return a different torque (AFD-048)."
 
 echo "== NC1: perturb the input — the torque must move =="
-[ -f "$ROOT/.scratch/invoke/nc1.elf" ] || fail "nc1.elf missing — build.sh must emit it"
-N1=($(read_words "$ROOT/.scratch/invoke/nc1.elf"))
+[ -f "$SCRATCH/invoke/nc1.elf" ] || fail "nc1.elf missing — build.sh must emit it"
+N1=($(read_words "$SCRATCH/invoke/nc1.elf"))
 [ "${#N1[@]}" -ge 10 ] || fail "NC1 produced no result block"
 same=1; for i in 1 2 3 4 6 7 8 9; do [ "${N1[$i]}" = "${W[$i]}" ] || same=0; done
 [ "$same" = "0" ] || fail "VACUOUS: a perturbed input produced the IDENTICAL torque — the stage is not reading its argument"
 echo "   perturbed wy -> tx ${N1[1]} ty ${N1[2]} tz ${N1[3]} thrust ${N1[4]}  (DISTINCT)"
 
 echo "== NC2: skip the embedder init — the result must be WRONG =="
-[ -f "$ROOT/.scratch/invoke/nc2.elf" ] || fail "nc2.elf missing — build.sh must emit it"
-N2=($(read_words "$ROOT/.scratch/invoke/nc2.elf"))
+[ -f "$SCRATCH/invoke/nc2.elf" ] || fail "nc2.elf missing — build.sh must emit it"
+N2=($(read_words "$SCRATCH/invoke/nc2.elf"))
 if [ "${#N2[@]}" -ge 10 ]; then
   match=1; for i in 1 2 3 4 6 7 8 9; do [ "${N2[$i]}" = "${W[$i]}" ] || match=0; done
   [ "$match" = "0" ] || fail "VACUOUS: skipping data-segment + globals init changed NOTHING — the embedder obligations are not load-bearing here, so this test proves nothing about them"

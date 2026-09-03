@@ -3308,3 +3308,60 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T19:15:47Z
+
+  - id: AFD-065
+    type: ai-found-defect
+    title: The pins made jess's oracles CHECKABLE but not REPRODUCIBLE — nothing could fetch the pinned bytes, gale-nano is in no release at all, and the synth pin is unsatisfiable off macOS
+    status: resolved
+    description: |-
+      2026-09-04. AFD-064 D4 recorded that no cascade-invoke oracle runs in CI. Investigating why found a
+      prerequisite that had never been built: tools/deps/artifacts.pins recorded WHAT each oracle consumes
+      and verified it by digest, but NOTHING COULD PRODUCE THOSE BYTES. .scratch/ is gitignored, so a
+      fresh clone had seven pins and no way to satisfy any of them. The pins made the claims checkable;
+      they did not make them reproducible.
+      *** tools/deps/fetch.sh now reconstructs all seven from a clean checkout. *** Verified: fetching
+      into an EMPTY tree pulls 7/7 and check.sh confirms every digest.
+      *** TWO MAPPINGS THAT COST REAL TIME, ESTABLISHED BY DIGEST RATHER THAN BY GUESSING NAMES ***:
+        1 The falcon stages are NOT standalone release assets. They live inside
+          falcon-components-v1.134.tar.gz and are named falcon-<stage>-v1.134.wasm upstream, while jess
+          stores them as <stage>.wasm. A first attempt looking for rate.wasm found NOTHING.
+        2 gale-nano is in NO gale release - checked v0.7.0, v0.7.1 and v0.8.0; those carry only the
+          msgq/mutex/sem primitives. It is an OCI artifact at ghcr.io/pulseengine/gale-nano:0.7.0, where
+          its name is fused-gustos.component.wasm. Pulled it and the digest matched the pin exactly. The
+          pin's old source field said "release-or-ghcr", which is a guess written down, not a locator.
+      The locators now live IN the pins file, so there is one source of truth, and a wrong locator fails
+      against the digest that is already there rather than silently installing a lookalike.
+      *** WHY D4 IS STILL BLOCKED, NOW WITH A NAMED REASON ***: the fg60/synth pin is a MACH-O ARM64
+      BINARY. Its digest is satisfiable only on aarch64-apple-darwin and can NEVER match on a linux
+      runner. So tools/deps/check.sh cannot go green in CI for that entry, and promoting the on-target
+      oracles to a CI gate requires verifying synth against the release's own signed SHA256SUMS.txt
+      instead of against a single-platform digest. fetch.sh records platform= per pin and SKIPS a
+      foreign-platform entry loudly rather than fetching bytes that cannot match.
+      *** A DEFECT IN THIS SCRIPT, FOUND BY RUNNING THE CASE IT EXISTS FOR ***: fetch.sh ends by calling
+      check.sh as the final authority. check.sh honours SCRATCH, not DEST - so with DEST pointing at a
+      fresh tree it verified $ROOT/.scratch instead, and the clean-checkout run was "confirmed" by the
+      pre-existing artifacts sitting next door. It PASSED FOR THE WRONG REASON. Fixed by passing
+      SCRATCH="$DEST". Same family as AFD-064: the checker, not the code.
+      *** CONTROLS, all observed ***:
+        wrong locator (rate pin pointed at the mixer member) -> rc=1, mismatch named, bad file REMOVED
+        empty pin set                                        -> rc=2, refuses to report success
+        foreign-platform pin                                 -> skipped loudly, not fetched
+        corrupted artifact                                   -> re-fetched and repaired
+      *** END-TO-END ***: build.sh and both oracles now honour SCRATCH, so the whole chain runs off a
+      freshly fetched, digest-verified tree. Building from the clean tree and running the soak reproduces
+      tick 1 0x00000000 0x00000000 0x3EB2AF18 0x3F800000, tick 64 0x3ED89353 0x3EB9A587 0x3F176935
+      0x3F1F7A5F and fold 0x3466E91F - BIT-IDENTICAL to the run from the working tree. That is the first
+      time any jess on-target result has been reproduced from inputs fetched by digest rather than from
+      whatever happened to be on disk.
+      (Adding SCRATCH also produced a self-inflicted bug worth noting: a naive string replace of
+      E="$ROOT/.scratch/invoke/ also matched inside NC1E= and NC2E=, mangling three lines. Caught because
+      the oracle then failed; substring collisions in mechanical edits are not hypothetical.)
+    tags: [reproducibility, supply-chain, pins, fetch, oci, ghcr, platform-specific, ci-blocker, checker-bug]
+    fields:
+      detected-by: jess investigating why AFD-064 D4 (oracles not in CI) could not simply be fixed, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-03T22:51:52Z

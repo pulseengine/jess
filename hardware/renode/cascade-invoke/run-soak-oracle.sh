@@ -23,8 +23,9 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
 RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
 PY="${PY:-python3}"
-E="$ROOT/.scratch/invoke/soak.elf"
-MOD="$ROOT/.scratch/invoke/c.loom.wasm"
+SCRATCH="${SCRATCH:-$ROOT/.scratch}"
+E="$SCRATCH/invoke/soak.elf"
+MOD="$SCRATCH/invoke/c.loom.wasm"
 N="${N:-64}"                      # MUST match SOAK_N in boot-soak.S; asserted below.
 RUNFOR="${RUNFOR:-4.0}"
 
@@ -135,7 +136,7 @@ echo "   soak_ref.py vacuity guard self-test PASS"
 # reference; none of it shows a WRONG-BUT-PLAUSIBLE target result would be caught.
 # soak_nc1 perturbs wy in the argument vector and keeps the embedder init ENTIRELY, so a
 # divergence is attributable to the computation rather than to nothing having run.
-NC1E="$ROOT/.scratch/invoke/soak_nc1.elf"
+NC1E="$SCRATCH/invoke/soak_nc1.elf"
 [ -f "$NC1E" ] || fail "soak_nc1.elf missing — run build.sh; without it nothing shows this oracle catches a plausible wrong answer"
 N1=( $(read_soak "$NC1E") )
 [ "${#N1[@]}" -eq 11 ] || fail "soak_nc1 returned ${#N1[@]} words, expected 11"
@@ -157,7 +158,7 @@ echo "   (a wrong-but-plausible on-target result IS caught)"
 # promises. Clean-room verification built a third image that KEEPS the promises and drops
 # only the argument write, and it folds identically to this one. So the assertion here is
 # the precise one: it must equal the all-zero fold.
-NC2E="$ROOT/.scratch/invoke/soak_nc2.elf"
+NC2E="$SCRATCH/invoke/soak_nc2.elf"
 if [ -f "$NC2E" ]; then
   N2=( $(read_soak "$NC2E") )
   [ "${#N2[@]}" -eq 11 ] || fail "soak_nc2 returned ${#N2[@]} words, expected 11"
