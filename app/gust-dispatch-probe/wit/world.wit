@@ -1,0 +1,26 @@
+package jess:gust-dispatch-probe@0.1.0;
+
+// OBSERVABLE dispatch. gale-nano's `gust:os/exec.poll-round` is documented to
+// "drain every ready task exactly once through taskdisp.poll-task" (gale#223).
+// jess's existing taskdisp implementation returns 0 and records NOTHING, so it
+// cannot distinguish "poll-round drained the task" from "poll-round did nothing".
+//
+// This world is the same native residual as jess:gust-hal-stub, plus a read-back
+// interface, so a caller can prove poll-task was actually reached and with which id.
+interface probe {
+    /// How many times poll-task has been invoked since instantiation.
+    polls: func() -> u32;
+    /// The id passed to the most recent poll-task call.
+    /// 0xFFFF_FFFF means NEVER CALLED — a distinct value from a real id, because
+    /// gale-nano hands out handle 0 and a 0 sentinel would alias it.
+    last-id: func() -> u32;
+    /// Bitwise-OR of every id seen — distinguishes "one task polled twice" from
+    /// "two distinct tasks polled once", which a bare count cannot.
+    id-mask: func() -> u32;
+}
+
+world hal {
+    export gust:hal/mmio@0.1.0;
+    export gust:os/taskdisp@0.1.0;
+    export probe;
+}

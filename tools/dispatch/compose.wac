@@ -1,0 +1,14 @@
+package jess:dispatch-exp;
+
+let probe = new jess:gust-dispatch-probe { ... };
+let gale  = new gust:runtime {
+  "gust:os/taskdisp@0.1.0": probe["gust:os/taskdisp@0.1.0"],
+  "gust:hal/mmio@0.1.0":    probe["gust:hal/mmio@0.1.0"],
+  ...
+};
+let drv = new jess:dispatch-driver {
+  "gust:os/exec@0.1.0": gale["gust:os/exec@0.1.0"],
+  "jess:gust-dispatch-probe/probe@0.1.0": probe["jess:gust-dispatch-probe/probe@0.1.0"],
+  ...
+};
+export drv...;

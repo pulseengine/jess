@@ -26,10 +26,18 @@ impl Mmio for Stub {
 }
 
 impl TaskDisp for Stub {
-    /// 0 = "task complete". The stub never reports pending, so a composed image
-    /// cannot livelock waiting on a dispatcher that will never advance.
+    /// Reports COMPLETE. The value is load-bearing and its polarity was MEASURED, not
+    /// assumed (AFD-067): with gale-nano 0.7.0, returning 0 leaves the task in
+    /// `exec.state` 1 and it is re-polled by every subsequent `exec.poll-round`;
+    /// returning 1 moves it to state 2 and it is not polled again.
+    ///
+    /// This comment previously said "0 = task complete ... cannot livelock", which was
+    /// exactly backwards — 0 means "still ready, poll me again". A driver that admitted a
+    /// task and looped would have spun forever. gale-nano's shipped WIT documents no
+    /// semantics for this return value at all (gust:os/taskdisp is bare
+    /// `poll-task: func(id: u32) -> u32`), so it was an assumption, not a contract.
     fn poll_task(_id: u32) -> u32 {
-        0
+        1
     }
 }
 
