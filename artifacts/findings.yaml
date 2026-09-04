@@ -746,37 +746,32 @@ artifacts:
     type: ai-found-defect
     title: synth --safety-bounds is a NO-OP on the optimized path (main i32/i64 memory access) - flight bounds-safety hole
     status: open
-    description: >
-      Surfaced 2026-06-19 (iter#38) by the synth maintainer (synth#377) while
-      answering jess's question about pinning --safety-bounds for the falcon flight
-      build. Per-path behavior verified: on the OPTIMIZED path (the bulk of a flight
-      loop - i32/i64 loads/stores) --safety-bounds {none,mpu,software} emit
-      BYTE-IDENTICAL code (movw/movt/add/str) with NO inline bounds check and NO MPU
-      programming - `software` is a no-op there; `mpu` programs zero MPU regions (it
-      only writes a .safety-manifest.json the codegen never enforces). Inline checks
-      are emitted ONLY via the direct selector (the declined ops: bulk-mem #374,
-      i64 #372, floats). So #374's bulk-mem traps correctly (inline UDF), but the
-      main memory path is unprotected. Impact for jess: pinning --safety-bounds
-      software on the falcon M7 firmware would give a FALSE sense of memory-safety -
-      it protects only decline-path ops, not the primary load/store path; `mpu` is
-      worse (looks enforced, isn't). jess's posture (DD-006 maximal-wasm + the gust
-      TCB boundary): hardware-MPU enforcement of the wasm linear-memory region
-      belongs in the NATIVE TRUSTED BASE (a register/MMIO concern owned by gale's
-      verified primitives), with synth's inline bounds as defense-in-depth - so for
-      jess `software` was intended as belt-and-suspenders, NOT the sole mechanism.
-      But #377 means jess must (a) NOT treat synth bounds as load-bearing on the main
-      path, and (b) confirm/own MPU programming of the linear-memory region in the
-      native base. RESOLVED-(b) iter#43: gale provides a VERIFIED MPU primitive
-      (gale/src/mpu.rs + mem_domain.rs + mmu.rs, Verus/Rocq-proven) - so the native
-      trusted base (gale-maximal-wasm, DD-017) DOES own MPU enforcement of the
-      linear-memory region; synth's --safety-bounds stays defense-in-depth only, as
-      the DD-006 posture held. So the flight memory-safety guarantee = gale's MPU
-      (verified), not synth bounds. Tracking https://github.com/pulseengine/synth/issues/377;
-      scoping with the maintainer. Suggested: synth should either emit real inline
-      checks on the optimized path under `software`, or program real MPU regions
-      under `mpu`, or clearly document that bounds enforcement is the embedder's
-      (native base's) responsibility so `software`/`mpu` aren't mistaken for
-      enforcement.
+    description: |-
+      Surfaced 2026-06-19 (iter#38) by the synth maintainer (synth#377) while answering jess's question about pinning --safety-bounds for the falcon flight build. Per-path behavior verified: on the OPTIMIZED path (the bulk of a flight loop - i32/i64 loads/stores) --safety-bounds {none,mpu,software} emit BYTE-IDENTICAL code (movw/movt/add/str) with NO inline bounds check and NO MPU programming - `software` is a no-op there; `mpu` programs zero MPU regions (it only writes a .safety-manifest.json the codegen never enforces). Inline checks are emitted ONLY via the direct selector (the declined ops: bulk-mem #374, i64 #372, floats). So #374's bulk-mem traps correctly (inline UDF), but the main memory path is unprotected. Impact for jess: pinning --safety-bounds software on the falcon M7 firmware would give a FALSE sense of memory-safety - it protects only decline-path ops, not the primary load/store path; `mpu` is worse (looks enforced, isn't). jess's posture (DD-006 maximal-wasm + the gust TCB boundary): hardware-MPU enforcement of the wasm linear-memory region belongs in the NATIVE TRUSTED BASE (a register/MMIO concern owned by gale's verified primitives), with synth's inline bounds as defense-in-depth - so for jess `software` was intended as belt-and-suspenders, NOT the sole mechanism. But #377 means jess must (a) NOT treat synth bounds as load-bearing on the main path, and (b) confirm/own MPU programming of the linear-memory region in the native base. RESOLVED-(b) iter#43: gale provides a VERIFIED MPU primitive (gale/src/mpu.rs + mem_domain.rs + mmu.rs, Verus/Rocq-proven) - so the native trusted base (gale-maximal-wasm, DD-017) DOES own MPU enforcement of the linear-memory region; synth's --safety-bounds stays defense-in-depth only, as the DD-006 posture held. So the flight memory-safety guarantee = gale's MPU (verified), not synth bounds. Tracking https://github.com/pulseengine/synth/issues/377; scoping with the maintainer. Suggested: synth should either emit real inline checks on the optimized path under `software`, or program real MPU regions under `mpu`, or clearly document that bounds enforcement is the embedder's (native base's) responsibility so `software`/`mpu` aren't mistaken for enforcement.
+
+      *** CORRECTION 2026-09-04 (AFD-076) — THE RESOLUTION ABOVE OVERSTATES WHAT gale PROVIDES. ***
+      The sentence "the flight memory-safety guarantee = gale's MPU (verified)" was written from gale's
+      SOURCE. Asked directly (gale#348), gale answered and three things narrow it:
+        1 NOT SHIPPABLE AS AN ARTIFACT THE WAY sem/mutex/msgq ARE. MPU enforcement is a PRIVILEGED PPB
+          REGISTER WRITE (MPU_RBAR/MPU_RASR at 0xE000ED9C) and no wasm component can perform it. gale
+          puts it behind one trusted atom (mpu-thin, one undefined symbol `mpu-write`). If gale ships it,
+          jess receives the VERIFIED REGION-TABLE COMPUTATION and FSM; THE REGISTER WRITE IS JESS'S
+          OBLIGATION. Part of the guarantee moves to jess's side of the line.
+        2 THE SCOPE IS FAULT-CONTAINMENT, NOT SECURITY-CONTAINMENT. Per gale, VER-OS-ISO-001's demo
+          tenant runs PRIVILEGED and the PPB is NOT MPU-checked, so a privileged tenant can reprogram the
+          MPU. It supports "an accidental out-of-grant access is contained"; it does NOT support "a
+          compromised tenant cannot escape".
+          FOR AFD-028 THAT SCOPE IS THE RIGHT ONE AND SHOULD BE STATED: this finding arose from synth#377,
+          a MISCOMPILATION concern (--safety-bounds is a no-op on the optimized path). Fault-containment
+          is exactly the threat model that concern needs. The overstatement was calling it "the flight
+          memory-safety guarantee" without qualification, not the choice of mechanism.
+        3 IT WILL NOT SHIP IN v0.7.x. gale is scoping it after the privileged/PPB question, deliberately,
+          to avoid inviting the reading that the artifact enforces by itself.
+      AND JESS CANNOT VALIDATE ITS OWN HALF IN EMULATION (AFD-076): Renode 1.16.1 models the Cortex-M7
+      MPU REGISTER FILE but does not ENFORCE regions. So the register-write obligation is currently
+      untestable off silicon.
+      STATUS: remains open. It is NOT resolved-(b); that half is now a stated obligation on jess plus a
+      pending gale artifact, and the enforcement leg needs hardware.
     tags: [release-watch, synth, safety-bounds, memory-safety, on-target, flight-safety]
     fields:
       detected-by: synth#377 (maintainer, answering jess's --safety-bounds question) - {none,mpu,software} byte-identical on the optimized path, no check / no MPU; jess confirmed flight-relevant
@@ -3851,3 +3846,55 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T14:58:48Z
+
+  - id: AFD-076
+    type: ai-found-defect
+    title: Renode models the Cortex-M7 MPU REGISTER FILE but does not ENFORCE it — every register reads back perfect while an out-of-region write lands, so jess cannot validate the gale#348 obligation off silicon
+    status: resolved
+    description: |-
+      2026-09-04. gale answered gale#348 and handed jess an obligation: if the verified MPU primitive
+      ships, jess receives the region-table computation and THE PRIVILEGED REGISTER WRITE
+      (MPU_RBAR/MPU_RASR at PPB 0xE000ED9C) becomes jess's to implement. Before building to that, jess
+      asked whether the obligation can be VALIDATED in emulation.
+      *** IT CANNOT, AND THE WAY IT FAILS IS THE TRAP ***. Measured on emulated RT1176 Cortex-M7
+      (Renode 1.16.1) with a 24-instruction probe that programs ONE 32 KB region and then writes outside
+      it, with the background region DISABLED:
+        MPU_TYPE   0x00000800   -> DREGION = 8. The model ADVERTISES eight MPU regions.
+        MPU_CTRL   0x00000001   -> reads back ENABLED, PRIVDEFENA=0
+        MPU_RBAR   0x20000000   -> reads back exactly as written
+        MPU_RASR   0x0300001D   -> reads back exactly as written (AP=3, 32 KB, ENABLE)
+        inside  write @0x20001000 -> 0x1111AAAA   landed, as it must
+        outside write @0x20008000 -> 0x2222BBBB   *** ALSO LANDED ***
+        CFSR       0x00000000   no fault
+        MemManage handler        never entered
+      So every register exists, accepts writes and reads back correctly, and NOTHING IS ENFORCED. Renode
+      models the MPU REGISTER FILE, not the MPU.
+      *** WHY THIS IS THE VACUOUS SHAPE AND NOT MERELY A MISSING FEATURE ***: a test that programmed the
+      MPU and then CHECKED THE REGISTERS would report complete success. MPU_TYPE says eight regions,
+      MPU_CTRL says enabled, RASR reads back byte-perfect. Every observable short of an actual
+      out-of-region access agrees that memory protection is active. Only the access itself distinguishes
+      them, and that is precisely the observation a register-level test omits.
+      *** CONSEQUENCE FOR THE SAFETY CASE ***: AFD-028 recorded "the flight memory-safety guarantee =
+      gale's MPU (verified)". Corrected there today. The mechanism is right for the threat AFD-028
+      actually arose from - synth#377 is a MISCOMPILATION concern and gale's scope is fault-containment,
+      which matches - but the guarantee now has three qualifiers it did not have: it depends on a jess-side
+      register write that does not exist, on a gale artifact that will not ship in v0.7.x, and its
+      enforcement leg CANNOT BE TESTED OFF SILICON. That last one is new and is jess's own finding.
+      *** COMMITTED AS A CHARACTERIZATION TEST, NOT A GATE ***: hardware/renode/mpu-probe/run-oracle.sh
+      asserts the CURRENT behaviour and FAILS LOUDLY if Renode ever starts enforcing - because that would
+      be good news that jess must act on, and a probe that passed either way would tell us nothing. It
+      also refuses if MPU_TYPE reads zero (cannot distinguish "not enforced" from "not present") or if the
+      configuration does not read back (a non-fault would then prove nothing).
+      *** A PARSING DEFECT FOUND WHILE BUILDING IT ***: Renode terminates monitor lines with \r\r\n, so
+      `/^B$/` never matches and an awk-based parse silently yielded ZERO words while the log plainly held
+      seven. The sibling oracles avoid this only because their python parser rstrips. Fixed with `tr -d
+      '\r'`; recorded because the failure mode is an empty result that looks like a clean read.
+    tags: [renode, mpu, gale-348, afd-028, vacuous-observable, characterization-test, emulation-limit, safety-case]
+    fields:
+      detected-by: jess testing whether the MPU register-write obligation gale assigned can be validated in emulation, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T18:49:11Z
