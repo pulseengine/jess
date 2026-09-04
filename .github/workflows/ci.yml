@@ -242,7 +242,7 @@ jobs:
       - name: build the cascade image (pinned toolchain, fetched)
         run: |
           set -euo pipefail
-          MELD=.scratch/meld/meld LOOM=.scratch/loom/loom \
+          REQUIRE_ON_PIN=1 MELD=.scratch/meld/meld LOOM=.scratch/loom/loom \
             hardware/renode/cascade-invoke/build.sh
       # The gate. A wrong lowering, a broken embedder promise, or a stale image all fail here.
       - name: TEST-PIX-032 — cascade stage executes and matches relay's SIL reference
