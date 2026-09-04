@@ -3479,3 +3479,46 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T06:53:36Z
+
+  - id: AFD-068
+    type: ai-found-defect
+    title: meld v0.53.0 is a NO-OP on jess's fused cascade — exactly one byte differs, and it is the character in meld's own version string
+    status: resolved
+    description: |-
+      2026-09-04. Release-watch, per-piece, against the REAL fused falcon cascade rather than a fixture.
+      meld v0.53.0 vs the pinned 0.52.0, identical inputs (the five digest-pinned falcon v1.134.1 stage
+      components), identical flags (--memory shared --pack-rebase), identical paths. Only the meld binary
+      differed. Binary verified against the release's own signed SHA256SUMS.txt before use.
+      *** THE NAIVE COMPARISON WAS NOT ATTRIBUTABLE ***: 30 differing bytes, all inside custom
+      "wsc.transformation.attestation". But AFD-066 had already measured 29 bytes of RUN-TO-RUN variance
+      inside that same section within a single meld version, so 30 bytes across versions is inside the
+      noise. Reporting "meld 0.53.0 changes 30 bytes" would have been a measurement of the timestamp.
+      *** THE CONFOUND REMOVED, AND THE REMOVAL ITSELF VERIFIED ***: re-fused both versions with
+      `--reproducible` and SOURCE_DATE_EPOCH=0. SELF-CHECK FIRST - two 0.52.0 fusions under the flag are
+      BYTE-IDENTICAL, so the flag actually suppresses the variance and the cross-version comparison is
+      meaningful. Without that check, "identical" could have meant the flag did nothing and the two runs
+      happened to agree.
+      *** RESULT — EXACTLY ONE BYTE DIFFERS ***, at offset 0xF430 inside the attestation JSON:
+        0.52.0   e":"meld","version":"0.52.0"},"metadata"
+        0.53.0   e":"meld","version":"0.53.0"},"metadata"
+        identical everywhere else: True
+      That single byte is 0x32 -> 0x33, the '2'/'3' of meld's own version string. Every code byte, every
+      data byte and every other metadata byte is identical. meld v0.53.0 is a NO-OP for jess's fused
+      cascade.
+      *** SCOPE, stated because it is easy to overread ***: this exercises the --memory shared
+      --pack-rebase path jess uses for the FIVE-STAGE CASCADE. It does NOT test meld#393, the composed
+      same-memory path with flight-app, which remains the open blocker for lowering the full stack. And it
+      is a comparison of FUSION OUTPUT, not an execution claim - nothing was run on target here.
+      Combined with AFD-066 (synth v0.61.0 emits byte-identical ARM), two of the four pending toolchain
+      releases are now cleared against the real workload. Remaining: loom v1.4.1, rivet v0.35.0, and relay
+      falcon-v1.135.0 - the last being the interesting one, since it changes the INPUTS rather than the
+      toolchain and so cannot be byte-identical by construction.
+    tags: [release-watch, meld-0.53, byte-identical, reproducible, confound-removed, self-checked-control]
+    fields:
+      detected-by: jess release-watch on the real fused falcon, 2026-09-04
+      severity: info
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T07:54:47Z
