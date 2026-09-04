@@ -3719,3 +3719,38 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T11:04:54Z
+
+  - id: AFD-073
+    type: ai-found-defect
+    title: The CI step named 'pinned toolchain' did not enforce it — an off-pin build exits 0, so the gate would have gone green on the wrong toolchain
+    status: resolved
+    description: |-
+      2026-09-04. Follow-up to AFD-072, found by chasing a SECONDARY observation in the clean-room report
+      rather than only its headline defects. C3 noted in passing that ON-PIN/OFF-PIN was "banner-only: an
+      off-pin meld/loom never fails the build". Verified: an off-pin build exits 0.
+      *** THE CONSEQUENCE ***: the CI step is NAMED "build the cascade image (pinned toolchain, fetched)"
+      and nothing made that true. If the fetched binaries were ever a different version - a changed pin, a
+      changed release, a tampered fetch - the gate would have gone GREEN with an OFF-PIN banner in the log
+      that nobody reads. A step whose name asserts something no check enforces is the unearned-green class
+      this campaign keeps finding, and it had just been promoted to a gate.
+      *** FIX ***: REQUIRE_ON_PIN=1 turns an off-pin toolchain from a printed warning into a hard failure,
+      and CI sets it. It covers all four off-pin paths: a non-executable override, a digest matching no
+      pin, a digest matching a FOREIGN-PLATFORM pin, and the synth off-pin branch. Local release-watch
+      deliberately leaves it unset, because testing a candidate toolchain is exactly what off-pin mode
+      exists for (AFD-066, AFD-069) - the flag makes CI strict without taking that away.
+      *** CONTROLS, all three observed ***:
+        off-pin loom + REQUIRE_ON_PIN=1   -> rc=1, "REQUIRE_ON_PIN is set and loom is off-pin"
+        off-pin loom, flag unset          -> rc=0, banner only (release-watch preserved)
+        pinned meld+loom + flag           -> rc=0, ON-PIN
+      *** THE GENERAL LESSON ***: the clean-room's asides are worth verifying, not just its findings. This
+      one read as a minor "FYI, banner-only" next to three reproducible defects, and it was the same
+      defect class one level up - a claim in a name with no check behind it.
+    tags: [unearned-green, ci-gate, on-pin, toolchain-pinning, clean-room-aside, self-correction]
+    fields:
+      detected-by: jess verifying a secondary observation in the AFD-072 clean-room report, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T11:11:18Z

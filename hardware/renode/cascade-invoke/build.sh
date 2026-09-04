@@ -29,6 +29,13 @@ case "$(uname -s)/$(uname -m)" in
   *)             HOST_PLATFORM="unknown" ;;
 esac
 HOST_PLATFORM="${HOST_PLATFORM_OVERRIDE:-$HOST_PLATFORM}"
+# REQUIRE_ON_PIN=1 turns an off-pin toolchain from a PRINTED WARNING into a hard failure.
+# CI sets it. Without it the CI step named "pinned toolchain, fetched" asserted something no
+# check made true: an off-pin build exits 0, so a fetched binary of the wrong version would
+# have passed the gate behind a banner nobody reads — the unearned-green class this campaign
+# keeps finding. Local release-watch deliberately leaves it unset, because testing a
+# CANDIDATE toolchain is exactly what off-pin mode is for.
+REQUIRE_ON_PIN="${REQUIRE_ON_PIN:-0}"
 MELD="${MELD:-}"
 LOOM="${LOOM:-}"
 run_meld() { if [ -n "$MELD" ]; then "$MELD" "$@"; else varve run meld "$@"; fi; }
@@ -58,6 +65,7 @@ else
   echo "!!   pinned synth : $(grep '^fg60/synth' "$ROOT/tools/deps/artifacts.pins" | awk '{print $3}' | sed 's/.*@//;s/!.*//')"
   echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
   echo "!!   not a campaign result, until the pin is updated."
+  [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and synth is off-pin"
 fi
 # An override is NOT automatically off-pin. CI must supply meld/loom as fetched binaries
 # because varve is not available there, and those binaries are byte-identical to what varve
@@ -74,7 +82,11 @@ fi
 announce_tool() {   # $1 = tool name, $2 = path
   [ -n "$2" ] || return 0
   local d line pinplat
-  [ -x "$2" ] || { echo "!! OFF-PIN $1 : $2 is not an executable file"; return 0; }
+  if [ ! -x "$2" ]; then
+    echo "!! OFF-PIN $1 : $2 is not an executable file"
+    [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and $1 is not executable"
+    return 0
+  fi
   if command -v shasum >/dev/null 2>&1; then d="$(shasum -a 256 "$2" 2>/dev/null | cut -d" " -f1)"
   elif command -v sha256sum >/dev/null 2>&1; then d="$(sha256sum "$2" 2>/dev/null | cut -d" " -f1)"
   else fail "cannot verify $1 against its pin: neither shasum nor sha256sum is available"; fi
@@ -85,6 +97,7 @@ announce_tool() {   # $1 = tool name, $2 = path
   if [ -z "$line" ]; then
     echo "!! OFF-PIN $1 : $("$2" --version 2>&1 | head -1)  ($2)"
     echo "!!   digest $d is not a pinned $1 — CANDIDATE differential"
+    [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and $1 is off-pin"
     return 0
   fi
   # The line matched, but a pin is per-platform: a linux digest is not ON-PIN on Darwin.
@@ -92,6 +105,7 @@ announce_tool() {   # $1 = tool name, $2 = path
   case "$line" in *platform=*) pinplat="${line#*platform=}"; pinplat="${pinplat%% *}" ;; esac
   if [ -n "$pinplat" ] && [ "$pinplat" != "$HOST_PLATFORM" ]; then
     echo "!! OFF-PIN $1 : digest matches the $pinplat pin but this host is $HOST_PLATFORM"
+    [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and $1 matches a foreign-platform pin"
     return 0
   fi
   echo "   $1 override matches its pin ($("$2" --version 2>&1 | head -1)) — ON-PIN"
