@@ -3603,3 +3603,51 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T08:55:02Z
+
+  - id: AFD-071
+    type: ai-found-defect
+    title: The on-target oracles are now a CI GATE, not hand-run evidence — the single-platform synth pin that blocked it is gone, and the linux digests were proven from macOS before CI depended on them
+    status: resolved
+    description: |-
+      2026-09-04. AFD-064 D4 recorded that NONE of the cascade-invoke oracles run in CI, so every
+      on-target result this campaign has reported was hand-run evidence rather than an enforced gate.
+      AFD-065 named the blocker: tools/deps/artifacts.pins carried ONE digest for the synth binary, a
+      Mach-O arm64 one, which a linux runner can NEVER satisfy. This removes that blocker and promotes
+      TEST-PIX-032 and TEST-PIX-033 to CI.
+      *** PLATFORM-AWARE PINS ***: artifacts.pins now carries ONE LINE PER PLATFORM for every compiled
+      binary (synth, and now meld and loom), each tagged platform=<triple>. check.sh and fetch.sh act only
+      on the line matching the running host and SKIP the others VISIBLY - a silent skip would make a
+      platform-incomplete pin set look complete.
+      *** THE LINUX DIGESTS WERE PROVEN BEFORE CI DEPENDED ON THEM ***, not after. Added
+      HOST_PLATFORM_OVERRIDE to both scripts and used it to fetch the x86_64-unknown-linux-gnu synth FROM
+      MACOS: the fetch pulled the linux tarball, extracted the binary, and its digest matched the new pin
+      line. That is a real verification of the CI path from a machine that cannot run it. The chain for
+      every new digest is release signature -> tarball -> extracted binary; none was typed in by hand.
+      *** meld AND loom ARE NOW PINNED TOO, and the reason matters ***: varve is not available on a CI
+      runner, so CI must supply them as fetched binaries. VERIFIED 2026-09-04 that the binaries inside the
+      meld v0.52.0 / loom v1.4.0 release tarballs are BYTE-IDENTICAL to what `varve which meld` and
+      `varve which loom` resolve to locally. So a CI measurement is comparable to a developer-machine one
+      rather than merely similar - without that check, "CI runs the pinned toolchain" would have been an
+      assumption.
+      *** AN OVERRIDE IS NO LONGER TREATED AS OFF-PIN ***. build.sh previously announced OFF-PIN whenever
+      MELD/LOOM were supplied at all, which would have made EVERY CI run declare itself a candidate
+      differential and drained the banner of meaning. It now judges by DIGEST against the pins file:
+      matching -> "ON-PIN", not matching -> the OFF-PIN banner naming the digest. Both directions observed
+      - pinned binaries report ON-PIN, loom 1.4.1 still reports OFF-PIN.
+      *** A PORTABILITY BUG FIXED BEFORE IT COULD FAIL IN CI ***: check.sh, fetch.sh and build.sh all
+      hardcoded `shasum`, which macOS ships (perl) and Linux does not guarantee. On a runner without perl
+      every one of them would have failed for a reason unrelated to the artifacts. All three now select
+      shasum or sha256sum at startup and refuse if neither exists.
+      *** WHAT IS AND IS NOT VERIFIED ***: everything above was exercised on macOS, including the linux
+      PIN via the override. The linux JOB ITSELF - apt gcc-arm-none-eabi, the Renode portable tarball,
+      oras, and the oracles running under them - is UNTESTED until this PR's CI runs. That is the honest
+      status: the PR is the test. If it fails, the failure is the finding.
+    tags: [ci-gate, afd-064-d4, platform-pins, reproducibility, toolchain-pinning, portability, on-target]
+    fields:
+      detected-by: jess closing AFD-064 D4, the last named blocker to enforcing the on-target oracles, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T10:48:46Z

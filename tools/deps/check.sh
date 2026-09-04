@@ -27,11 +27,45 @@ done
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 PINS="$ROOT/tools/deps/artifacts.pins"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
+
+# A pin may be platform-specific (a compiled binary has a different digest per host). Such
+# a line carries `platform=<triple>` and is acted on ONLY when it matches the running host;
+# the others are skipped visibly. Without this, a linux pin reads as ABSENT on macOS and
+# vice versa, which is what kept the on-target oracles out of CI (AFD-064 D4).
+# HOST_PLATFORM may be overridden to EXERCISE another platform's pin from this host. That
+# is not a convenience: it is how the linux pin gets proven correct before CI depends on it,
+# without waiting for a red CI run to discover a typo'd digest.
+case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64)  HOST_PLATFORM="aarch64-apple-darwin" ;;
+  Darwin/x86_64) HOST_PLATFORM="x86_64-apple-darwin" ;;
+  Linux/aarch64) HOST_PLATFORM="aarch64-unknown-linux-gnu" ;;
+  Linux/x86_64)  HOST_PLATFORM="x86_64-unknown-linux-gnu" ;;
+  *)             HOST_PLATFORM="unknown" ;;
+esac
+HOST_PLATFORM="${HOST_PLATFORM_OVERRIDE:-$HOST_PLATFORM}"
+# sha256 helper. macOS ships `shasum` (perl); Linux ships `sha256sum` and only has `shasum`
+# if perl happens to be installed. Hardcoding either one makes this script fail on the other
+# platform for a reason that has nothing to do with the artifacts — and this file is about to
+# run on a linux CI runner.
+if command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$1" 2>/dev/null | cut -d" " -f1; }
+elif command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$1" 2>/dev/null | cut -d" " -f1; }
+else
+  echo "FAIL: neither shasum nor sha256sum is available" >&2; exit 1
+fi
+
 [ -f "$PINS" ] || { echo "FAIL: $PINS missing" >&2; exit 1; }
 
-miss=0; bad=0; ok=0
-while read -r path want src; do
+miss=0; bad=0; ok=0; skipped=0
+while read -r path want src rest; do
   case "${path:-}" in ''|'#'*|'['*) continue ;; esac
+  pin_platform=""
+  case "${src:-} ${rest:-}" in *platform=*) pin_platform="${src} ${rest}"; pin_platform="${pin_platform#*platform=}"; pin_platform="${pin_platform%% *}" ;; esac
+  if [ -n "$pin_platform" ] && [ "$pin_platform" != "$HOST_PLATFORM" ]; then
+    printf '  skip     %-32s  pinned for %s, host is %s\n' "$path" "$pin_platform" "$HOST_PLATFORM"
+    skipped=$((skipped+1)); continue
+  fi
   [ -z "$ONLY" ]    || case "$path" in *"$ONLY"*) : ;; *) continue ;; esac
   if [ -n "$EXCLUDE" ]; then
     case "$path" in *"$EXCLUDE"*) printf '  EXCLUDED %-32s  (caller set this pin aside)\n' "$path"; continue ;; esac
@@ -40,7 +74,7 @@ while read -r path want src; do
   if [ ! -f "$f" ]; then
     printf '  ABSENT   %-32s  %s\n' "$path" "$src"; miss=$((miss+1)); continue
   fi
-  got="$(shasum -a 256 "$f" | cut -d' ' -f1)"
+  got="$(sha256 "$f")"
   if [ "$got" = "$want" ]; then
     printf '  ok       %-32s  %s\n' "$path" "${want:0:16}…"; ok=$((ok+1))
   else
@@ -62,4 +96,4 @@ if [ "$miss" -gt 0 ]; then
 fi
 # Refuse to report a green on an empty pin file.
 [ "$ok" -gt 0 ] || { echo "FAIL: no pins were checked — an empty verification is not a pass" >&2; exit 1; }
-echo "all $ok pinned artifact(s) present and matching"
+echo "all $ok pinned artifact(s) present and matching${skipped:+ ($skipped skipped for other platforms)}"

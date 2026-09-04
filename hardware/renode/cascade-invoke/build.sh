@@ -51,10 +51,25 @@ else
   echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
   echo "!!   not a campaign result, until the pin is updated."
 fi
-# meld/loom are dispatched through varve by default, so an override here is the ONLY way
-# they can be off-pin — announce it whenever it happens, on the pinned-synth path too.
-[ -z "$MELD" ] || echo "!! OFF-PIN meld : $("$MELD" --version 2>&1 | head -1)  ($MELD)"
-[ -z "$LOOM" ] || echo "!! OFF-PIN loom : $("$LOOM" --version 2>&1 | head -1)  ($LOOM)"
+# An override is NOT automatically off-pin. CI must supply meld/loom as fetched binaries
+# because varve is not available there, and those binaries are byte-identical to what varve
+# dispatches locally (verified, and pinned in artifacts.pins). So judge by DIGEST, not by
+# "was an override used" — otherwise every CI run would announce itself as a candidate
+# differential and the banner would stop meaning anything.
+announce_tool() {   # $1 = name, $2 = path
+  [ -n "$2" ] || return 0
+  local d
+  if command -v shasum >/dev/null 2>&1; then d="$(shasum -a 256 "$2" 2>/dev/null | cut -d" " -f1)"
+  else d="$(sha256sum "$2" 2>/dev/null | cut -d" " -f1)"; fi
+  if grep -q "^$1/$1 *$d " "$ROOT/tools/deps/artifacts.pins" 2>/dev/null; then
+    echo "   $1 override matches its pin ($("$2" --version 2>&1 | head -1)) — ON-PIN"
+  else
+    echo "!! OFF-PIN $1 : $("$2" --version 2>&1 | head -1)  ($2)"
+    echo "!!   digest $d is not a pinned $1 for this platform — CANDIDATE differential"
+  fi
+}
+announce_tool meld "$MELD"
+announce_tool loom "$LOOM"
 
 echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
 run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \

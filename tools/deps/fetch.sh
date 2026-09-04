@@ -32,6 +32,9 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # The host triple the platform-specific pins are expressed against.
+# HOST_PLATFORM may be overridden to EXERCISE another platform's pin from this host. That
+# is not a convenience: it is how the linux pin gets proven correct before CI depends on it,
+# without waiting for a red CI run to discover a typo'd digest.
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64)  HOST_PLATFORM="aarch64-apple-darwin" ;;
   Darwin/x86_64) HOST_PLATFORM="x86_64-apple-darwin" ;;
@@ -39,11 +42,24 @@ case "$(uname -s)/$(uname -m)" in
   Linux/x86_64)  HOST_PLATFORM="x86_64-unknown-linux-gnu" ;;
   *)             HOST_PLATFORM="unknown" ;;
 esac
+HOST_PLATFORM="${HOST_PLATFORM_OVERRIDE:-$HOST_PLATFORM}"
 
 [ -f "$PINS" ] || fail "no pin file at $PINS"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-digest_of() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1; }
+# sha256 helper. macOS ships `shasum` (perl); Linux ships `sha256sum` and only has `shasum`
+# if perl happens to be installed. Hardcoding either one makes this script fail on the other
+# platform for a reason that has nothing to do with the artifacts — and this file is about to
+# run on a linux CI runner.
+if command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$1" 2>/dev/null | cut -d" " -f1; }
+elif command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$1" 2>/dev/null | cut -d" " -f1; }
+else
+  echo "FAIL: neither shasum nor sha256sum is available" >&2; exit 1
+fi
+
+digest_of() { sha256 "$1"; }
 
 considered=0 fetched=0 skipped=0 already=0
 

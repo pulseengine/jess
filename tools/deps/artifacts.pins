@@ -28,11 +28,15 @@
 #   release:<owner>/<repo>@<tag>!<asset>[!<member-inside-tarball>]
 #   oci:<ref>!<file-in-artifact>
 #
-# PLATFORM CAVEAT: fg60/synth is a Mach-O arm64 BINARY. Its digest is satisfiable only on
-# aarch64-apple-darwin, so `platform=` records which host the pin is for and check.sh's
-# green means nothing about a linux runner. Any CI use must verify against the release's
-# own signed SHA256SUMS.txt instead. This is why the on-target oracles are not yet a CI
-# gate (AFD-064 D4).
+# PLATFORM-SPECIFIC PINS: fg60/synth is a compiled BINARY, so its digest differs per host.
+# There is therefore ONE LINE PER PLATFORM, each tagged `platform=`, and both check.sh and
+# fetch.sh act only on the line matching the running host and SKIP the others visibly. A
+# single-platform pin was what blocked the on-target oracles from becoming a CI gate
+# (AFD-064 D4): a linux runner could never satisfy a Mach-O digest.
+#
+# Each linux digest below was taken from the binary inside the platform tarball AFTER
+# verifying that tarball against the release's own signed SHA256SUMS.txt — so the chain is
+# release signature -> tarball -> extracted binary, not a digest someone typed in.
 
 [falcon-v1.134.1]
 v1341/rate.wasm              43982be498c0e4a2b03ce6a56a06496cb46dcdc98fdf8bf8cbd610a1d891ae63  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-rate-v1.134.wasm
@@ -47,4 +51,16 @@ galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310b
 [synth]
 # NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.60.0.
 # That divergence is real and is why this is pinned by digest here (AFD-053 S5).
-fg60/synth                   01dd072f1ae31dac9a1cffd0ac00ea4d343d044f2d91ff489b3844a22da33759  release:pulseengine/synth@v0.60.0!synth-v0.60.0-{PLATFORM}.tar.gz!synth  platform=aarch64-apple-darwin
+fg60/synth                   01dd072f1ae31dac9a1cffd0ac00ea4d343d044f2d91ff489b3844a22da33759  release:pulseengine/synth@v0.60.0!synth-v0.60.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
+fg60/synth                   8f7266f659cf1ef4687381563d4f6f1339dc2ee8382e33bf5af9d8886c81c743  release:pulseengine/synth@v0.60.0!synth-v0.60.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
+
+[toolchain]
+# The lowering toolchain, pinned per platform so a CI runner can reconstruct the SAME BYTES
+# the varve layer dispatches locally. VERIFIED 2026-09-04: the binaries inside these release
+# tarballs are byte-identical to what `varve which meld` / `varve which loom` resolve to, so
+# a result measured in CI is comparable to one measured on a developer machine rather than
+# merely similar.
+meld/meld                    88fb38bd1e796632b4b55c5bafc3fa82fde89fbf391171db2d72a41fd28aac6b  release:pulseengine/meld@v0.52.0!meld-v0.52.0-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
+meld/meld                    29a052d582374f4da06c4a79fbbb5b40df589442899e3c8edaf7f079b2d47020  release:pulseengine/meld@v0.52.0!meld-v0.52.0-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
+loom/loom                    9583f530baa0d6f0a0c140b5247ac618d9d56bcbf8d42e0c8a1ba5a2a20af6f6  release:pulseengine/loom@v1.4.0!loom-v1.4.0-aarch64-apple-darwin.tar.gz!loom      platform=aarch64-apple-darwin
+loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc6fb5df15c5380  release:pulseengine/loom@v1.4.0!loom-v1.4.0-x86_64-unknown-linux-gnu.tar.gz!loom  platform=x86_64-unknown-linux-gnu
