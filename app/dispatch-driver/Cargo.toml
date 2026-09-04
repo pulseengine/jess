@@ -1,0 +1,17 @@
+[package]
+name = "jess-dispatch-driver"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+jess-bump-alloc = { path = "../bump-alloc" }
+wit-bindgen = { version = "0.52", default-features = false, features = ["macros", "realloc", "bitflags"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"

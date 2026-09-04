@@ -1,0 +1,7 @@
+package jess:gust-dispatch-probe@0.1.0;
+
+interface probe {
+    polls: func() -> u32;
+    last-id: func() -> u32;
+    id-mask: func() -> u32;
+}

@@ -1,0 +1,32 @@
+package jess:dispatch-driver@0.1.0;
+
+// Drives gale-nano's dispatch loop from INSIDE the component graph, because each
+// `wasmtime run --invoke` is a fresh instantiation — admit / poll-round / read-back
+// cannot span three CLI calls. Running the sequence in one exported function keeps it
+// in one instance; using SEPARATE exported functions for the two experiments keeps each
+// one's instance fresh, which is what makes them a valid negative-control pair.
+world driver {
+    import gust:os/exec@0.1.0;
+    import jess:gust-dispatch-probe/probe@0.1.0;
+
+    /// admit a task, then poll-round. Returns the poll-task count observed.
+    export with-admit: func() -> u32;
+    /// poll-round with NO task admitted. Returns the poll-task count observed.
+    /// Differs from with-admit in EXACTLY ONE variable: the admit call.
+    export without-admit: func() -> u32;
+    /// the handle admit returned, and the id poll-task actually saw
+    export admitted-handle: func() -> u32;
+    export observed-id: func() -> u32;
+    /// admit TWO tasks, then ONE poll-round. Tests "drain EVERY ready task".
+    export two-tasks-one-round: func() -> u32;
+    /// admit ONE task, then TWO poll-rounds. Tests "exactly once": poll-task reports 0
+    /// (complete), so a completed task must not be re-polled by the next round.
+    export one-task-two-rounds: func() -> u32;
+    /// gale's OWN view of the task after one round — exec.state(handle).
+    export state-after-round: func() -> u32;
+    /// exec.state(handle) BEFORE any round, for comparison.
+    export state-before-round: func() -> u32;
+    /// poll-round with NO task, then read last-id. Proves the "never called" sentinel is
+    /// reachable, so `observed-id() == 0` means "id 0" and not "nothing was recorded".
+    export unpolled-id: func() -> u32;
+}
