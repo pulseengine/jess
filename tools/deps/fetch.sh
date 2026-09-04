@@ -32,6 +32,9 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # The host triple the platform-specific pins are expressed against.
+# HOST_PLATFORM may be overridden to EXERCISE another platform's pin from this host. That
+# is not a convenience: it is how the linux pin gets proven correct before CI depends on it,
+# without waiting for a red CI run to discover a typo'd digest.
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64)  HOST_PLATFORM="aarch64-apple-darwin" ;;
   Darwin/x86_64) HOST_PLATFORM="x86_64-apple-darwin" ;;
@@ -39,11 +42,24 @@ case "$(uname -s)/$(uname -m)" in
   Linux/x86_64)  HOST_PLATFORM="x86_64-unknown-linux-gnu" ;;
   *)             HOST_PLATFORM="unknown" ;;
 esac
+HOST_PLATFORM="${HOST_PLATFORM_OVERRIDE:-$HOST_PLATFORM}"
 
 [ -f "$PINS" ] || fail "no pin file at $PINS"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-digest_of() { shasum -a 256 "$1" 2>/dev/null | cut -d' ' -f1; }
+# sha256 helper. macOS ships `shasum` (perl); Linux ships `sha256sum` and only has `shasum`
+# if perl happens to be installed. Hardcoding either one makes this script fail on the other
+# platform for a reason that has nothing to do with the artifacts — and this file is about to
+# run on a linux CI runner.
+if command -v shasum >/dev/null 2>&1; then
+  sha256() { shasum -a 256 "$1" 2>/dev/null | cut -d" " -f1; }
+elif command -v sha256sum >/dev/null 2>&1; then
+  sha256() { sha256sum "$1" 2>/dev/null | cut -d" " -f1; }
+else
+  echo "FAIL: neither shasum nor sha256sum is available" >&2; exit 1
+fi
+
+digest_of() { sha256 "$1"; }
 
 considered=0 fetched=0 skipped=0 already=0
 
@@ -53,12 +69,22 @@ while read -r path want locator rest; do
   [ -z "$ONLY" ] || case "$path" in *"$ONLY"*) : ;; *) continue ;; esac
   considered=$((considered+1))
 
+  # The dest path comes from a PR-editable file and this script runs in CI with a token.
+  # `../../x` escaped DEST and still reported success (clean-room verification). Confine it.
+  case "$path" in
+    /*|*..*|*'$('*|*'`'*)
+      fail "pin path '$path' escapes the destination tree or contains a substitution — refusing" ;;
+  esac
+
   out="$DEST/$path"
 
   # A pin may be platform-specific (a compiled binary). Its digest is unsatisfiable on any
   # other host, so SKIP it loudly rather than fetching bytes that can never match.
+  # Parse from locator+remainder, matching check.sh exactly. check.sh looked at both while
+  # this looked only at `rest`, so a `platform=` placed before the locator made check.sh skip
+  # silently while fetch.sh hard-failed — two scripts disagreeing about one file's grammar.
   pin_platform=""
-  case "$rest" in *platform=*) pin_platform="${rest#*platform=}"; pin_platform="${pin_platform%% *}" ;; esac
+  case "$locator $rest" in *platform=*) pin_platform="${locator} ${rest}"; pin_platform="${pin_platform#*platform=}"; pin_platform="${pin_platform%% *}" ;; esac
   if [ -n "$pin_platform" ] && [ "$pin_platform" != "$HOST_PLATFORM" ]; then
     echo "  skip     $path — pinned for $pin_platform, host is $HOST_PLATFORM"
     skipped=$((skipped+1)); continue

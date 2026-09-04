@@ -21,6 +21,14 @@ PY="${PY:-python3}"
 # synth only, which meant loom and meld could not be release-watched at all without editing
 # this file — measured the hard way while testing loom v1.4.1 (AFD-069), where the test had
 # to run from a scratch copy of this script.
+case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64)  HOST_PLATFORM="aarch64-apple-darwin" ;;
+  Darwin/x86_64) HOST_PLATFORM="x86_64-apple-darwin" ;;
+  Linux/aarch64) HOST_PLATFORM="aarch64-unknown-linux-gnu" ;;
+  Linux/x86_64)  HOST_PLATFORM="x86_64-unknown-linux-gnu" ;;
+  *)             HOST_PLATFORM="unknown" ;;
+esac
+HOST_PLATFORM="${HOST_PLATFORM_OVERRIDE:-$HOST_PLATFORM}"
 MELD="${MELD:-}"
 LOOM="${LOOM:-}"
 run_meld() { if [ -n "$MELD" ]; then "$MELD" "$@"; else varve run meld "$@"; fi; }
@@ -51,10 +59,45 @@ else
   echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
   echo "!!   not a campaign result, until the pin is updated."
 fi
-# meld/loom are dispatched through varve by default, so an override here is the ONLY way
-# they can be off-pin — announce it whenever it happens, on the pinned-synth path too.
-[ -z "$MELD" ] || echo "!! OFF-PIN meld : $("$MELD" --version 2>&1 | head -1)  ($MELD)"
-[ -z "$LOOM" ] || echo "!! OFF-PIN loom : $("$LOOM" --version 2>&1 | head -1)  ($LOOM)"
+# An override is NOT automatically off-pin. CI must supply meld/loom as fetched binaries
+# because varve is not available there, and those binaries are byte-identical to what varve
+# dispatches locally (verified, and pinned in artifacts.pins). So judge by DIGEST, not by
+# "was an override used" — otherwise every CI run would announce itself as a candidate
+# differential and the banner would stop meaning anything.
+# Judge an override by DIGEST against the pins file. Three traps, all found by clean-room
+# verification and all reachable end-to-end before this rewrite:
+#   1. An empty digest (binary missing/unreadable) made the BRE collapse to `^meld/meld * `
+#      which MATCHES the real pin line — so a nonexistent binary reported ON-PIN.
+#   2. The match ignored `platform=`, so a LINUX digest reported ON-PIN on a Darwin host.
+#   3. There was no "neither shasum nor sha256sum" refusal, so on a host with no hasher
+#      EVERY binary reported ON-PIN — including /bin/ls.
+announce_tool() {   # $1 = tool name, $2 = path
+  [ -n "$2" ] || return 0
+  local d line pinplat
+  [ -x "$2" ] || { echo "!! OFF-PIN $1 : $2 is not an executable file"; return 0; }
+  if command -v shasum >/dev/null 2>&1; then d="$(shasum -a 256 "$2" 2>/dev/null | cut -d" " -f1)"
+  elif command -v sha256sum >/dev/null 2>&1; then d="$(sha256sum "$2" 2>/dev/null | cut -d" " -f1)"
+  else fail "cannot verify $1 against its pin: neither shasum nor sha256sum is available"; fi
+  # A 64-hex digest or nothing. Never let an empty value reach the matcher.
+  case "$d" in [0-9a-f][0-9a-f]*) : ;; *) echo "!! OFF-PIN $1 : could not digest $2"; return 0 ;; esac
+  [ "${#d}" -eq 64 ] || { echo "!! OFF-PIN $1 : digest of $2 is not sha256"; return 0; }
+  line="$(grep -E "^$1/$1[[:space:]]+$d([[:space:]]|\$)" "$ROOT/tools/deps/artifacts.pins" 2>/dev/null | head -1)"
+  if [ -z "$line" ]; then
+    echo "!! OFF-PIN $1 : $("$2" --version 2>&1 | head -1)  ($2)"
+    echo "!!   digest $d is not a pinned $1 — CANDIDATE differential"
+    return 0
+  fi
+  # The line matched, but a pin is per-platform: a linux digest is not ON-PIN on Darwin.
+  pinplat=""
+  case "$line" in *platform=*) pinplat="${line#*platform=}"; pinplat="${pinplat%% *}" ;; esac
+  if [ -n "$pinplat" ] && [ "$pinplat" != "$HOST_PLATFORM" ]; then
+    echo "!! OFF-PIN $1 : digest matches the $pinplat pin but this host is $HOST_PLATFORM"
+    return 0
+  fi
+  echo "   $1 override matches its pin ($("$2" --version 2>&1 | head -1)) — ON-PIN"
+}
+announce_tool meld "$MELD"
+announce_tool loom "$LOOM"
 
 echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
 run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \

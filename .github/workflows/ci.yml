@@ -172,6 +172,88 @@ jobs:
       - name: FUSED falcon cascade on the RT1176 M7 (TEST-PIX-031)
         run: /tmp/renode/renode-test hardware/renode/cascade-m7/falcon-cascade-m7.robot
 
+  # TEST-PIX-032 / TEST-PIX-033 — the ON-TARGET oracles, promoted from local evidence to a
+  # GATE. AFD-064 D4 recorded that none of the cascade-invoke oracles ran in CI, so every
+  # on-target result this campaign reported was hand-run. The blocker was that the synth pin
+  # was a single Mach-O digest no linux runner could satisfy; artifacts.pins now carries one
+  # line per platform (AFD-071) and the linux digests were proven from macOS via
+  # HOST_PLATFORM_OVERRIDE before this job was written.
+  #
+  # The toolchain here is FETCHED rather than varve-dispatched, because varve is not on the
+  # runner. Those fetched binaries are byte-identical to what varve dispatches locally
+  # (verified), so a CI result is comparable to a developer-machine result, and build.sh
+  # judges ON-PIN by digest rather than by "an override was used".
+  on-target-oracles:
+    name: on-target cascade oracles (TEST-PIX-032 / TEST-PIX-033)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: arm-none-eabi toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-arm-none-eabi binutils-arm-none-eabi
+          arm-none-eabi-gcc --version | head -1
+      - name: Renode (pinned portable)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o renode.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
+          mkdir -p renode && tar xzf renode.tgz -C renode --strip-components=1
+          test -x /tmp/renode/renode
+      - name: oras (for the gale-nano OCI pin)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o oras.tgz https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
+          mkdir -p orasbin && tar xzf oras.tgz -C orasbin
+          sudo install -m755 orasbin/oras /usr/local/bin/oras
+          oras version | head -2
+      - name: wasm-tools (pinned to the version used locally)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o wt.tgz https://github.com/bytecodealliance/wasm-tools/releases/download/v1.245.1/wasm-tools-1.245.1-x86_64-linux.tar.gz
+          mkdir -p wt && tar xzf wt.tgz -C wt --strip-components=1
+          sudo install -m755 wt/wasm-tools /usr/local/bin/wasm-tools
+          wasm-tools --version
+      - name: wasmtime python module
+        run: pip install -q -r tools/cascade-differential/requirements.txt
+      # PREFLIGHT. The first run of this job failed at build step 2 with "wasm-tools not on
+      # PATH" — a dependency this job simply did not install. Failing there wastes a full
+      # fetch and build; worse, it names one missing tool at a time. Assert the whole set up
+      # front so a gap is reported once, by name, before any work is done.
+      - name: preflight — every tool the oracles invoke
+        run: |
+          set -euo pipefail
+          missing=""
+          for t in arm-none-eabi-gcc arm-none-eabi-ld arm-none-eabi-nm arm-none-eabi-objcopy \
+                   arm-none-eabi-objdump wasm-tools perl python3 oras gh; do
+            command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+          done
+          [ -x /tmp/renode/renode ] || missing="$missing renode"
+          python3 -c 'import wasmtime' 2>/dev/null || missing="$missing python-wasmtime-module"
+          if [ -n "$missing" ]; then echo "MISSING:$missing" >&2; exit 1; fi
+          echo "all oracle dependencies present"
+      - name: fetch every pinned artifact from a clean checkout
+        run: tools/deps/fetch.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: build the cascade image (pinned toolchain, fetched)
+        run: |
+          set -euo pipefail
+          MELD=.scratch/meld/meld LOOM=.scratch/loom/loom \
+            hardware/renode/cascade-invoke/build.sh
+      # The gate. A wrong lowering, a broken embedder promise, or a stale image all fail here.
+      - name: TEST-PIX-032 — cascade stage executes and matches relay's SIL reference
+        run: hardware/renode/cascade-invoke/run-oracle.sh
+        env:
+          RENODE: /tmp/renode/renode
+      - name: TEST-PIX-033 — 64-tick soak tracks the wasmtime reference
+        run: hardware/renode/cascade-invoke/run-soak-oracle.sh
+        env:
+          RENODE: /tmp/renode/renode
+
   # REQ-PIX-018 leg b (TEST-PIX-022) — the DO-333 sound-static-analysis leg of
   # the V, on the CONSUMED (stripped) falcon wasm: fetch a pinned falcon
   # component -> meld fuse -> scry (scry-sai-core) analyze -> assert the analysis

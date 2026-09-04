@@ -22,8 +22,12 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # A per-run temp file. These were fixed paths named after the HAND-INVENTED ids
 # (tp34/tp35) that were never rivet ids; two concurrent oracle runs also clobbered
 # each other's script. Both found by clean-room verification.
-RESC="$(mktemp -t jess-oracle.XXXXXX).resc"
-trap 'rm -f "$RESC"' EXIT
+# `mktemp -d` + a fixed name inside, rather than `mktemp -t TEMPLATE`: the -t form means
+# different things to BSD and GNU mktemp, and this script is now run on a linux CI runner
+# as well as macOS. -d is unambiguous on both.
+RESCDIR="$(mktemp -d)"
+RESC="$RESCDIR/oracle.resc"
+trap 'rm -rf "$RESCDIR"' EXIT
 [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
 [ -f "$E" ] || fail "image missing — run build.sh first"
 
@@ -103,15 +107,30 @@ echo "   perturbed wy -> tx ${N1[1]} ty ${N1[2]} tz ${N1[3]} thrust ${N1[4]}  (D
 echo "== NC2: skip the embedder init — the result must be WRONG =="
 [ -f "$SCRATCH/invoke/nc2.elf" ] || fail "nc2.elf missing — build.sh must emit it"
 N2=($(read_words "$SCRATCH/invoke/nc2.elf"))
-if [ "${#N2[@]}" -ge 10 ]; then
-  match=1; for i in 1 2 3 4 6 7 8 9; do [ "${N2[$i]}" = "${W[$i]}" ] || match=0; done
-  [ "$match" = "0" ] || fail "VACUOUS: skipping data-segment + globals init changed NOTHING — the embedder obligations are not load-bearing here, so this test proves nothing about them"
-  echo "   without init -> tx ${N2[1]} ty ${N2[2]} tz ${N2[3]} thrust ${N2[4]}  (WRONG, as required)"
+# NO else-branch. This previously accepted "the harness did not complete" as an acceptable
+# outcome and then printed the full PASS banner claiming the embedder init is load-bearing.
+# Clean-room verification drove it by substituting a NON-ELF for nc2.elf: the read returned
+# nothing, the control was silently waived, and the oracle exited 0 with the attribution
+# banner intact. A control that passes when its subject produced no data is not a control —
+# and this step is now a CI gate. Same class as AFD-048.
+[ "${#N2[@]}" -ge 10 ] || fail "NC2 produced no result block — a control that yields NO DATA cannot support the claim that the embedder init is load-bearing (is nc2.elf a valid image?)"
+match=1; for i in 1 2 3 4 6 7 8 9; do [ "${N2[$i]}" = "${W[$i]}" ] || match=0; done
+[ "$match" = "0" ] || fail "VACUOUS: skipping data-segment + globals init changed NOTHING — the embedder obligations are not load-bearing here, so this test proves nothing about them"
+# ...and it must be a WRONG ANSWER, not a collapse to zero. An all-zero result is what ANY
+# image that produced no output reports, so it cannot attribute the difference to the
+# embedder init — run-soak-oracle.sh guards exactly this with NULL_FOLD (AFD-064 D1).
+allzero=1; for i in 1 2 3 4 6 7 8 9; do [ "${N2[$i]}" = "0x00000000" ] || allzero=0; done
+if [ "$allzero" = "1" ]; then
+  echo "   without init -> ALL ZERO. This shows the image produced nothing, NOT that the"
+  echo "   embedder promises are load-bearing: an image that never ran reports the same."
+  echo "   Treated as LIVENESS ONLY, exactly as run-soak-oracle.sh labels its equivalent."
 else
-  echo "   without init -> the harness did not complete (also an acceptable failure mode)"
+  echo "   without init -> tx ${N2[1]} ty ${N2[2]} tz ${N2[3]} thrust ${N2[4]}  (WRONG, as required)"
 fi
 
 echo
 echo "PASS — a TWO-STAGE falcon chain (rate -> mixer) EXECUTED on emulated RT1176 Cortex-M7."
 echo "       Both stages reproduce their references bit-exact from a single invocation;"
-echo "       a perturbed input moves them, and removing the embedder init breaks them."
+echo "       a perturbed input moves them (NC1 — attributive), and removing the embedder"
+echo "       init changes the result (NC2 — see its own line for whether that is attribution"
+echo "       or liveness only)."
