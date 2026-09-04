@@ -17,6 +17,14 @@ SCRATCH="${SCRATCH:-$ROOT/.scratch}"
 OUT="${OUT:-$SCRATCH/invoke}"; mkdir -p "$OUT"
 SYNTH="${SYNTH:-$SCRATCH/fg60/synth}"
 PY="${PY:-python3}"
+# RELEASE-WATCH overrides. Empty = use the varve-pinned dispatch. AFD-066 added this for
+# synth only, which meant loom and meld could not be release-watched at all without editing
+# this file — measured the hard way while testing loom v1.4.1 (AFD-069), where the test had
+# to run from a scratch copy of this script.
+MELD="${MELD:-}"
+LOOM="${LOOM:-}"
+run_meld() { if [ -n "$MELD" ]; then "$MELD" "$@"; else varve run meld "$@"; fi; }
+run_loom() { if [ -n "$LOOM" ]; then "$LOOM" "$@"; else varve run loom "$@"; fi; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 [ -x "$SYNTH" ] || fail "synth not at $SYNTH"
@@ -43,11 +51,15 @@ else
   echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
   echo "!!   not a campaign result, until the pin is updated."
 fi
+# meld/loom are dispatched through varve by default, so an override here is the ONLY way
+# they can be off-pin — announce it whenever it happens, on the pinned-synth path too.
+[ -z "$MELD" ] || echo "!! OFF-PIN meld : $("$MELD" --version 2>&1 | head -1)  ($MELD)"
+[ -z "$LOOM" ] || echo "!! OFF-PIN loom : $("$LOOM" --version 2>&1 | head -1)  ($LOOM)"
 
 echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
-varve run meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
     --memory shared --pack-rebase -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
-varve run loom optimize "$OUT/c.wasm" -o "$OUT/c.loom.wasm" >"$OUT/loom.log" 2>&1 || fail "loom"
+run_loom optimize "$OUT/c.wasm" -o "$OUT/c.loom.wasm" >"$OUT/loom.log" 2>&1 || fail "loom"
 "$SYNTH" compile "$OUT/c.loom.wasm" -t cortex-m7dp --cortex-m --relocatable \
     --embedder-data-init --embedder-global-init -o "$OUT/cascade.o" >"$OUT/synth.log" 2>&1 || fail "synth"
 

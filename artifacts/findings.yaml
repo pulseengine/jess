@@ -3522,3 +3522,84 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T07:54:47Z
+
+  - id: AFD-069
+    type: ai-found-defect
+    title: loom v1.4.1 is behaviourally equivalent but STRUCTURALLY different — 4 more functions, +196 B of ARM, and the 64-tick flight result is bit-identical
+    status: resolved
+    description: |-
+      2026-09-04. Release-watch, per-piece, against the REAL fused falcon cascade. Unlike synth v0.61.0
+      (AFD-066) and meld v0.53.0 (AFD-068), which were byte-identical, loom v1.4.1 GENUINELY CHANGES ITS
+      OUTPUT — and the flight answer is unchanged anyway, which is the stronger result because something
+      could have broken.
+      *** METHOD ***: the input was a `--reproducible` meld fusion, so the upstream nondeterminism
+      characterised in AFD-066 could not confound the comparison. SELF-CHECK FIRST: loom 1.4.0 run twice
+      on that fixed input is BYTE-IDENTICAL, so loom itself is deterministic and a cross-version
+      difference is attributable.
+      *** WHAT CHANGED (wasm) ***:
+        loom 1.4.0   31 functions, code 15,926 B, module 61,167 B
+        loom 1.4.1   35 functions, code 16,018 B, module 61,263 B
+        data (43,100 B) and globals (84 B) IDENTICAL; 16,913 differing bytes overall
+      1.4.1 retains FOUR MORE FUNCTIONS than 1.4.0 eliminated.
+      *** WHAT CHANGED (ARM, cortex-m7dp via synth 0.60.0) ***:
+        invoke.elf  89,752 B -> 89,948 B   (+196 B)
+        soak.elf    89,704 B -> 89,900 B   (+196 B)
+      *** WHAT DID NOT CHANGE — the point ***: the 64-tick soak on emulated RT1176 reproduces
+        tick 1  0x00000000 0x00000000 0x3EB2AF18 0x3F800000
+        tick 64 0x3ED89353 0x3EB9A587 0x3F176935 0x3F1F7A5F
+        fold    0x3466E91F
+      IDENTICALLY under both loom versions, and each build matches its OWN wasmtime reference bit-exact.
+      So loom v1.4.1 is BEHAVIOURALLY EQUIVALENT AND STRUCTURALLY DIFFERENT on jess's path.
+      *** THE FOOTPRINT DATUM IS WORTH REPORTING UPSTREAM ***: +196 bytes of ARM on a flight target, from
+      four functions 1.4.0 removed and 1.4.1 keeps. loom may not know its optimiser change shows up that
+      way downstream; jess is the consumer that can measure it.
+      *** MACHINERY GAP THIS EXPOSED, NOW FIXED ***: AFD-066 made release-watch executable for SYNTH ONLY.
+      meld and loom were hardcoded to `varve run`, so a loom candidate could not be tested without editing
+      build.sh — this measurement had to be taken from a SCRATCH COPY of the script with its paths
+      hardcoded, specifically to avoid contaminating an open PR. build.sh now takes MELD= and LOOM=
+      overrides (empty = the varve-pinned dispatch) and ANNOUNCES any off-pin tool, on the pinned-synth
+      path too, since an override is the only way those two can be off-pin. Verified both directions: the
+      pinned path prints no banner, the loom override prints one and reproduces the same 89,900 B image
+      the scratch copy produced.
+    tags: [release-watch, loom-1.4.1, codegen-change, footprint, behaviour-preserved, self-checked-control, machinery-gap]
+    fields:
+      detected-by: jess release-watch on the real fused falcon, 2026-09-04
+      severity: info
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T08:55:02Z
+
+  - id: AFD-070
+    type: ai-found-defect
+    title: falcon-v1.135.0 changes NOTHING jess consumes — all five stage components byte-identical to v1.134.1; the single changed asset is the P3 stream artifact relay#202 is about
+    status: resolved
+    description: |-
+      2026-09-04. Release-watch. relay shipped falcon-v1.135.0 while jess pins falcon-v1.134.1. Checked
+      whether a re-lowering and a fresh on-target differential were needed BEFORE doing either.
+      *** RESULT: every component jess consumes is BYTE-IDENTICAL between the two releases. ***
+        rate      43982be498c0e4a2…  UNCHANGED
+        mixer     076b8a816493e199…  UNCHANGED
+        attitude  d85c325f7564145b…  UNCHANGED
+        position  32a45a53aa9fa3a4…  UNCHANGED
+        iekf      600f9047dba73f27…  UNCHANGED
+      Comparing EVERY wasm asset in the two component tarballs, exactly ONE differs:
+        falcon-cascade-stream-fused-v1.13X.wasm   DIFFERS
+        (cascade, flight, ekf, cascade-stream-composed and all five stages: same)
+      *** CONSEQUENCE ***: no re-lowering, no new differential, and jess's v1.134.1 pins remain valid for
+      v1.135.0. The cheapest possible release-watch answer, obtained by comparing digests rather than by
+      rebuilding — and obtained BEFORE spending a build on it.
+      *** THE ONE CHANGED ARTIFACT IS THE P3 STREAM ONE ***, which is the subject of relay#202 ("P3 stream
+      artifacts — intended consumer?"). jess does NOT consume falcon-cascade-stream-fused: jess fuses the
+      five stage components itself via meld. That is a concrete answer jess can give relay on #202 — the
+      artifact that changed in their latest release has, at least in jess, no consumer.
+    tags: [release-watch, relay, falcon-1.135, byte-identical, relay-202, p3-stream, no-op]
+    fields:
+      detected-by: jess release-watch comparing digests before rebuilding, 2026-09-04
+      severity: info
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T08:55:02Z
