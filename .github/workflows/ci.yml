@@ -254,6 +254,79 @@ jobs:
         env:
           RENODE: /tmp/renode/renode
 
+  # The COMPONENT-LEVEL oracles, promoted from local evidence to a gate.
+  #
+  # AFD-071 put the two cascade oracles in CI and that was read as closing AFD-064 D4. It
+  # did not: an exact-path audit of ci.yml found NINE oracles that CI never runs, so most of
+  # this campaign's component-level claims still rested on hand-run evidence (AFD-074).
+  # These four are the wasmtime-level ones — no Renode, so they are cheap — and they cover
+  # the composed stack (AFD-044), the dispatch contract (AFD-067) and the timer/flight-loop
+  # experiments that DD-025 rests on.
+  #
+  # tools/fusion-matrix/run.sh is deliberately NOT here: it invokes `varve run` directly and
+  # has no MELD/LOOM/SYNTH override, so it cannot run without varve on the runner. That is a
+  # named gap, not an oversight.
+  component-oracles:
+    name: component oracles (composition, dispatch, timer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: rust wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: wasm-tools / wac / wasmtime (pinned to the versions used locally)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o wt.tgz https://github.com/bytecodealliance/wasm-tools/releases/download/v1.245.1/wasm-tools-1.245.1-x86_64-linux.tar.gz
+          mkdir -p wt && tar xzf wt.tgz -C wt --strip-components=1
+          sudo install -m755 wt/wasm-tools /usr/local/bin/wasm-tools
+          curl -fsSL -o wac https://github.com/bytecodealliance/wac/releases/download/v0.10.1/wac-cli-x86_64-unknown-linux-musl
+          sudo install -m755 wac /usr/local/bin/wac
+          curl -fsSL -o wasmtime.tar.xz https://github.com/bytecodealliance/wasmtime/releases/download/v42.0.1/wasmtime-v42.0.1-x86_64-linux.tar.xz
+          mkdir -p wtm && tar xJf wasmtime.tar.xz -C wtm --strip-components=1
+          sudo install -m755 wtm/wasmtime /usr/local/bin/wasmtime
+          wasm-tools --version && wac --version && wasmtime --version
+      - name: oras (for the gale-nano OCI pin)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o oras.tgz https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
+          mkdir -p orasbin && tar xzf oras.tgz -C orasbin
+          sudo install -m755 orasbin/oras /usr/local/bin/oras
+      - name: wasmtime python module
+        run: pip install -q -r tools/cascade-differential/requirements.txt
+      # Assert the whole dependency set up front. AFD-072: discovering missing tools one at a
+      # time, after a full fetch and build, wastes a run per gap and names only one of them.
+      - name: preflight — every tool these oracles invoke
+        run: |
+          set -euo pipefail
+          missing=""
+          for t in cargo wac wasm-tools wasmtime oras gh python3; do
+            command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+          done
+          python3 -c 'import wasmtime' 2>/dev/null || missing="$missing python-wasmtime-module"
+          rustup target list --installed | grep -q wasm32-unknown-unknown || missing="$missing wasm32-target"
+          if [ -n "$missing" ]; then echo "MISSING:$missing" >&2; exit 1; fi
+          echo "all component-oracle dependencies present"
+      - name: fetch every pinned artifact from a clean checkout
+        run: tools/deps/fetch.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # MELD/LOOM are supplied because varve is not on the runner; appcompose derives its
+      # fused core from the pinned stage components rather than depending on an unreproducible
+      # file (AFD-075).
+      - name: the full wasm stack composes and RUNS (AFD-044)
+        run: |
+          set -euo pipefail
+          MELD=.scratch/meld/meld LOOM=.scratch/loom/loom \
+            tools/appcompose/build-and-verify.sh
+      - name: gale-nano dispatch contract — poll-round drains through poll-task (AFD-067)
+        run: tools/dispatch/run.sh
+      - name: flight-loop composition (DD-025)
+        run: tools/flight-loop/run.sh
+      - name: timer probe — the clock behaviour DD-025 rests on (AFD-047)
+        run: tools/timer-probe/run.sh
+
   # REQ-PIX-018 leg b (TEST-PIX-022) — the DO-333 sound-static-analysis leg of
   # the V, on the CONSUMED (stripped) falcon wasm: fetch a pinned falcon
   # component -> meld fuse -> scry (scry-sai-core) analyze -> assert the analysis

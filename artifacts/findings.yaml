@@ -3754,3 +3754,100 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T11:11:18Z
+
+  - id: AFD-074
+    type: ai-found-defect
+    title: "'The oracles are a CI gate' covered 2 of 16 — NINE are never run in CI, and jess's first audit of that was itself vacuous (basename matching)"
+    status: resolved
+    description: |-
+      2026-09-04. AFD-071 put the two cascade oracles into CI and that was reported as closing AFD-064 D4
+      ("none of the on-target oracles run in CI"). AN EXACT-PATH AUDIT OF ci.yml SHOWS IT DID NOT.
+      *** MEASURED ***: of 16 runnable oracle scripts in the repo, ci.yml invokes 5 by path. NINE ARE
+      NEVER RUN IN CI AT ALL - verified by checking, for each, whether any CI-invoked script calls it:
+        NEVER RUN   tools/appcompose/build-and-verify.sh     the composed wasm stack (AFD-044)
+        NEVER RUN   tools/dispatch/run.sh                    the dispatch contract (AFD-067)
+        NEVER RUN   tools/flight-loop/run.sh                 DD-025 flight loop
+        NEVER RUN   tools/timer-probe/run.sh                 the clock behaviour DD-025 rests on
+        NEVER RUN   tools/fusion-matrix/run.sh               every meld memory strategy
+        NEVER RUN   tools/gust/passthrough-oracle.sh
+        NEVER RUN   hardware/renode/tcb-link/run-oracle.sh
+        NEVER RUN   hardware/renode/stack-highwater/run-oracle.sh
+        NEVER RUN   hardware/renode/vehicle/run-vehicle-multinode.sh
+      Only tools/embedder-init/run.sh runs TRANSITIVELY, via cascade-invoke/build.sh.
+      So "the on-target oracles are a CI gate" was true and much narrower than it sounded: most
+      COMPONENT-LEVEL claims in this campaign still rest on hand-run evidence.
+      *** MY FIRST AUDIT OF THIS WAS ITSELF VACUOUS, and that is the more useful half of the finding ***.
+      It tested `grep -q "$(basename $f)" ci.yml`, which reports IN CI for every file named run.sh or
+      run-oracle.sh because ci.yml contains those basenames for DIFFERENT files. It cheerfully reported
+      tools/dispatch/run.sh and hardware/renode/tcb-link/run-oracle.sh as covered when neither is. A
+      coverage audit that matches on a generic basename measures nothing. Caught by re-running it against
+      FULL PATHS, which flipped the answer for 5 of 16 entries.
+      *** FIX ***: a `component-oracles` CI job running the four wasmtime-level oracles that need no
+      Renode - appcompose (AFD-044), dispatch (AFD-067), flight-loop and timer-probe. Dependencies are
+      installed PINNED TO THE LOCAL VERSIONS (wasm-tools 1.245.1, wac 0.10.1, wasmtime 42.0.1) so CI and
+      local are not silently different toolchains, and a PREFLIGHT asserts the whole set before any work -
+      the AFD-072 lesson about discovering missing tools one at a time.
+      *** DELIBERATELY NOT INCLUDED, and named rather than left implicit ***:
+        - tools/fusion-matrix/run.sh invokes `varve run` directly and has NO MELD/LOOM/SYNTH override, so
+          it cannot run without varve on the runner. It needs the AFD-069 override treatment first.
+        - The three remaining Renode oracles (tcb-link, stack-highwater, vehicle) each need their own
+          setup; they stay local-only for now and are still an open gap, not a closed one.
+      So this narrows the gap from 9 to 5; it does not close it. Stating the residual explicitly because
+      AFD-071 was read as closing more than it did, and that is exactly how this recurs.
+    tags: [ci-coverage, vacuous-audit, afd-064-d4, hand-run-evidence, component-oracles, self-correction]
+    fields:
+      detected-by: jess auditing which oracles ci.yml actually invokes, by path rather than basename, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T14:46:00Z
+
+  - id: AFD-075
+    type: ai-found-defect
+    title: A DERIVED artifact with no pin, no locator and no derivation sat under three tools — appcompose had never been reproducible from a clean checkout, and its provenance matches no current toolchain
+    status: resolved
+    description: |-
+      2026-09-04. AFD-074 promoted four component oracles to CI. The first run failed, and the failure was
+      worth more than the job: `MISSING UPSTREAM ARTIFACT: .scratch/v1341/casc_new.loom.wasm`.
+      *** THE FINDING: a DERIVED artifact with no pin, no locator and no derivation sat at the root of
+      three tools. *** casc_new.loom.wasm existed only on the machine that once produced it. It is not in
+      artifacts.pins, fetch.sh cannot obtain it, and nothing in the repo derives it - so
+      tools/appcompose/build-and-verify.sh had NEVER been reproducible from a clean checkout. AFD-065 made
+      the SUPPLIER artifacts fetchable; this is the same defect for a DERIVED one, and it went unnoticed
+      because the file happened to exist locally.
+      Three consumers depended on it: appcompose (default FUSED), cascade-differential/cascade_ref.py and
+      cascade-differential/sil_reference.py (both as a DEFAULT MODULE argument).
+      *** ITS PROVENANCE DOES NOT MATCH THE CURRENT TOOLCHAIN ***, which is how unreproducible inputs
+      rot silently:
+        casc_new.loom.wasm   35 functions, code 15,979 B, data 43,103 B, total 61,216 B
+        c.loom.wasm (build.sh, meld 0.52.0 -> loom 1.4.0)
+                             31 functions, code 15,926 B, data 43,100 B, total 63,156 B
+      Neither loom 1.4.0 (31 fn / 15,926 B) nor loom 1.4.1 (35 fn / 16,018 B, per AFD-069) produces it.
+      So it is the output of some earlier pipeline state that no longer exists anywhere.
+      *** THE ERROR MESSAGE WAS ALSO WRONG ***, and would have sent the next person the wrong way: it
+      called the missing file a "supplier artifact (relay falcon v1.134.1, gale-nano 0.7.0)" and told them
+      to "fetch it via the DD-026 OCI consumption path". It is not a supplier artifact and no fetch can
+      produce it.
+      *** FIX ***: appcompose now DERIVES its fused core from the digest-pinned stage components
+      (meld fuse --memory shared --pack-rebase -> loom optimize), with MELD/LOOM overridable in the same
+      shape as cascade-invoke/build.sh so release-watch can swap them. Verified: the derived module is
+      BYTE-IDENTICAL to build.sh's c.loom.wasm (7378d2553042ba1a…, 63,156 B), and appcompose passes
+      against it with the SAME reference value it produced against the old mystery file (1068280774) - so
+      this changes what the oracle CONSUMES, not what it concludes.
+      The two reference generators no longer default to anything: they exit 2 with a usage message naming
+      how to derive a module. A default that silently points at an unreproducible file lets a script
+      report numbers nobody else can reproduce, which is precisely how this survived.
+      *** WHAT CI EARNED HERE ***: this was invisible locally by construction - every local run found the
+      file and passed. Only a clean checkout could surface it, which is the argument for the gate rather
+      than for more local runs.
+    tags: [reproducibility, derived-artifact, unpinned, ci-earned-it, appcompose, provenance, misleading-error]
+    fields:
+      detected-by: the AFD-074 component-oracles CI job failing on its first run, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T14:58:48Z
