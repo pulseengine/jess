@@ -33,8 +33,12 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # A per-run temp file. These were fixed paths named after the HAND-INVENTED ids
 # (tp34/tp35) that were never rivet ids; two concurrent oracle runs also clobbered
 # each other's script. Both found by clean-room verification.
-RESC="$(mktemp -t jess-oracle.XXXXXX).resc"
-trap 'rm -f "$RESC"' EXIT
+# `mktemp -d` + a fixed name inside, rather than `mktemp -t TEMPLATE`: the -t form means
+# different things to BSD and GNU mktemp, and this script is now run on a linux CI runner
+# as well as macOS. -d is unambiguous on both.
+RESCDIR="$(mktemp -d)"
+RESC="$RESCDIR/oracle.resc"
+trap 'rm -rf "$RESCDIR"' EXIT
 [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
 [ -f "$E" ]   || fail "soak image missing — run build.sh first"
 [ -f "$MOD" ] || fail "module missing — run build.sh first"

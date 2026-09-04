@@ -25,7 +25,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
-PINS="$ROOT/tools/deps/artifacts.pins"
+# Overridable, as in fetch.sh. Without this the two scripts disagree about their own
+# interface, and a pin-file variant cannot be tested without moving the real file aside.
+PINS="${PINS:-$ROOT/tools/deps/artifacts.pins}"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
 
 # A pin may be platform-specific (a compiled binary has a different digest per host). Such
@@ -57,15 +59,34 @@ fi
 
 [ -f "$PINS" ] || { echo "FAIL: $PINS missing" >&2; exit 1; }
 
+# Every platform triple that may legitimately appear in a pin. An UNRECOGNISED triple is a
+# typo, and a typo silently removes that pin from verification on EVERY host while this
+# script stays green — clean-room verification demonstrated `aarch64-apple-darwinn` doing
+# exactly that. Validate rather than trust.
+KNOWN_PLATFORMS="aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu"
+
 miss=0; bad=0; ok=0; skipped=0
+# Paths that have at least one line, and whether any line APPLIED to this host. A path whose
+# every line is foreign-platform is a COVERAGE GAP, not a skip: nothing verifies it here.
+seen_paths=""; covered_paths=""
 while read -r path want src rest; do
   case "${path:-}" in ''|'#'*|'['*) continue ;; esac
   pin_platform=""
   case "${src:-} ${rest:-}" in *platform=*) pin_platform="${src} ${rest}"; pin_platform="${pin_platform#*platform=}"; pin_platform="${pin_platform%% *}" ;; esac
+  if [ -n "$pin_platform" ]; then
+    case " $KNOWN_PLATFORMS " in
+      *" $pin_platform "*) : ;;
+      *) echo "FAIL: pin '$path' declares an UNKNOWN platform '$pin_platform'." >&2
+         echo "A misspelt triple matches no host, so the pin is silently never verified anywhere." >&2
+         exit 1 ;;
+    esac
+  fi
+  case " $seen_paths " in *" $path "*) : ;; *) seen_paths="$seen_paths $path" ;; esac
   if [ -n "$pin_platform" ] && [ "$pin_platform" != "$HOST_PLATFORM" ]; then
     printf '  skip     %-32s  pinned for %s, host is %s\n' "$path" "$pin_platform" "$HOST_PLATFORM"
     skipped=$((skipped+1)); continue
   fi
+  case " $covered_paths " in *" $path "*) : ;; *) covered_paths="$covered_paths $path" ;; esac
   [ -z "$ONLY" ]    || case "$path" in *"$ONLY"*) : ;; *) continue ;; esac
   if [ -n "$EXCLUDE" ]; then
     case "$path" in *"$EXCLUDE"*) printf '  EXCLUDED %-32s  (caller set this pin aside)\n' "$path"; continue ;; esac
@@ -94,6 +115,19 @@ if [ "$miss" -gt 0 ]; then
   echo "\$SCRATCH at the paths above, then re-run. The oracles will not be reproducible until then." >&2
   exit 2
 fi
+# A path every one of whose lines was skipped is NOT verified on this host. Reporting green
+# over it would mean an arbitrary binary could sit at that path unchecked — clean-room
+# verification did exactly that with /bin/ls after deleting the host's meld line.
+uncovered=""
+for pth in $seen_paths; do
+  case " $covered_paths " in *" $pth "*) : ;; *) uncovered="$uncovered $pth" ;; esac
+done
+if [ -n "$uncovered" ]; then
+  echo "FAIL: no pin line applies to this host ($HOST_PLATFORM) for:$uncovered" >&2
+  echo "Those paths are therefore verified by NOTHING here. Add a pin line for this platform." >&2
+  exit 1
+fi
+
 # Refuse to report a green on an empty pin file.
 [ "$ok" -gt 0 ] || { echo "FAIL: no pins were checked — an empty verification is not a pass" >&2; exit 1; }
 echo "all $ok pinned artifact(s) present and matching${skipped:+ ($skipped skipped for other platforms)}"

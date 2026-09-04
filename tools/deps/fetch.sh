@@ -69,12 +69,22 @@ while read -r path want locator rest; do
   [ -z "$ONLY" ] || case "$path" in *"$ONLY"*) : ;; *) continue ;; esac
   considered=$((considered+1))
 
+  # The dest path comes from a PR-editable file and this script runs in CI with a token.
+  # `../../x` escaped DEST and still reported success (clean-room verification). Confine it.
+  case "$path" in
+    /*|*..*|*'$('*|*'`'*)
+      fail "pin path '$path' escapes the destination tree or contains a substitution — refusing" ;;
+  esac
+
   out="$DEST/$path"
 
   # A pin may be platform-specific (a compiled binary). Its digest is unsatisfiable on any
   # other host, so SKIP it loudly rather than fetching bytes that can never match.
+  # Parse from locator+remainder, matching check.sh exactly. check.sh looked at both while
+  # this looked only at `rest`, so a `platform=` placed before the locator made check.sh skip
+  # silently while fetch.sh hard-failed — two scripts disagreeing about one file's grammar.
   pin_platform=""
-  case "$rest" in *platform=*) pin_platform="${rest#*platform=}"; pin_platform="${pin_platform%% *}" ;; esac
+  case "$locator $rest" in *platform=*) pin_platform="${locator} ${rest}"; pin_platform="${pin_platform#*platform=}"; pin_platform="${pin_platform%% *}" ;; esac
   if [ -n "$pin_platform" ] && [ "$pin_platform" != "$HOST_PLATFORM" ]; then
     echo "  skip     $path — pinned for $pin_platform, host is $HOST_PLATFORM"
     skipped=$((skipped+1)); continue

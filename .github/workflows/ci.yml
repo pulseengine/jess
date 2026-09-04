@@ -209,8 +209,32 @@ jobs:
           mkdir -p orasbin && tar xzf oras.tgz -C orasbin
           sudo install -m755 orasbin/oras /usr/local/bin/oras
           oras version | head -2
+      - name: wasm-tools (pinned to the version used locally)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o wt.tgz https://github.com/bytecodealliance/wasm-tools/releases/download/v1.245.1/wasm-tools-1.245.1-x86_64-linux.tar.gz
+          mkdir -p wt && tar xzf wt.tgz -C wt --strip-components=1
+          sudo install -m755 wt/wasm-tools /usr/local/bin/wasm-tools
+          wasm-tools --version
       - name: wasmtime python module
         run: pip install -q -r tools/cascade-differential/requirements.txt
+      # PREFLIGHT. The first run of this job failed at build step 2 with "wasm-tools not on
+      # PATH" — a dependency this job simply did not install. Failing there wastes a full
+      # fetch and build; worse, it names one missing tool at a time. Assert the whole set up
+      # front so a gap is reported once, by name, before any work is done.
+      - name: preflight — every tool the oracles invoke
+        run: |
+          set -euo pipefail
+          missing=""
+          for t in arm-none-eabi-gcc arm-none-eabi-ld arm-none-eabi-nm arm-none-eabi-objcopy \
+                   arm-none-eabi-objdump wasm-tools perl python3 oras gh; do
+            command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+          done
+          [ -x /tmp/renode/renode ] || missing="$missing renode"
+          python3 -c 'import wasmtime' 2>/dev/null || missing="$missing python-wasmtime-module"
+          if [ -n "$missing" ]; then echo "MISSING:$missing" >&2; exit 1; fi
+          echo "all oracle dependencies present"
       - name: fetch every pinned artifact from a clean checkout
         run: tools/deps/fetch.sh
         env:
