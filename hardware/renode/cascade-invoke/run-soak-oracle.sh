@@ -82,6 +82,19 @@ for l in sys.stdin:
 print(" ".join(out))'
 }
 
+# FRESHNESS. This oracle reads a prebuilt ELF, so a FAILED build leaves the previous run's
+# image in place and the oracle passes on it. That happened for real: a bash-3.2 array bug
+# broke build.sh's pinned path while this oracle still reported PASS on stale artifacts —
+# the AFD-047 staleness class again. Refuse an image older than any of its inputs.
+for src in "$D/harness.c" "$D/boot-soak.S" "$D/link.ld" "$MOD"; do
+  [ -f "$src" ] || fail "missing build input $src"
+  # Fail only if the input is STRICTLY newer. `-nt` is false for equal mtimes, and a single
+  # build.sh run writes the module and the ELF within the same second, so the naive
+  # "ELF must be newer" form rejects a perfectly fresh build.
+  [ "$src" -nt "$E" ] && fail "$(basename "$src") is NEWER than soak.elf — STALE image; re-run build.sh (a failed build leaves the previous image in place)"
+done
+echo "   soak.elf is newer than harness.c, boot-soak.S, link.ld and the module"
+
 echo "== 1. run $N ticks on emulated RT1176 =="
 W=( $(read_soak "$E") )
 [ "${#W[@]}" -eq 11 ] || fail "expected 11 words from the soak region, got ${#W[@]} (${W[*]:-none})"

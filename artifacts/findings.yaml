@@ -3365,3 +3365,60 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-03T22:51:52Z
+
+  - id: AFD-066
+    type: ai-found-defect
+    title: Release-watch was NOT EXECUTABLE — every preflight refused an off-pin build; with that fixed, synth v0.61.0 emits BYTE-IDENTICAL ARM to 0.60.0 on the real fused falcon
+    status: resolved
+    description: |-
+      2026-09-04. Release-watch had slipped several ticks: the on-target oracles run synth 0.60.0 while
+      v0.61.0 shipped. Testing a candidate toolchain turned out to be IMPOSSIBLE by construction - every
+      preflight verifies all seven pins, so a deliberately off-pin build is indistinguishable from a
+      corrupted tree and is refused. STEP 2 of the loop was not executable.
+      *** MACHINERY ***: check.sh gains --only/--exclude; build.sh detects SYNTH pointing away from the
+      pinned binary, sets that ONE pin aside explicitly, prints an OFF-PIN banner naming the version
+      actually in use, and threads DEPS_EXCLUDE to the sub-oracles so there is exactly one place that
+      decides which pin may be waived. INPUT pins stay enforced - a toolchain differential is meaningless
+      if the inputs are not identical.
+      *** RESULT — synth v0.61.0 PASSES ***, tested against the REAL fused falcon cascade, not a fixture:
+        cascade.o   0.60.0 395fe6d4e5aa37b0…  0.61.0 395fe6d4e5aa37b0…  BYTE-IDENTICAL
+        soak.elf    0.60.0 bf6d92927cadae7e…  0.61.0 bf6d92927cadae7e…  BYTE-IDENTICAL
+        invoke.elf  identical
+        64-tick soak on emulated RT1176: tick1, tick64 and fold 0x3466E91F all reproduce, every control
+        fires. synth v0.61.0 changes NOTHING on jess's lowering path.
+      *** A LATENT BUG FIXED WHILE HERE ***: build.sh called tools/deps/check.sh WITHOUT passing SCRATCH.
+      It worked only because the child inherited it from the environment - so a caller setting SCRATCH as
+      an unexported shell variable would have had its inputs verified against the DEFAULT tree. Exactly
+      the defect AFD-065 found in fetch.sh, still latent in build.sh one file away. Now passed explicitly.
+      *** THE MELD VARIANCE IS UNDERSTOOD, AND IT IS ALREADY-KNOWN, NOT NEW ***. The two builds' fused
+      wasm differed (66,930 vs 70,125 B), which looked alarming next to identical ARM output. Localized:
+        - code (16,862 B) and data (43,100 B) are BYTE-STABLE at identical offsets across all builds
+        - run-to-run with identical paths, exactly 29 bytes differ, all inside
+          custom "wsc.transformation.attestation" (0xEE24..0xEE46) - a timestamp
+        - the size difference is meld embedding ABSOLUTE INPUT PATHS in custom "component-provenance":
+          1,912 B (short path) -> 3,312 B (jess path) -> 6,152 B (long scratch path)
+      The path-dependence is NOT a new finding: tools/repro/fuse-repro-oracle.sh already documents it as a
+      KNOWN RESIDUAL verified on meld v0.39.0 and filed upstream. What is new is (a) it persists at 0.52.0,
+      and (b) IT DOES NOT REACH THE FLIGHT ARTIFACT - synth's ARM output is invariant to it, which is why
+      cascade.o is byte-identical across builds whose input wasm differs by 3 KB. Checked the existing
+      oracle BEFORE reporting, rather than filing a duplicate.
+      *** TWO OF MY OWN DEFECTS, BOTH CAUGHT BY RUNNING THE ORDINARY PATH ***:
+        1 The DEPS_EXCLUDE plumbing used a bash ARRAY. Under `set -u`, bash 3.2 - what macOS ships -
+          treats "${EMPTY_ARRAY[@]}" as unbound and aborts. The OFF-PIN path worked while the ORDINARY
+          PINNED BUILD BROKE. Rewritten without an array.
+        2 That breakage was MASKED: run-soak-oracle.sh reported PASS while build.sh was failing, because
+          it reads a prebuilt ELF and a failed build leaves the previous image in place. The AFD-047
+          staleness class again. Added a freshness guard - the oracle now refuses an image older than
+          harness.c, boot-soak.S, link.ld or the module. Both directions observed: touching harness.c
+          fires it, rebuilding clears it. Note the guard had to be written as "fail if an input is
+          STRICTLY newer", because `-nt` is false for equal mtimes and one build.sh run writes the module
+          and the ELF inside the same second - the naive form rejected a perfectly fresh build.
+    tags: [release-watch, synth-0.61, toolchain, byte-identical, meld-nondeterminism, staleness, bash-3.2, checker-bug]
+    fields:
+      detected-by: jess acting on accumulated release-watch debt, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T02:51:23Z

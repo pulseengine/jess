@@ -26,8 +26,20 @@ command -v wasm-tools >/dev/null || fail "wasm-tools not on PATH"
 # AFD-053 S2: verify the external artifacts against tools/deps/artifacts.pins BEFORE
 # measuring anything. Without this the oracle runs against whatever happens to be in
 # .scratch/ and reports a result that reads reproducible and is not.
-"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || {
-  "$ROOT/tools/deps/check.sh" >&2
+# DEPS_EXCLUDE is set by a release-watch build that is deliberately running one artifact
+# off-pin (see hardware/renode/cascade-invoke/build.sh). It is threaded rather than
+# re-derived so there is exactly one place that decides which pin may be set aside.
+# NOTE: written WITHOUT an array. Under `set -u`, bash 3.2 (which is what macOS ships)
+# treats "${EMPTY_ARRAY[@]}" as an unbound variable and aborts — so the array form broke
+# the ordinary pinned build while the off-pin path worked, and the oracles masked it by
+# re-using artifacts from the previous run.
+DEPS_EXCLUDE="${DEPS_EXCLUDE:-}"
+run_check() {
+  if [ -n "$DEPS_EXCLUDE" ]; then "$ROOT/tools/deps/check.sh" --exclude "$DEPS_EXCLUDE" "$@"
+  else "$ROOT/tools/deps/check.sh" "$@"; fi
+}
+run_check >/dev/null 2>&1 || {
+  run_check >&2
   fail "external artifacts do not match tools/deps/artifacts.pins (see above)"
 }
 
