@@ -20,7 +20,29 @@ PY="${PY:-python3}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 [ -x "$SYNTH" ] || fail "synth not at $SYNTH"
-"$ROOT/tools/deps/check.sh" >/dev/null 2>&1 || fail "external artifacts do not match tools/deps/artifacts.pins"
+# Pass SCRATCH EXPLICITLY. This previously relied on the child inheriting it from the
+# environment, so a caller that set SCRATCH as a shell variable rather than exporting it
+# would have had its inputs verified against the DEFAULT tree — the same defect AFD-065
+# found in fetch.sh, latent here.
+#
+# RELEASE-WATCH: when SYNTH is overridden away from the pinned binary (testing a candidate
+# release), that one pin is set aside EXPLICITLY and the version actually used is printed.
+# The input pins — the falcon stages and gale-nano — are still enforced, because a
+# toolchain differential is only meaningful if the inputs are identical.
+PINNED_SYNTH="$SCRATCH/fg60/synth"
+if [ "$SYNTH" = "$PINNED_SYNTH" ]; then
+  SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" >/dev/null 2>&1 \
+    || fail "external artifacts do not match tools/deps/artifacts.pins"
+else
+  SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" --exclude fg60/synth >/dev/null 2>&1 \
+    || fail "input artifacts do not match tools/deps/artifacts.pins (synth pin excluded)"
+  export DEPS_EXCLUDE="fg60/synth"   # threaded to the sub-oracles' own preflights
+  echo "!! OFF-PIN TOOLCHAIN — release-watch mode"
+  echo "!!   synth in use : $("$SYNTH" --version 2>&1 | head -1)  ($SYNTH)"
+  echo "!!   pinned synth : $(grep '^fg60/synth' "$ROOT/tools/deps/artifacts.pins" | awk '{print $3}' | sed 's/.*@//;s/!.*//')"
+  echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
+  echo "!!   not a campaign result, until the pin is updated."
+fi
 
 echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
 varve run meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \

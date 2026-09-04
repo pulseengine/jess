@@ -10,7 +10,20 @@
 # Exit 0 = every pinned artifact present AND matching.
 # Exit 1 = a present artifact does NOT match its pin  (the dangerous case: a lookalike)
 # Exit 2 = an artifact is absent                      (the honest case: fetch it)
+#
+# --only/--exclude exist for RELEASE-WATCH: testing a candidate toolchain means deliberately
+# running one artifact off-pin. Excluding it must be an explicit, visible act — never a
+# silent skip — so the caller states which pin it is setting aside and why.
 set -uo pipefail
+ONLY=""; EXCLUDE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --only)    ONLY="${2:-}"; shift ;;
+    --exclude) EXCLUDE="${2:-}"; shift ;;
+    *) echo "unknown argument: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 PINS="$ROOT/tools/deps/artifacts.pins"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
@@ -19,6 +32,10 @@ SCRATCH="${SCRATCH:-$ROOT/.scratch}"
 miss=0; bad=0; ok=0
 while read -r path want src; do
   case "${path:-}" in ''|'#'*|'['*) continue ;; esac
+  [ -z "$ONLY" ]    || case "$path" in *"$ONLY"*) : ;; *) continue ;; esac
+  if [ -n "$EXCLUDE" ]; then
+    case "$path" in *"$EXCLUDE"*) printf '  EXCLUDED %-32s  (caller set this pin aside)\n' "$path"; continue ;; esac
+  fi
   f="$SCRATCH/$path"
   if [ ! -f "$f" ]; then
     printf '  ABSENT   %-32s  %s\n' "$path" "$src"; miss=$((miss+1)); continue
