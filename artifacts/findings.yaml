@@ -3803,3 +3803,51 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T14:46:00Z
+
+  - id: AFD-075
+    type: ai-found-defect
+    title: A DERIVED artifact with no pin, no locator and no derivation sat under three tools — appcompose had never been reproducible from a clean checkout, and its provenance matches no current toolchain
+    status: resolved
+    description: |-
+      2026-09-04. AFD-074 promoted four component oracles to CI. The first run failed, and the failure was
+      worth more than the job: `MISSING UPSTREAM ARTIFACT: .scratch/v1341/casc_new.loom.wasm`.
+      *** THE FINDING: a DERIVED artifact with no pin, no locator and no derivation sat at the root of
+      three tools. *** casc_new.loom.wasm existed only on the machine that once produced it. It is not in
+      artifacts.pins, fetch.sh cannot obtain it, and nothing in the repo derives it - so
+      tools/appcompose/build-and-verify.sh had NEVER been reproducible from a clean checkout. AFD-065 made
+      the SUPPLIER artifacts fetchable; this is the same defect for a DERIVED one, and it went unnoticed
+      because the file happened to exist locally.
+      Three consumers depended on it: appcompose (default FUSED), cascade-differential/cascade_ref.py and
+      cascade-differential/sil_reference.py (both as a DEFAULT MODULE argument).
+      *** ITS PROVENANCE DOES NOT MATCH THE CURRENT TOOLCHAIN ***, which is how unreproducible inputs
+      rot silently:
+        casc_new.loom.wasm   35 functions, code 15,979 B, data 43,103 B, total 61,216 B
+        c.loom.wasm (build.sh, meld 0.52.0 -> loom 1.4.0)
+                             31 functions, code 15,926 B, data 43,100 B, total 63,156 B
+      Neither loom 1.4.0 (31 fn / 15,926 B) nor loom 1.4.1 (35 fn / 16,018 B, per AFD-069) produces it.
+      So it is the output of some earlier pipeline state that no longer exists anywhere.
+      *** THE ERROR MESSAGE WAS ALSO WRONG ***, and would have sent the next person the wrong way: it
+      called the missing file a "supplier artifact (relay falcon v1.134.1, gale-nano 0.7.0)" and told them
+      to "fetch it via the DD-026 OCI consumption path". It is not a supplier artifact and no fetch can
+      produce it.
+      *** FIX ***: appcompose now DERIVES its fused core from the digest-pinned stage components
+      (meld fuse --memory shared --pack-rebase -> loom optimize), with MELD/LOOM overridable in the same
+      shape as cascade-invoke/build.sh so release-watch can swap them. Verified: the derived module is
+      BYTE-IDENTICAL to build.sh's c.loom.wasm (7378d2553042ba1a…, 63,156 B), and appcompose passes
+      against it with the SAME reference value it produced against the old mystery file (1068280774) - so
+      this changes what the oracle CONSUMES, not what it concludes.
+      The two reference generators no longer default to anything: they exit 2 with a usage message naming
+      how to derive a module. A default that silently points at an unreproducible file lets a script
+      report numbers nobody else can reproduce, which is precisely how this survived.
+      *** WHAT CI EARNED HERE ***: this was invisible locally by construction - every local run found the
+      file and passed. Only a clean checkout could surface it, which is the argument for the gate rather
+      than for more local runs.
+    tags: [reproducibility, derived-artifact, unpinned, ci-earned-it, appcompose, provenance, misleading-error]
+    fields:
+      detected-by: the AFD-074 component-oracles CI job failing on its first run, 2026-09-04
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-04T14:58:48Z

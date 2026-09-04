@@ -312,8 +312,14 @@ jobs:
         run: tools/deps/fetch.sh
         env:
           GH_TOKEN: ${{ github.token }}
+      # MELD/LOOM are supplied because varve is not on the runner; appcompose derives its
+      # fused core from the pinned stage components rather than depending on an unreproducible
+      # file (AFD-075).
       - name: the full wasm stack composes and RUNS (AFD-044)
-        run: tools/appcompose/build-and-verify.sh
+        run: |
+          set -euo pipefail
+          MELD=.scratch/meld/meld LOOM=.scratch/loom/loom \
+            tools/appcompose/build-and-verify.sh
       - name: gale-nano dispatch contract — poll-round drains through poll-task (AFD-067)
         run: tools/dispatch/run.sh
       - name: flight-loop composition (DD-025)

@@ -14,7 +14,19 @@ Canonical ABI of the export, from the WIT + the lowered signature:
 import struct, sys
 from wasmtime import Store, Module, Instance
 
-MODULE = sys.argv[1] if len(sys.argv) > 1 else ".scratch/v1341/casc_new.loom.wasm"
+# NO DEFAULT MODULE. This used to default to .scratch/v1341/casc_new.loom.wasm — a file with
+# no pin, no locator and no derivation, present only on the machine that once produced it
+# (AFD-075). Defaulting to it meant this script could silently reference an artifact nobody
+# else can reproduce, and report numbers from it as if they were the campaign's. Require the
+# caller to name the module.
+if len(sys.argv) < 2:
+    sys.stderr.write(
+        "usage: %s <fused-core.wasm>\n"
+        "No default: the module must be one you can reproduce (see tools/deps/fetch.sh and\n"
+        "tools/appcompose/build-and-verify.sh, which derives it from the pinned components).\n"
+        % sys.argv[0])
+    sys.exit(2)
+MODULE = sys.argv[1]
 EXPORT = "pulseengine:falcon-cascade/rate@0.7.0#tick"
 
 # One deliberately non-symmetric test vector. Symmetric or all-zero inputs are a
