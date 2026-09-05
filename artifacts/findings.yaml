@@ -5079,3 +5079,85 @@ artifacts:
     links:
       - type: traces-to
         target: AFD-093
+
+  - id: AFD-096
+    type: ai-found-defect
+    title: gale's F100 has NO MPU (MPU_TYPE=0, DREGION 0) — confirmed independently over SWD and now ASSERTED in the emulator; plus jess's Rust port silently turned a runnable path into a directory and broke the first outside consumer
+    status: open
+    description: |-
+      2026-09-05. gale replied on gale#356 with an adoption report and one hardware fact jess did not
+      have. Both are actionable; the fact is the more important of the two.
+
+      *** THE STM32F100 HAS NO MPU AT ALL - CONFIRMED INDEPENDENTLY, NOT ADOPTED ON TRUST ***
+      gale measured MPU_TYPE = 0x00000000 (DREGION 0) and warned that any design assuming MPU-based
+      isolation on the IO coprocessor cannot work there - by hardware, not "not yet". jess re-read it
+      over SWD on the same board, halted first, under a stlink-v1 claim:
+          0xE000ED90  MPU_TYPE  00000000        0xE000ED94  MPU_CTRL  00000000
+          0xE000ED00  CPUID     411fc231        (Cortex-M3 r1p1, matches)
+      Confirmed. The MPU is OPTIONAL on Cortex-M3 and this part omits it. gale also flagged the trap
+      that cost them a day: do NOT infer from qemu's lm3s6965evb, which IS a Cortex-M3 WITH a PMSA
+      MPU - same core family, different option.
+      IMPACT ON JESS: none retroactive, checked rather than assumed. jess's MPU work (AFD-076,
+      AFD-077 and the withdrawal) was about the CORTEX-M7 on the RT1176 and stm32f4_discovery-kit,
+      never the F100; and m3.repl never declared an MPU. So no jess claim rests on an F100 MPU.
+      BUT IT IS NOW ASSERTED RATHER THAN INCIDENTAL: passthrough-m3.robot reads MPU_TYPE on the
+      emulated M3 and requires 0x00000000. This is AFD-088's lesson on a second axis - an emulator
+      must not be MORE CAPABLE than the part it stands for, or a design that cannot work on silicon
+      passes in emulation. m3.repl not declaring an MPU was true by accident of authorship; it is now
+      true by test.
+      NOTE the F100 on the VEHICLE has no debug port at all (AFD-091), so this register could never
+      have been read there. The VLDISCOVERY is again the only instrument that could establish it.
+
+      *** A CONSUMER-FACING REGRESSION JESS SHIPPED, FOUND BY THE FIRST OUTSIDE CONSUMER ***
+      tools/bench/with-device was an executable script; the Rust port made it a DIRECTORY at the same
+      path. gale's resolver did `[ -x "$sib" ]`, which is TRUE for any traversable directory, so it
+      selected the directory and failed later with permission denied / exit 126 - an error nowhere
+      near its cause. That is gale's bug to fix and they fixed it, but jess caused it: the path that
+      used to be runnable silently became something else. Any other consumer resolving it the obvious
+      way hits the same wall.
+      FIXED HERE with tools/bench/README.md: names the trap and its exit-126 symptom, gives the
+      correct test (`[ -f ] && [ -x ]`, -f FIRST), and points at the signed release pin as the thing
+      to consume rather than a path inside this repo. Also documents that the registry is host-local
+      and authoritative.
+
+      *** THE REGISTRY EARNED ITS KEEP ON THE FIRST OUTSIDE CONSUMER ***
+      gale had invented the device name `stlink-v1-f100`; the registry says `stlink-v1`. v0.2.1
+      refused it (exit 2). Under the 0.2.0 prototype those were two DIFFERENT lock files: both agents
+      claim successfully, neither excludes the other, and the bench looks protected while being
+      completely unguarded. That is exactly the vacuous-lock failure AFD-082 recorded, and it was
+      caught on first contact with a real second consumer rather than by review.
+
+      *** ALSO FROM GALE, worth recording ***
+      They re-ran their own #348 measurement under halt-first after jess's HLA note (an HLA read of a
+      RUNNING target returns nothing and reads exactly like a dead probe). Result unchanged, finding
+      stands - re-established rather than defended.
+      STILL OPEN AND JESS'S: whether with-device gets a neutral home (varve#130). gale's preference is
+      neutral > gale > status quo, and they say it is not blocking.
+
+      *** THE ASSERTION FAILED ON ITS FIRST RUN, AND THAT IS THE REAL FINDING ***
+      The new robot case went RED in CI immediately:
+          emulated M3   MPU_TYPE = 0x00000800   -> DREGION 8
+          real F100     MPU_TYPE = 0x00000000   -> no MPU
+      Renode DEFAULTS a Cortex-M to EIGHT MPU regions when the platform description says nothing.
+      m3.repl said nothing, so jess's "STM32F100-class" platform has been modelling a core with an
+      8-region MPU that the actual part does not have, for as long as the file has existed.
+      This is the THIRD instance of the same class in one week, after the 256 KB-vs-8 KB SRAM
+      (AFD-088) and the emulator-vs-silicon geometry work: an emulator that is MORE CAPABLE than the
+      part lets a design pass that hardware would refuse. Note the shape here is nastier than AFD-088
+      because the over-capability came from a DEFAULT rather than from something anyone wrote down -
+      "we never declared an MPU" felt like "there is no MPU here", and those are not the same
+      sentence. Absence in a platform file is not absence in the model.
+      FIXED by declaring `numberOfMPURegions: 0` explicitly, so the emulator matches the measured
+      silicon. The assertion stays, so the default can never quietly come back.
+      NOTHING CURRENT RESTED ON IT: jess has no F100 isolation claim (checked). The value is entirely
+      forward-looking - and it was found by a gate written the same hour, which is the argument for
+      writing the gate at the moment the fact arrives rather than when it is needed.
+    tags: [f100, mpu, gale, cortex-m3, renode, evidence-transfer, with-device, consumer-regression, afd-088, afd-082]
+    fields:
+      detected-by: gale#356 reply, independently re-measured by jess on the same board, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T19:00:40Z

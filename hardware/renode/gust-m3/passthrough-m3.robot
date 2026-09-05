@@ -57,6 +57,15 @@ Pass Through Row Is Byte Exact
     Should Be Equal As Integers    ${o3}    ${m3}    output motor 3 not byte-exact
 
 *** Test Cases ***
+The emulated M3 has NO MPU, matching the real STM32F100
+    # AFD-088's lesson applied to a second axis: an emulator must not be MORE CAPABLE than the
+    # part it stands for, or a design that cannot work on silicon passes here. gale measured
+    # MPU_TYPE = 0 (DREGION 0) on the real F100 (gale#356); jess confirmed it independently
+    # over SWD, halted. The MPU is optional on Cortex-M3 and this part omits it.
+    ${t}=                     Execute Command  sysbus ReadDoubleWord 0xE000ED90
+    Should Contain            ${t}    0x00000000
+
+
 Rotor-out asymmetric zeros survive un-re-mixed (motors 0 and 2 = 0)
     # relay fixture rotor_out row: m0=0, m2=0 — the PART-P02 (a) safety-critical case.
     Pass Through Row Is Byte Exact    0x00000000    0x3f3ccbcb    0x00000000    0x3f3ccbcb
