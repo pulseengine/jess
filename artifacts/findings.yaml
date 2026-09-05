@@ -4369,8 +4369,30 @@ artifacts:
       target the Pi will use, so it needs a real run before anyone trusts it there.
 
       *** CI GATE ***: new `bench-tool` job runs build + the CLI baseline + --self-test on every PR. The
-      tool's own exclusion property is now gated rather than remembered. NOT YET EXECUTED IN CI at the
-      time of writing - this AFD is authored pre-merge; the verdict is the PR's.
+      tool's own exclusion property is now gated rather than remembered.
+      *** VERDICT (post-merge, no longer pre-emptive) ***: PR #228 ALL GREEN on adf4fa6 - all 8 CI jobs
+      including bench-tool. Merged as 0312ec3. Released as v0.7.0.
+      *** A BUG IN MY OWN NEW GATE, found before CI hit it ***: the bench-tool step ran under
+      `set -euo pipefail` and asserted the unknown-flag exit code with `cmd; rc=$?`. Under `set -e` that
+      aborts the step the instant cmd fails - i.e. on exactly the failure the assertion exists to
+      measure. The job would have gone red at that line having performed NO assertion. Found only by
+      running the step body VERBATIM under `set -e` rather than running the commands individually,
+      which is the sole way the difference is observable. Now `rc=0; cmd || rc=$?`. Generalises: a CI
+      step is a shell PROGRAM, and testing its commands one at a time does not test the program.
+      *** RELEASE ASSETS VERIFIED FROM A CLEAN DOWNLOAD, not from the build tree ***: fresh temp dir,
+      `gh release download v0.7.0`, `shasum -a 256 -c SHA256SUMS.txt` with no --ignore-missing (so all
+      four assets must be present, not merely the ones that happen to be there): 4/4 OK. Extracted the
+      aarch64-apple-darwin tarball and EXECUTED it - `--version` -> with-device 0.2.0, `--self-test` ->
+      5/5 PASS including the opposite-order pair, and a two-device claim against the shipped
+      devices.yaml.example succeeded. "It is published" is not "it works"; this is the executed claim.
+        sha256 aarch64-apple-darwin      a81598fc292edc541be1f8bd248c26f21ef979a4a4cea0c0c9a8e01133373700
+        sha256 aarch64-unknown-linux-gnu aa53cfddcc2acb92419514563dd26797edf0f932124ec34acf962df77cc515ff
+        sha256 x86_64-apple-darwin       7d7718f7bd872857914622bbfb751ec9b157e74cf46b5de3fcec664f004e650c
+        sha256 x86_64-unknown-linux-gnu  ffb22a58b423d468bf81c91735359f84006607cfb370879b5aab002d9d8a0548
+      STILL UNEXECUTED, stated rather than glossed: both linux assets. They are the right ELF class
+      (x86-64 and ARM aarch64, PIE, stripped) but nothing has RUN them - the release job self-tests only
+      the targets its runner can execute. aarch64-unknown-linux-gnu is the Raspberry Pi target, so it
+      needs a real run there before the Pi plan depends on it.
     tags: [bench, with-device, rust, deadlock, negative-control, self-correction, release, varve, afd-048, afd-081]
     fields:
       detected-by: jess negative-controlling its own deadlock claim before reporting it, 2026-09-05
