@@ -4276,6 +4276,35 @@ artifacts:
       scare worth recording: immediately after the last return, telemetry read 0 B in 3 s. Re-checked
       after settling rather than reporting a fault - 53,686 / 52,626 / 51,080 B across three consecutive
       4 s windows. The zero was boot time, not damage.
+
+      *** UPDATE 2026-09-05 — gale CORRECTED jess's claim rule, and jess MEASURED the thing gale could
+      only assert. *** jess's rule was "read-only telemetry needs no claim". gale (gale#356) showed the
+      second O_RDONLY open on a tty is NOT refused, and argued a serial read is SINGLE-CONSUMER: two
+      readers each get a subset, silently. They were explicit that they had measured the double-open but
+      NOT the byte-splitting, and offered to nail it down. jess did:
+          one reader alone      66,872 B in 5 s
+          two readers together  37,787 B + 40,053 B = 77,840 B combined
+      Each got roughly HALF. Combined is ~16% over solo, not the ~2x duplication would give, and NEITHER
+      READER ERRORED. So two agents tailing one Pixhawk tty each capture a silent SUBSET, indistinguishable
+      from a flaky USB link - the exact failure this tool exists to prevent. jess's exemption was
+      self-defeating and is WITHDRAWN.
+      NEW RULE, either condition claims: (1) it attaches a debug probe - `mdw` is not a harmless read; or
+      (2) it opens a device whose data is CONSUMED BY THE READER - any tty/serial, even O_RDONLY. Genuinely
+      claim-free is narrower than "reads": files, lsusb/ioreg, `pyocd list`, an already-captured log.
+      CONSEQUENCE FOR THIS SESSION'S EVIDENCE: every telemetry capture jess took today ran unclaimed under
+      the wrong rule. None is known to be corrupted - gale was not reading concurrently - but they were
+      taken with no protection against exactly that, which is worth stating rather than assuming.
+      *** RELEASE-READINESS (operator asked for it to become a varve-layer tool) ***: varve layers are
+      cosign-signed OCI bundles of TOOL BINARIES, and per the PulseEngine CLI conventions every binary in
+      a layer must meet a baseline. with-device met NONE of it. Now conformant and verified:
+        --version / -V -> "with-device 0.1.0", rc 0     --help -> rc 0
+        unknown flag   -> rc 2 with usage on stderr     --status --format json -> structured output
+        exit codes documented: 2 usage (incl. unregistered device), 3 busy, else the wrapped command's
+      Zero third-party dependencies (stdlib only), which matters for a tool that must be reproducible
+      inside a signed layer.
+      OPEN QUESTION THAT IS NOT JESS'S TO DECIDE: where it lives. Every current layer tool comes from its
+      own repo (loom from loom, rivet from rivet). jess is a CONSUMER repo whose releases are findings,
+      not tools, so shipping an org-wide utility from here is the wrong shape. Raised with varve.
     tags: [h1, silicon, sdp, hid, macos, afd-080, near-miss, vacuous-lock, bench, self-correction]
     fields:
       detected-by: jess testing whether hidapi bypasses the macOS HID claim limitation, 2026-09-05
