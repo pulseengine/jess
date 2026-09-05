@@ -25,6 +25,7 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
 VENV="${VENV:-/private/tmp/claude-501/-Volumes-Home-git-pulseengine-jess/spsdk-venv}"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
+PY_BIN="${PY_BIN:-python3}"
 PAYLOAD="$D/sig.bin"
 FLASHLOADER="$SCRATCH/h1/ivt_flashloader.bin"
 MODE="readonly"; DRY=0
@@ -79,8 +80,17 @@ fi
 if [ "${NEED_FL:-1}" = "1" ]; then
   echo "== phase 1b: load the PINNED flashloader into OCRAM (RAM only, no flash) =="
   echo "  digest-verified above; IVT self=0x2024FE00 entry=0x20262561, both OCRAM1."
-  run "$SDPHOST" -u -- write-file 0x20240000 "$FLASHLOADER"
-  run "$SDPHOST" -u -- jump-address 0x20240000
+  # Load address is DERIVED FROM THE IVT's own self field, not a hardcoded constant. This
+  # said 0x20240000; the image's IVT declares self=0x2024FE00 and entry=0x20262561, and the
+  # entry must fall inside the loaded span. A guessed base would have put the entry outside
+  # the image (AFD-080).
+  FL_BASE="$("$PY_BIN" -c "
+import struct,sys
+d=open(sys.argv[1],'rb').read()
+print(hex(struct.unpack_from('<IIIIII',d,4)[4]))" "$FLASHLOADER")"
+  echo "  IVT self-address: $FL_BASE (from the binary, not assumed)"
+  run "$SDPHOST" -u 0x1fc9,0x013d write-file "$FL_BASE" "$FLASHLOADER"
+  run "$SDPHOST" -u 0x1fc9,0x013d jump-address "$FL_BASE"
   echo "  (the board re-enumerates as mboot 0x15A2:0x0073)"
 fi
 
