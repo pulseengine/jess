@@ -1571,3 +1571,50 @@ artifacts:
         target: DD-025
       - type: traces-to
         target: DD-023
+
+  - id: DD-027
+    type: design-decision
+    title: Keep the flock bench-claim now, migrate to labgrid when the host-local assumption breaks (Pi move or a third consumer)
+    status: approved
+    description: |-
+      2026-09-05. jess built tools/bench/with-device (AFD-081) because two agents were about to collide on
+      one debug probe within the hour. The right follow-up - is there an existing small tool? - deserves a
+      recorded answer rather than being re-litigated whenever someone sees a 120-line lock and wonders why
+      it exists.
+      CANDIDATE EVALUATED: labgrid (Pengutronix), the mature purpose-built option for embedded board farms
+      with places, reservation and remote access. Its own getting-started docs give the requirements:
+      a COORDINATOR daemon (mandatory - "reserving a place absolutely requires it"), an EXPORTER daemon,
+      clients pointed at the coordinator, and passwordless SSH from client to exporter EVEN WHEN BOTH ARE
+      THE SAME MACHINE. That is three running components plus SSH key setup to arbitrate TWO agents over
+      TWO devices plugged into the SAME host. LAVA is heavier still.
+      OFFERED TO gale (gale#356) including ownership, since gale owns the verified primitives. jess also
+      asked the two questions that would INVALIDATE this decision rather than defending it - same board?
+      same machine? - because if gale runs on a different host then trigger (a) is already true today and
+      labgrid, not flock, is the answer now.
+    tags: [bench, hardware, reservation, labgrid, build-vs-adopt, proportionality, gale-356]
+    fields:
+      rationale: |-
+        PROPORTIONALITY, plus one property the heavier option does not give for free.
+        Today's shape is two agents, two devices, one host. flock arbitrates that in ~120 lines with zero
+        running infrastructure. labgrid needs three components and SSH config for the same job.
+        The flock ALSO survives the failure that actually matters: the claim is an OS lock on an open fd, so
+        a CRASHED holder releases it automatically. A coordinator-based reservation left by a dead client
+        must be reaped by something. jess self-tested exactly this (holder killed with os._exit -> next
+        claimant succeeds, rc=0).
+        THE TRIGGER IS CONCRETE so this is not "revisit someday". Adopt labgrid when the host-local
+        assumption breaks, i.e. when EITHER:
+         (a) hardware and agents stop being co-located. The operator plans to move the Pixhawk to a
+             Raspberry Pi to get past the macOS HID limitation (AFD-080); if agents then drive it from
+             another machine (usbip/ssh), the flock is on the wrong host and protects nothing. Most likely
+             trigger, already on the roadmap.
+         (b) a third consumer appears (CI, or a repo beyond jess/gale), or the device count grows past a
+             handful, at which point a registry with discovery beats a hand-maintained devices.yaml.
+        Until then the flock is the correct size, not a stopgap: it fully prevents the failure it targets -
+        two agents driving one probe at once, producing a corrupted session that reads as a hardware fault.
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T10:14:49Z
+    links:
+      - type: satisfies
+        target: REQ-PIX-010

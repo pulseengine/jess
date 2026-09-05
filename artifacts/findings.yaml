@@ -4189,3 +4189,47 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T08:45:38Z
+  - id: AFD-081
+    type: ai-found-defect
+    title: jess and gale share one physical bench and the org had NO reservation mechanism — added a host-local claim whose lock dies with the holder, self-tested including the crashed-holder case
+    status: resolved
+    description: |-
+      2026-09-05. jess and gale both want the same physical bench (the STLINK-V3 on a NUCLEO-G474RE, and
+      later the Pixhawk). Checked first whether the org already had a reservation mechanism - searched
+      kiln, relay, gale, scry, varve, temper and jess for hardware-lock code and for issues about shared
+      probes: NOTHING EXISTS. So this is the first, which makes getting the SCOPE right more important
+      than features.
+      *** THE CONSTRAINT THAT MAKES IT SMALL ***: a probe can only be driven from the host it is PLUGGED
+      INTO. Two agents can therefore only collide on the SAME MACHINE. Cross-machine coordination is not
+      merely unnecessary, it is impossible to need. That eliminates every heavyweight option considered -
+      a reservation server, a GitHub-issue mutex, a git-CAS lease file - and leaves a host-local lock.
+      *** THE FAILURE MODE THAT ACTUALLY MATTERS ***: not "two agents both want it" (rare, and obvious
+      when it happens) but "one agent CRASHED holding it and now nobody can use the bench". Any design
+      with an explicit release step has that failure. So the claim is an OS flock held on an open fd for
+      exactly the lifetime of the wrapped command: when the process dies, for ANY reason, the kernel drops
+      it. There is no release to forget and no stale-lock reaper to write.
+        tools/bench/with-device <device> <purpose> -- <command...>
+        tools/bench/with-device --status | --self-test
+        tools/bench/devices.yaml   the registry (stlink-v3, pixhawk-6xrt)
+      *** SELF-TESTED, because a lock that does not exclude is worse than no lock at all *** - it would
+      give two agents false confidence while they corrupt each other's session. --self-test forks a real
+      holder and asserts all three properties, each OBSERVED:
+        contender while held      rc=3   refused, names the holder, pid and purpose
+        contender after release   rc=0
+        contender after the holder CRASHED (os._exit)  rc=0   <- the bench is NOT wedged
+      *** SCOPE NOTE recorded in devices.yaml ***: read-only telemetry on the Pixhawk (O_RDONLY on the
+      tty) needs NO claim - it cannot disturb another user. Anything that WRITES needs the claim AND
+      operator consent. Conflating those two would make the lock either useless or obstructive.
+      *** PROCESS NOTE ***: verifying this hit the campaign's most-repeated trap for the THIRD time in one
+      session - `tool | sed` reported the contender's refusal as rc=0 because that is sed's status. Caught
+      and re-checked bare. Three occurrences in one session is no longer bad luck; it is a signal that any
+      exit code quoted from a pipeline in this campaign should be treated as unverified until re-run bare.
+    tags: [bench, hardware, reservation, shared-resource, gale, flock, self-tested, crash-safe]
+    fields:
+      detected-by: jess needing the STLINK-V3 that gale also uses, 2026-09-05
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T10:10:33Z

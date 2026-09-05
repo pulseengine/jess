@@ -1,0 +1,20 @@
+# The shared physical bench. One entry per device that more than one agent may want.
+#
+# WHY THIS IS MACHINE-LOCAL AND THAT IS CORRECT: a probe can only be driven from the host it
+# is plugged into, so two agents can only collide if they are on the SAME machine. Locking
+# is therefore a host-local problem and needs no server, no GitHub mutex and no git-CAS
+# lease. When hardware moves to another host (e.g. the Pi), the lock moves with it.
+devices:
+  stlink-v3:
+    what: STLINK-V3 debug probe
+    serial: 003B001A3235511337333439
+    attached-to: NUCLEO-G474RE (STM32G474, Cortex-M4)
+    identify: pyocd list
+  pixhawk-6xrt:
+    what: Holybro Pixhawk 6X-RT flight controller (i.MX RT1176)
+    usb: PX4 FMU v6XRT.x, idVendor 13891
+    tty: /dev/cu.usbmodem01
+    identify: "ioreg -p IOUSB -l -w 0 | grep 'PX4 FMU'"
+    note: >
+      Vehicle. Read-only telemetry (O_RDONLY on the tty) needs no claim. Anything that
+      WRITES — ISP entry, SDP, flash — must hold this claim AND have operator consent.
