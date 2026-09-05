@@ -1,0 +1,110 @@
+name: Release
+
+# Cuts the release assets for jess's own shipped binary: `with-device`, the shared-bench
+# claim (AFD-081, DD-027). Until now jess cut releases by hand and shipped no binary, so
+# `with-device` existed only as a file in this repo — gale could read it but not RUN it, and
+# varve could not carry it (varve#130 needs a signed release asset with a digest, not a path).
+#
+# Asset naming follows the convention every other PulseEngine repo publishes and that
+# tools/deps/fetch.sh already parses:
+#     with-device-<version>-<target-triple>.tar.gz   +   SHA256SUMS.txt
+# so a consumer pins it exactly like synth or meld:
+#     release:pulseengine/jess@vX.Y.Z!with-device-<v>-<triple>.tar.gz!with-device
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and attach assets to'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-latest, target: aarch64-unknown-linux-gnu }
+          - { os: macos-14,      target: aarch64-apple-darwin }
+          - { os: macos-14,      target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v4
+      - name: rust target
+        run: rustup target add ${{ matrix.target }}
+      # The crate has zero dependencies and calls flock(2) via a bare `extern "C"`, so a
+      # cross build needs only a linker — no sysroot, no `cross`, no container.
+      - name: aarch64 linux cross-linker
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
+      - name: build
+        working-directory: tools/bench/with-device
+        run: cargo build --release --target ${{ matrix.target }}
+      # Self-test only where the binary can actually execute. A cross-built artifact is
+      # shipped UNTESTED unless its host runs it; say so rather than implying coverage.
+      # x86_64-apple-darwin runs under Rosetta on macos-14, so it is exercised too.
+      - name: self-test (native + rosetta targets only)
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        working-directory: tools/bench/with-device
+        run: |
+          BIN=target/${{ matrix.target }}/release/with-device
+          "$BIN" --version
+          "$BIN" --self-test
+      - name: package
+        working-directory: tools/bench/with-device
+        run: |
+          set -euo pipefail
+          # Read the version from Cargo.toml, not from `--version`: the aarch64-linux
+          # artifact is cross-built and cannot be executed on this runner.
+          VER=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          test -n "$VER"
+          NAME="with-device-${VER}-${{ matrix.target }}"
+          mkdir -p "/tmp/pkg/$NAME"
+          cp "target/${{ matrix.target }}/release/with-device" "/tmp/pkg/$NAME/"
+          cp ../devices.yaml "/tmp/pkg/$NAME/devices.yaml.example"
+          tar czf "/tmp/${NAME}.tar.gz" -C /tmp/pkg "$NAME"
+          echo "asset=/tmp/${NAME}.tar.gz" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.target }}
+          path: /tmp/with-device-*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: attach assets to the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: /tmp/assets, merge-multiple: true }
+      - name: SHA256SUMS.txt
+        working-directory: /tmp/assets
+        run: |
+          set -euo pipefail
+          ls -1 *.tar.gz
+          sha256sum *.tar.gz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: upload
+        working-directory: /tmp/assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber *.tar.gz SHA256SUMS.txt
+          echo "attached to $TAG:"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name'

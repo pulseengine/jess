@@ -4314,3 +4314,74 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T10:49:09Z
+
+  - id: AFD-083
+    type: ai-found-defect
+    title: "my own deadlock rationale failed its negative control: the self-test passes with the sort REMOVED — what prevents deadlock is no-hold-and-wait, not the ordering (with-device ported to Rust, released, CI-gated)"
+    status: open
+    description: |-
+      2026-09-05. Board attached; Track A. User set three requirements for the shared-bench claim tool:
+      deadlock-free under multi-device claims, shipped in the GitHub release, and Rust mandatory.
+      All three are met. But the load-bearing result of this tick is a negative control that
+      CONTRADICTED THE DESIGN RATIONALE I HAD ALREADY WRITTEN INTO THE CODE.
+
+      *** THE PORT (requirement 3) ***: tools/bench/with-device is now a Rust crate, replacing the
+      Python script at the same path (v0.1.0 -> v0.2.0). ZERO dependencies: flock(2) is declared with a
+      bare `extern "C"`, so the crate that will sit in a signed varve layer has nothing to vendor and
+      nothing to audit but itself. clippy -D warnings + cargo fmt --check clean.
+
+      *** THE FINDING: MY OWN DEADLOCK ARGUMENT DID NOT SURVIVE ITS NEGATIVE CONTROL ***
+      I designed sorted acquisition (Dijkstra's resource hierarchy: all claimants take locks in one
+      global order, so no cycle can form) and wrote in the module header that `--self-test` PROVES it,
+      by racing two processes that request the same two devices in OPPOSITE order. The self-test went
+      green on the first run. Reporting it there would have been a confident wrong claim.
+
+      Then I removed the sort and re-ran. Measured on this binary:
+        as shipped                        opposite-order pair -> 0,0 in 2.1 s   PASS
+        sort REMOVED, everything else     opposite-order pair -> 0,0 in 2.1 s   PASS  <-- test blind
+        sort removed AND hold-and-wait    opposite-order pair -> 3,3 in 15.1 s  FAIL  <-- real cycle,
+                                          restored                                    broken only by the
+                                                                                      --wait deadline
+
+      So the mechanism that actually prevents deadlock here is NO HOLD-AND-WAIT: on contention the
+      claimant DROPS every lock it already holds before retrying, which breaks Coffman's hold-and-wait
+      condition outright. The sort is real and kept as defence in depth (it is what would still hold if
+      --wait ever grew a blocking flock(LOCK_EX) path, where drop-and-retry is unavailable), but the
+      self-test does not discriminate on it. The 3,3-in-15.1s control is what makes the test non-vacuous
+      at all: without it, a test that passes on EVERY variant is a test that measures nothing.
+
+      This is the AFD-048 failure mode - a vacuous negative control - caught at authoring time instead
+      of by a clean-room pass, and caught in the rationale rather than the code. The code was correct;
+      the STATED REASON it was correct was wrong. Module header now carries the table above and says
+      plainly which mechanism the test sees. Generalised lesson: "I designed property P and the test
+      passes" is not evidence for P. Break P and confirm the test goes red. Design intent is the thing
+      least likely to be independently checked later, because it reads as explanation, not as a claim.
+
+      *** THE RELEASE (requirement 2) ***: jess had NO release workflow - v0.6.0 was cut by hand and jess
+      shipped no binary at all, which is why with-device existed only as a file gale could read but not
+      run, and why varve#130 had nothing to pin (a varve layer needs a signed release asset with a
+      digest, not a repo path). .github/workflows/release.yml now builds 4 targets
+      (x86_64/aarch64-unknown-linux-gnu, aarch64/x86_64-apple-darwin) on tag push, emits
+      with-device-<ver>-<triple>.tar.gz + SHA256SUMS.txt in the same shape every other PulseEngine repo
+      publishes and tools/deps/fetch.sh already parses, so a consumer pins it exactly like synth or meld.
+      HONEST SCOPE: aarch64-unknown-linux-gnu is CROSS-BUILT and its self-test is SKIPPED - that asset
+      ships unexecuted, and the workflow says so at the step rather than implying coverage. It is the
+      target the Pi will use, so it needs a real run before anyone trusts it there.
+
+      *** CI GATE ***: new `bench-tool` job runs build + the CLI baseline + --self-test on every PR. The
+      tool's own exclusion property is now gated rather than remembered. NOT YET EXECUTED IN CI at the
+      time of writing - this AFD is authored pre-merge; the verdict is the PR's.
+    tags: [bench, with-device, rust, deadlock, negative-control, self-correction, release, varve, afd-048, afd-081]
+    fields:
+      detected-by: jess negative-controlling its own deadlock claim before reporting it, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T11:04:49Z
+    links:
+      - type: traces-to
+        target: DD-027
+      - type: corrects
+        target: AFD-081

@@ -103,6 +103,38 @@ jobs:
         working-directory: jess
         run: tools/rivet/snapshot.sh | tee -a "$GITHUB_STEP_SUMMARY"
 
+  # The shared-bench claim (AFD-081, DD-027) is the one BINARY jess ships, and gale runs it
+  # on the same bench. A lock that silently fails to exclude is worse than no lock: both
+  # agents then believe they hold the probe. So the tool's own `--self-test` is a CI gate,
+  # not a thing someone remembers to run — it asserts exclusion under contention, release on
+  # crash, refusal of an unregistered name, and the opposite-order pair completing without
+  # deadlock. Negative-controlled: see the module header in src/main.rs for which mechanism
+  # that last check actually discriminates on (it is hold-and-wait, not the sort).
+  bench-tool:
+    name: with-device (shared-bench claim)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build + self-test
+        working-directory: tools/bench/with-device
+        run: |
+          set -euo pipefail
+          cargo build --release
+          B=target/release/with-device
+          # CLI baseline (pulseengine-cli-conventions): --version/-V and --help exit 0,
+          # an unknown flag exits 2 with usage on stderr.
+          test "$($B --version)" = "with-device $(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          $B --help >/dev/null
+          $B -V >/dev/null
+          if $B --no-such-flag -- true 2>/dev/null; then echo "unknown flag did not fail"; exit 1; fi
+          $B --no-such-flag -- true 2>/dev/null; rc=$?; test "$rc" = 2 || { echo "unknown flag rc=$rc, want 2"; exit 1; }
+          $B --self-test
+      - name: clippy + fmt
+        working-directory: tools/bench/with-device
+        run: |
+          cargo fmt --check
+          cargo clippy --release -- -D warnings
+
   # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
   spar-model:
     name: spar model (Pixhawk 6X-RT)
