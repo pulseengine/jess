@@ -375,7 +375,7 @@ artifacts:
         Float (px4-faithful) mixer - rejected for the F100: pulls 104 #369 ops,
         making gale-nano gated on hard-float (GI-FPU-002) for no benefit on an
         FPU-less M3 (it would be soft-float regardless). Reserve float mixing for
-        the M7 (where falcon already runs and an FPU exists). Caveat carried: the
+        the M7 (where falcon already runs IN EMULATION and an FPU exists). Caveat carried: the
         profile's IPC copies were small (<=22B, LLVM-inlined); a larger real
         IPC/telemetry frame could cross LLVM's memcpy threshold and pull #374 -
         re-profile against real frame sizes when the failsafe core firms up.

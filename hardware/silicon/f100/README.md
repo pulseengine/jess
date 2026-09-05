@@ -57,4 +57,7 @@ with the thing that needs it.
 - **nSRST is not wired** (`Error: SRST error` is expected and harmless here); reset over SWD.
 - With HLA, a memory read on a **running** target returns nothing at all rather than erroring —
   it reads exactly like a dead probe. `halt` first.
-- Everything here runs under a `with-device stlink-v1` claim; the probe is shared with gale.
+- **The scripts take the claim themselves.** They re-exec under `with-device stlink-v1` unless
+  already inside a claim, so running one directly cannot drive a probe gale is holding. This was
+  previously only a sentence in this README while the scripts took no claim at all — documentation
+  asserting a control that did not exist, which is the AFD-082 shape in prose form.

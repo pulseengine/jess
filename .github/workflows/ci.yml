@@ -272,6 +272,16 @@ jobs:
             echo "the geometry gate reported success on an unparseable file — it is vacuous"; exit 1
           fi
           echo "negative control OK: the gate refuses what it cannot parse"
+      # SECOND control, the other direction: the first proves the gate refuses what it cannot
+      # read; this proves it can still go RED on an image it CAN read. Shrinking the assumed
+      # SRAM makes the committed (good) image fail the linmem-base check. Without this, a gate
+      # that had quietly become incapable of failing would still pass both other steps.
+      - name: F100 geometry gate — red control (must fail a good image on a shrunken SRAM)
+        run: |
+          if SRAM_SIZE_OVERRIDE=1024 hardware/renode/gust-m3/check-fits-real-f100.sh; then
+            echo "the geometry gate PASSED an image that does not fit — it can no longer go red"; exit 1
+          fi
+          echo "red control OK: the gate still fails an image that does not fit"
       - name: F100 geometry gate — the image fits real silicon (AFD-088)
         run: hardware/renode/gust-m3/check-fits-real-f100.sh
       - name: gust F100/M3 byte-exact pass-through oracle (REQ-PIX-004 PART-P02, TEST-PIX-028)
