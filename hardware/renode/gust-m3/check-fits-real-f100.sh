@@ -27,15 +27,35 @@ SRAM_TOP=$((SRAM_BASE + SRAM_SIZE))
 FLASH_SIZE=$((128 * 1024))
 
 for t in arm-none-eabi-readelf readelf; do command -v $t >/dev/null && RE=$t && break; done
-for t in arm-none-eabi-objcopy objcopy; do command -v $t >/dev/null && OC=$t && break; done
 for t in arm-none-eabi-objdump llvm-objdump objdump; do command -v $t >/dev/null && OD=$t && break; done
-[ -n "${RE:-}" ] && [ -n "${OC:-}" ] || { echo "need readelf + objcopy"; exit 2; }
+[ -n "${RE:-}" ] || { echo "need readelf"; exit 2; }
 
-# Initial MSP is the first word of the vector table.
-"$OC" -O binary --only-section=.text "$ELF" /tmp/.vt.bin 2>/dev/null || \
-  "$OC" -O binary "$ELF" /tmp/.vt.bin
-MSP=$(od -An -tx4 -N4 /tmp/.vt.bin | tr -d ' ')
-MSP=$((16#$MSP))
+# Read the initial MSP — the first word of the vector table, at the start of .text.
+#
+# FAIL CLOSED, and via readelf rather than objcopy. The first version of this check shelled out
+# to `objcopy -O binary`, and on a runner whose binutils has no ARM target that prints
+# "Unable to recognise the format of the input file" and writes nothing. The value was then the
+# EMPTY STRING, `[ "" -gt N ]` errors and evaluates FALSE, both range tests fell through, and
+# the gate printed "initial MSP: 0000000000  ok" and exited 0 — a PASS on a file it could not
+# read. That is precisely the vacuous-gate class this check exists to expose, shipped inside the
+# check itself. An unreadable value is now a hard failure, never an "ok".
+read_msp() {
+  # .text's file offset from the section table, then the first 4 bytes, little-endian.
+  local off size
+  # readelf -S prints "  [ 4] .text  PROGBITS  <addr> <off> <size> ..." — the "[ 4]" index
+  # is one or two fields depending on the number, so strip it before positional parsing.
+  off=$("$RE" -S "$ELF" 2>/dev/null | sed 's/\[[ 0-9]*\]//' | awk '$1==".text"{print $4; exit}')
+  [ -n "$off" ] || return 1
+  od -An -tx4 -N4 -j $((16#$off)) "$ELF" 2>/dev/null | tr -d ' \n'
+}
+MSP_HEX=$(read_msp || true)
+case "$MSP_HEX" in
+  [0-9a-fA-F][0-9a-fA-F]*) : ;;
+  *) echo "CANNOT READ the vector table from '$ELF' (readelf=$RE)."
+     echo "Result: FAIL — refusing to report a verdict on a file this check could not parse."
+     exit 1 ;;
+esac
+MSP=$((16#$MSP_HEX))
 
 fail=0
 printf "image:            %s\n" "$ELF"
@@ -70,16 +90,21 @@ else printf "ok\n"; fi
 done
 [ -f /tmp/.f100fail ] && { fail=1; rm -f /tmp/.f100fail; }
 
-# What the image actually TOUCHES: synth rebases fp in the prologue, so the linear-memory base
-# is a movw/movt immediate pair. Report it so the live footprint is visible, not inferred.
+# What the image actually TOUCHES: synth rebases fp in `entry`'s prologue, so the linear-memory
+# base is a movw/movt immediate pair. Scope the search to `entry` — a plain first-match grep
+# picks up the reset handler's own movw and reports the STACK pointer as the linmem base, which
+# is a wrong number that happens to fall in the right range.
 if [ -n "${OD:-}" ]; then
-  lo=$("$OD" -d "$ELF" 2>/dev/null | grep -m1 -oE 'movw[[:space:]]+fp, #[0-9]+' | grep -oE '[0-9]+$')
-  hi=$("$OD" -d "$ELF" 2>/dev/null | grep -m1 -oE 'movt[[:space:]]+fp, #[0-9]+' | grep -oE '[0-9]+$')
+  pro=$("$OD" -d "$ELF" 2>/dev/null | sed -n '/<entry>:/,/^$/p')
+  lo=$(printf '%s' "$pro" | grep -m1 -oE 'movw[[:space:]]+fp, #[0-9]+' | grep -oE '[0-9]+$')
+  hi=$(printf '%s' "$pro" | grep -m1 -oE 'movt[[:space:]]+fp, #[0-9]+' | grep -oE '[0-9]+$')
   if [ -n "${lo:-}" ] && [ -n "${hi:-}" ]; then
     lm=$(( (hi << 16) | lo ))
     printf "linmem base:      %#010x  " "$lm"
     if [ "$lm" -ge "$SRAM_BASE" ] && [ "$lm" -lt "$SRAM_TOP" ]; then printf "inside real SRAM\n"
     else printf "*** OUTSIDE real SRAM ***\n"; fail=1; fi
+  else
+    echo "linmem base:      (not located in <entry>; disassembler=${OD})"
   fi
 fi
 
