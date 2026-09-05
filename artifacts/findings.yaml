@@ -4949,3 +4949,71 @@ artifacts:
     links:
       - type: corrects
         target: AFD-086
+
+  - id: AFD-093
+    type: ai-found-defect
+    title: "meld v0.54.0 verified against jess's REAL 5-stage cascade: VALID, all 5 boundaries by symbol, and it EXECUTES to the reference — plus the control showing a plain fuse is nondeterministic so the version diff proved nothing"
+    status: open
+    description: |-
+      2026-09-05. STEP 1/2 of the loop: meld#393 closed and shipped as v0.54.0 the same day. The loop's
+      rule is to verify a resolution AGAINST THE REAL BUILD, never against the claim. Done, on jess's
+      real 5-stage falcon cascade rather than a synthetic case.
+
+      *** VERDICT: v0.54.0 IS GOOD ON JESS'S REAL CASCADE, AND SAFE TO ADOPT ***
+        meld fuse rate,mixer,attitude,position,iekf --memory shared --pack-rebase
+          v0.52.0 (pinned)  exit 0, 65,355 B, wasm-tools validate: VALID
+          v0.54.0 (new)     exit 0, 65,355 B, wasm-tools validate: VALID
+      Exit 0 is NOT the check here - meld#390 was precisely "emits INVALID wasm at exit 0" - so both
+      outputs were validated explicitly.
+      ALL FIVE BOUNDARIES RESOLVE, reported by SYMBOL NAME as the loop requires:
+          pulseengine:falcon-cascade/rate@0.7.0#tick
+          pulseengine:falcon-cascade/mixer@0.7.0#mix
+          pulseengine:falcon-cascade/attitude@0.7.0#tick
+          pulseengine:falcon-cascade/position@0.7.0#tick
+          pulseengine:falcon-cascade/ekf@0.7.0#estimate
+      AND IT EXECUTES, which is the claim that matters ("it lowers" is not "it works"): the appcompose
+      oracle ran the composed image under wasmtime and agreed with the independently computed
+      reference, 1068280774, on BOTH versions, with the reference's own negative control distinct
+      (1070923226 for wy+0.05).
+
+      *** THE CONTROL THAT STOPPED A WRONG CLAIM ***
+      The two fusions differ byte-wise at identical size, and the obvious reading is "0.54.0 changed
+      the output". That reading is unsupported: a plain `meld fuse` is NOT byte-stable, and v0.52.0
+      run twice on identical inputs ALSO differs from itself (meld#325). So the version diff measured
+      nondeterminism, not the version. One variable at a time:
+        - with --reproducible (which IS stable) the versions genuinely differ:
+              0.52.0  sha256 5b79236e8c3dbdff...
+              0.54.0  sha256 026e9dce9183e486...
+          so 0.54.0 DOES change the fused core for this input. That is real and it matters, because
+          TEST-PIX-026 and the sigil attestation key off exactly that digest.
+        - and the MELD= override was proven to have taken effect from the TOOL'S OWN BANNER
+          ("Meld v0.52.0" vs "Meld v0.54.0" in each run's meld.log), not from a digest difference
+          that nondeterminism could equally explain. Without that line the 0.54.0 PASS would have
+          been vacuous - the script only fuses when the output is absent, so a stale artifact would
+          have produced a confident green for a version that never ran.
+
+      *** AN UNEXPECTED AND USEFUL RESULT: LOOM NORMALISES THE DIFFERENCE AWAY ***
+          appcompose_pinned  fused.wasm 07116da94f885108   fused.loom.wasm 7378d2553042ba1a
+          appcompose_054     fused.wasm ec3ccbd375449309   fused.loom.wasm 7378d2553042ba1a
+      Two different fused cores, one identical optimized core. So on this input the meld bump is
+      invisible downstream of loom - synth, the attestation and the on-target image are unaffected.
+      That is a good reason to treat the bump as low-risk, and it is also a caution: a downstream
+      oracle keyed on the POST-loom digest cannot detect a meld regression at all. TEST-PIX-026 keys
+      on the meld output, which is the right place; nothing here changes that.
+      NOT CLAIMED: that loom always normalises this class of difference. One input, one observation.
+
+      *** WHAT THIS DOES NOT SETTLE ***
+      meld#393's specific defect was a use'd record across a same-memory boundary being REFUSED. This
+      cascade fuses cleanly on 0.52.0 too, so jess's input set does not appear to exercise the failing
+      path - the fix is verified as NON-REGRESSING here, not as REPAIRING anything here. The
+      maintainer's own report (7 -> 91 boundaries on the failing case) is the evidence for the repair;
+      jess corroborates that the shipped build is sound on the real cascade.
+    tags: [meld, release-watch, upstream, falcon-cascade, negative-control, loom, test-pix-026, verification]
+    fields:
+      detected-by: jess verifying meld#393's fix against the real build per the loop's STEP 1 rule, 2026-09-05
+      severity: minor
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T18:46:28Z
