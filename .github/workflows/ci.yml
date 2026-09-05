@@ -230,6 +230,13 @@ jobs:
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
         run: /tmp/renode/renode-test hardware/renode/synth507-brtable/brtable-507.robot
+      # AFD-088: assert the image FITS the real part before running it on the model. m3.repl
+      # used to declare 256 KB of SRAM while an STM32F100 has 8 KB, so an image whose stack
+      # sat at 0x20020000 — outside physical RAM — passed this gate for six weeks. The
+      # geometry check is cheap and runs first; if it fails, the robot's green would be about
+      # a machine that cannot exist.
+      - name: F100 geometry gate — the image fits real silicon (AFD-088)
+        run: hardware/renode/gust-m3/check-fits-real-f100.sh
       - name: gust F100/M3 byte-exact pass-through oracle (REQ-PIX-004 PART-P02, TEST-PIX-028)
         run: /tmp/renode/renode-test hardware/renode/gust-m3/passthrough-m3.robot
       - name: inter-core NavState crossing oracle (REQ-PIX-007, TEST-PIX-030)

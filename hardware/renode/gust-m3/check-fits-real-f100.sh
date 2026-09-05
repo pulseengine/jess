@@ -13,8 +13,10 @@
 # An emulator that is MORE GENEROUS than the target does not fail the way the target fails; it
 # passes. That is how an on-target claim can be green about a machine that cannot exist.
 #
-# This asserts the image against the REAL geometry. Exit 0 = fits; exit 1 = the evidence does
-# not transfer to silicon.
+# This asserts the image against the REAL geometry: the initial stack pointer and the linear-
+# memory base must land inside physical SRAM, and no INITIALISED data may sit past its top.
+# A NOBITS reservation larger than SRAM is reported and tolerated — see the correction below.
+# Exit 0 = fits; exit 1 = the evidence does not transfer to silicon.
 set -uo pipefail
 cd "$(dirname "$0")"
 ELF=${1:-passthrough_mem.elf}
@@ -26,6 +28,7 @@ FLASH_SIZE=$((128 * 1024))
 
 for t in arm-none-eabi-readelf readelf; do command -v $t >/dev/null && RE=$t && break; done
 for t in arm-none-eabi-objcopy objcopy; do command -v $t >/dev/null && OC=$t && break; done
+for t in arm-none-eabi-objdump llvm-objdump objdump; do command -v $t >/dev/null && OD=$t && break; done
 [ -n "${RE:-}" ] && [ -n "${OC:-}" ] || { echo "need readelf + objcopy"; exit 2; }
 
 # Initial MSP is the first word of the vector table.
@@ -42,18 +45,43 @@ if [ "$MSP" -gt "$SRAM_TOP" ] || [ "$MSP" -lt "$SRAM_BASE" ]; then
   printf "*** OUTSIDE PHYSICAL SRAM — the first stack push faults on real silicon ***\n"; fail=1
 else printf "ok\n"; fi
 
-# Every RW/LOAD segment placed in SRAM must fit inside 8 KB.
-"$RE" -l "$ELF" 2>/dev/null | awk '/LOAD/{print $3, $6}' | while read -r vaddr memsz; do
-  v=$((vaddr)); m=$((memsz))
-  case $((v >= SRAM_BASE && v < SRAM_BASE + 0x10000000)) in
-    1) end=$((v + m))
-       printf "SRAM segment:     %#010x + %#x = %#010x  " "$v" "$m" "$end"
-       if [ "$end" -gt "$SRAM_TOP" ]; then
-         printf "*** OVERFLOWS 8 KB by %d bytes ***\n" $((end - SRAM_TOP)); echo OVERFLOW >> /tmp/.f100fail
-       else printf "fits\n"; fi ;;
-  esac
+# The SRAM reservation: report it, but do NOT fail on it alone.
+#
+# CORRECTION (2026-09-05, same day this check was written): the first version FAILED whenever
+# a LOAD segment in SRAM exceeded 8 KB, and that was a FALSE POSITIVE. synth places the wasm
+# linear memory in a `.linear_memory` section of type NOBITS with FileSiz 0 — a pure
+# reservation. Nothing is written to it at load, and an image only faults if it ACCESSES past
+# the real SRAM top. The gust pass-through touches fp+0 .. fp+28 and nothing else.
+# Failing on the declared reservation measures the ELF's opinion, not the hardware's. That is
+# the same error this whole finding is about, committed inside the check written to expose it.
+"$RE" -l "$ELF" 2>/dev/null | awk '/LOAD/{print $3, $5, $6}' | while read -r vaddr filesz memsz; do
+  v=$((vaddr)); f=$((filesz)); m=$((memsz))
+  [ "$v" -ge "$SRAM_BASE" ] || continue
+  [ "$v" -lt $((SRAM_BASE + 0x10000000)) ] || continue
+  end=$((v + m))
+  printf "SRAM reservation: %#010x + %#x = %#010x  " "$v" "$m" "$end"
+  if [ "$end" -le "$SRAM_TOP" ]; then printf "fits\n"
+  elif [ "$f" -eq 0 ]; then
+    printf "exceeds 8 KB but FileSiz=0 (NOBITS) — a reservation, not a load; not fatal on its own\n"
+  else
+    printf "*** %d bytes of INITIALISED data past the SRAM top — written at load, fatal ***\n" \
+      $((end - SRAM_TOP)); echo OVERFLOW >> /tmp/.f100fail
+  fi
 done
 [ -f /tmp/.f100fail ] && { fail=1; rm -f /tmp/.f100fail; }
+
+# What the image actually TOUCHES: synth rebases fp in the prologue, so the linear-memory base
+# is a movw/movt immediate pair. Report it so the live footprint is visible, not inferred.
+if [ -n "${OD:-}" ]; then
+  lo=$("$OD" -d "$ELF" 2>/dev/null | grep -m1 -oE 'movw[[:space:]]+fp, #[0-9]+' | grep -oE '[0-9]+$')
+  hi=$("$OD" -d "$ELF" 2>/dev/null | grep -m1 -oE 'movt[[:space:]]+fp, #[0-9]+' | grep -oE '[0-9]+$')
+  if [ -n "${lo:-}" ] && [ -n "${hi:-}" ]; then
+    lm=$(( (hi << 16) | lo ))
+    printf "linmem base:      %#010x  " "$lm"
+    if [ "$lm" -ge "$SRAM_BASE" ] && [ "$lm" -lt "$SRAM_TOP" ]; then printf "inside real SRAM\n"
+    else printf "*** OUTSIDE real SRAM ***\n"; fail=1; fi
+  fi
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo
@@ -61,6 +89,8 @@ if [ "$fail" -ne 0 ]; then
   echo "  TEST-PIX-028 is green in Renode because hardware/renode/gust-m3/m3.repl declares"
   echo "  256 KB of SRAM. The target part has 8 KB. The emulator is more generous than the"
   echo "  hardware, so it does not reproduce the failure the hardware would have."
+  echo "  FIX: rebuild with --stack-layout low --stack-size <N> (synth >= 0.58) so the stack"
+  echo "  is reserved at the BOTTOM of SRAM instead of assuming a 128 KB part."
   exit 1
 fi
 echo "Result: PASS — fits the real STM32F100 geometry."
