@@ -126,8 +126,10 @@ jobs:
           test "$($B --version)" = "with-device $(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
           $B --help >/dev/null
           $B -V >/dev/null
-          if $B --no-such-flag -- true 2>/dev/null; then echo "unknown flag did not fail"; exit 1; fi
-          $B --no-such-flag -- true 2>/dev/null; rc=$?; test "$rc" = 2 || { echo "unknown flag rc=$rc, want 2"; exit 1; }
+          # `rc=0; cmd || rc=$?` and NOT `cmd; rc=$?` — under `set -e` the latter aborts the
+          # step on the very failure it is trying to measure, so the assertion never runs.
+          rc=0; $B --no-such-flag -- true 2>/dev/null || rc=$?
+          test "$rc" = 2 || { echo "unknown flag rc=$rc, want 2"; exit 1; }
           $B --self-test
       - name: clippy + fmt
         working-directory: tools/bench/with-device

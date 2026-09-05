@@ -73,7 +73,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/with-device" "/tmp/pkg/$NAME/"
           cp ../devices.yaml "/tmp/pkg/$NAME/devices.yaml.example"
           tar czf "/tmp/${NAME}.tar.gz" -C /tmp/pkg "$NAME"
-          echo "asset=/tmp/${NAME}.tar.gz" >> "$GITHUB_ENV"
+          ls -l "/tmp/${NAME}.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: pkg-${{ matrix.target }}
