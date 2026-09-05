@@ -1,10 +1,17 @@
 [package]
 name = "with-device"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Hold exclusive claims on shared bench hardware for the lifetime of a command"
 license = "Apache-2.0"
 publish = false
+
+# A library + a thin binary over it. The split exists so `cargo test` can reach the argument
+# and registry parsing; when it all lived in main.rs the only thing that could exercise it was
+# the binary's own --self-test, which walks a fraction of those paths.
+[lib]
+name = "with_device"
+path = "src/lib.rs"
 
 [[bin]]
 name = "with-device"

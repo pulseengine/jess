@@ -111,8 +111,18 @@ jobs:
   # deadlock. Negative-controlled: see the module header in src/main.rs for which mechanism
   # that last check actually discriminates on (it is hold-and-wait, not the sort).
   bench-tool:
-    name: with-device (shared-bench claim)
-    runs-on: ubuntu-latest
+    name: with-device (${{ matrix.os }})
+    # BOTH platforms, because the tool ships on both and the difference is not theoretical:
+    # the suite's `--version`-after-`--` case passed on macOS and FAILED on ubuntu, since GNU
+    # coreutils `echo` interprets `--version` itself while BSD echo prints it. A single-platform
+    # gate would have let that divergence through in either direction. The same asymmetry exists
+    # in the subject under test — a second flock(2) on one fd succeeds on BSD and blocks on
+    # Linux — so a same-device-twice bug would be invisible on a mac-only run.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: build + self-test
@@ -131,11 +141,32 @@ jobs:
           rc=0; $B --no-such-flag -- true 2>/dev/null || rc=$?
           test "$rc" = 2 || { echo "unknown flag rc=$rc, want 2"; exit 1; }
           $B --self-test
+      # The actual test suite. `--self-test` is the FIELD check that ships in the binary and
+      # runs where there is no source tree; it is not a substitute for this. The split is not
+      # academic: the suite's first run found that mode flags were matched across the whole
+      # argv, so `with-device probe -- mytool --version` printed with-device's own version and
+      # exited 0 WITHOUT RUNNING mytool — and --self-test was green throughout, because it
+      # never wraps a command containing a flag with-device also understands (AFD-084).
+      - name: cargo test (unit + behavioural)
+        working-directory: tools/bench/with-device
+        run: cargo test --all
       - name: clippy + fmt
         working-directory: tools/bench/with-device
         run: |
           cargo fmt --check
-          cargo clippy --release -- -D warnings
+          cargo clippy --release --all-targets -- -D warnings
+      - uses: taiki-e/install-action@cargo-llvm-cov
+        if: matrix.os == 'ubuntu-latest'
+      # Floor matched to what the suite actually achieves (96.8% lines locally), not set far
+      # below it — a coverage gate parked well under the real number passes no matter what
+      # rots, which is the vacuous-gate failure in yet another costume.
+      # Once, on linux — the coverage number does not differ by platform and installing
+      # llvm-cov twice buys nothing.
+      - name: coverage floor
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: tools/bench/with-device
+        run: |
+          cargo llvm-cov --summary-only --fail-under-lines 90 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
   spar-model:
