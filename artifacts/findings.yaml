@@ -4037,3 +4037,66 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T04:16:02Z
+
+  - id: AFD-079
+    type: ai-found-defect
+    title: "H1 is now executable: the prompt's recipe skipped the flashloader, ISP entry is software not surgery, and the SWD route is blocked on a cable — runbook is read-only by default with every guard observed firing"
+    status: resolved
+    description: |-
+      2026-09-05. The Pixhawk 6X-RT was attached this tick (PX4 FMU v6XRT.x, idVendor 13891, streaming
+      76,010 B of MAVLink in 6 s on /dev/cu.usbmodem01). H1 is the first incomplete rung. Researched the
+      actual procedure rather than executing the one written in the loop prompt, and it was wrong in one
+      place and right in another - in both cases the source that settled it was the tool's own data, not a
+      forum.
+      *** THE PROMPT'S H1 RECIPE IS INCOMPLETE ***: it says nxpdevscan -> blhost get-property 1 -> ...
+      For this part that skips a required step. spsdk's OWN device database for mimxrt1176 declares:
+        isp: rom:         protocol: sdp    usb 0x1FC9:0x013D
+             flashloader: protocol: mboot  usb 0x15A2:0x0073
+      So the ROM speaks SDP and blhost/mboot is reachable only after a flashloader is loaded into OCRAM.
+      blhost's write-memory / call / read-memory - exactly the H1 shape - therefore need that binary.
+      NXP community posts claim the opposite ("from RT11XX discard sdphost, just use blhost"). The
+      database and the forum disagree; the FIRST read-only nxpdevscan in ISP settles it by VID:PID before
+      anything is written, so the runbook does not need the question resolved in advance.
+      *** ISP ENTRY IS SOFTWARE ON THIS BOARD, which reverses jess's earlier advice ***: PX4's v6xrt
+      bootloader doc gives QGroundControl -> Analyze Tools -> MAVLink Console -> `reboot -i`. No
+      disassembly. The BOOT button inside the FMUM module is the BRICKED-board fallback, not the normal
+      path. Recovery is documented: BOOT button + reflash px4_fmu-v6xrt_bootloader.bin to 0x30000000 via
+      MCUXpresso Secure Provisioning Tool. So the downside is bounded and reversible.
+      *** THE SWD ROUTE IS BLOCKED ON HARDWARE, which also reverses jess's earlier preference ***: the
+      6X-RT does expose SWD (JST SM10B Pixhawk Debug Full: SWDIO pin 4, SWCLK pin 5, nRST pin 9), and
+      pyocd has BUILT-IN mimxrt1170_cm7/cm4 targets - but PX4 states an ST-Link "adapter must be
+      soldered", and the attached STLINK-V3 is on a NUCLEO-G474RE, not the Pixhawk. So SWD needs a Holybro
+      Pixhawk Debug Adapter or soldering. ISP is the route available today.
+      *** FLASHLOADER ACQUIRED AND PINNED, with corroborated provenance ***: it ships inside a TOOL repo,
+      not as a release asset. Fetched from JayHeng/NXP-MCUBootUtility and verified BYTE-IDENTICAL to the
+      copy in NXP'S OWN ORG (nxp-mcuxpresso/mcu-boot-utility) - two independent sources, one the vendor.
+      sha256 ba6a8b06161aef7914436909185b6196b278f8e4cd16deeaab9945c1464d5f41, 80,930 B. Structurally
+      verified as a real i.MX IVT: tag 0xD1, length 32, version 0x40, entry 0x20262561, self 0x2024FE00,
+      both in OCRAM1. UNSIGNED (csf=0), which is normal for a flashloader and is stated rather than
+      glossed. fetch.sh gained a `ghfile:` locator for repo-committed artifacts.
+      *** THE RUNBOOK IS SAFE BY DEFAULT ***: hardware/silicon/rt1176-blhost/h1-runbook.sh.
+        - DEFAULT IS READ-ONLY. --execute is required for any write and a human passes it.
+        - NO FLASH VERB EXISTS in the script. Audited on EXECUTABLE lines only: the seven blhost/sdphost
+          calls are write-file (to OCRAM), jump-address, get-property x2, write-memory, call, read-memory.
+          A naive grep matched 1 "flash" hit - it was the comment saying no flash command is issued, which
+          is why the audit was re-run against executable lines.
+        - THE ADDRESS IS NEVER GUESSED. It must come from get-property 12 (reserved regions), and the
+          script refuses if that returns nothing parseable. Writing outside a reserved region is how the
+          bootloader's own state gets corrupted.
+        - PASS REQUIRES BOTH MARKERS: 0x1E55F00D and arg+0x55. The second is address-derived, so a stale
+          RAM read cannot fake it; a single-word check could.
+        - Entering ISP is NOT in the script. It is a command to the vehicle and belongs to the operator.
+      *** GUARDS OBSERVED FIRING, not assumed ***: no board -> rc=1 "Nothing was done"; --execute without
+      ADDR -> rc=1 "Refusing to guess"; --dry-run -> rc=0, prints the full sequence and executes nothing.
+      The exit codes were checked BARE after a `| tail` first reported the refusal as rc=0 - the campaign's
+      most-repeated trap, hit again here in jess's own verification.
+      NOTHING WAS SENT TO THE VEHICLE THIS TICK. Read-only telemetry only.
+    tags: [h1, hardware, rt1176, isp, sdp, flashloader, provenance, safe-by-default, runbook, research]
+    fields:
+      detected-by: jess researching the documented H1 procedure against spsdk's device database and PX4/NXP docs before touching the attached board, 2026-09-05
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T08:15:07Z
