@@ -4595,19 +4595,29 @@ artifacts:
       "communicates, but reads return no data". Claiming H1 complete here would be the same error as
       claiming it on the macOS echo.
       Two open leads, neither verified: (a) the USB product string is "SE Blank RT Family" - SE as in
-      EdgeLock secure enclave - and such a part may refuse SDP reads by policy; (b) spsdk 3.11's
-      `read-register` CLI is separately BROKEN: every documented arg form fails inside spsdk with
-      "invalid sub-command or arguments 'read-register 0X2024FE00 32 None'", COUNT defaulting to None
-      rather than the format size. That is a CLI-layer defect, not a comms failure - the API path
-      reached the device fine - and is worth an upstream report.
+      EdgeLock secure enclave - and such a part may refuse SDP reads by policy; (b) originally recorded here as
+      "spsdk 3.11's read-register CLI is broken, COUNT defaults to None". THAT WAS WRONG AND IS
+      WITHDRAWN. Reading spsdk/apps/sdphost.py settles it:
+          response = sdp.read_safe(address, count, item_length)
+          if not response:
+              raise SPSDKAppError(f"Error: invalid sub-command or arguments 'read-register ...'")
+      The message is NOT a CLI parse error. It is raised when the READ RETURNS NOTHING, and spsdk
+      blames the arguments for an empty device response. read-register was failing for exactly the
+      same reason the API path was - no data came back - so it is one symptom, not two, and the CLI
+      is not defective. I nearly filed an upstream bug on this; checking the supplier's source before
+      reporting is what stopped it, and it is the third hypothesis of mine this session that the
+      evidence killed. What IS worth reporting upstream is much smaller: a misleading error message
+      that names the wrong cause and would send anyone else down the same path.
 
-      *** THREE WRONG HYPOTHESES I HELD ALONG THE WAY, ALL FALSIFIED BY MEASUREMENT ***
+      *** FOUR WRONG HYPOTHESES I HELD ALONG THE WAY, ALL FALSIFIED BY MEASUREMENT ***
         1. "spsdk has no USB ids for RT117x, so the family filter matches nothing." The RT117x
            database.yaml files genuinely carry no vid/pid while mimxrt1010/1040/1189/595s do, so this
            looked airtight. It is wrong: NXPUSBDeviceFilter.compare() on the real record returns True.
         2. "vars(dev) returns an unusable ctypes object, so enumerate() drops it." Also wrong -
            vars(dev) is a clean dict with vendor_id, product_id, path, the lot.
-        3. The real cause of every "No devices found" I saw was SELF-INFLICTED: my first script
+        3. "spsdk's read-register CLI is broken." Wrong - see above; it is the same no-data symptom
+           wearing a misleading error message.
+        4. The real cause of every "No devices found" I saw was SELF-INFLICTED: my first script
            detached the kernel HID driver via pyusb to prove libusb could claim it. That succeeded -
            and made the device invisible to hidapi, which is what spsdk actually uses. I then spent
            three rounds diagnosing spsdk for a hole I had dug. Re-attaching the driver made stock
