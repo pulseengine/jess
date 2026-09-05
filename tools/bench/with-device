@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Run a command while holding an exclusive claim on a shared bench device.
+
+    with-device <device> <purpose> -- <command...>
+    with-device --status
+    with-device --self-test
+
+WHY IT IS SHAPED THIS WAY. Two agents (jess and gale) share one physical bench. The failure
+mode that matters is not "two agents both want it" — it is "one agent crashed while holding
+it and now nobody can use it". So the claim is held by an OS-level flock on an open fd for
+exactly the lifetime of the wrapped command: when the process dies, for any reason, the
+kernel drops the lock. There is no release step to forget and no stale-lock cleanup to write.
+
+Machine-local on purpose: a probe can only be driven from the host it is plugged into, so
+two agents can only collide on the same machine. That makes a server, a GitHub-issue mutex
+or a git-CAS lease all unnecessary complexity.
+
+Exit codes: the command's own, or 3 if the device is already claimed, 4 on usage error.
+"""
+import fcntl, json, os, sys, time, subprocess, datetime
+
+LOCKDIR = os.environ.get("BENCH_LOCKDIR", "/var/tmp/pulseengine-bench")
+
+
+def _paths(dev):
+    return os.path.join(LOCKDIR, dev + ".lock"), os.path.join(LOCKDIR, dev + ".holder")
+
+
+def status():
+    if not os.path.isdir(LOCKDIR):
+        print("  no claims (no lock dir yet)"); return 0
+    any_held = False
+    for f in sorted(os.listdir(LOCKDIR)):
+        if not f.endswith(".lock"):
+            continue
+        dev = f[:-5]
+        lock, holder = _paths(dev)
+        fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o666)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            print(f"  {dev:<16} free")
+        except OSError:
+            any_held = True
+            info = {}
+            try:
+                info = json.load(open(holder))
+            except Exception:
+                pass
+            held = info.get("since", "?")
+            print(f"  {dev:<16} CLAIMED by {info.get('who','?')} pid={info.get('pid','?')} "
+                  f"since {held} — {info.get('purpose','?')}")
+        finally:
+            os.close(fd)
+    return 0 if not any_held else 0
+
+
+def self_test():
+    """A lock that does not exclude is worse than none. Prove the failing case is reachable."""
+    dev = "selftest-device"
+    lock, _ = _paths(dev)
+    os.makedirs(LOCKDIR, exist_ok=True)
+    me = sys.argv[0]
+    # hold it in a child for 3s, then try to claim it here and require refusal
+    child = subprocess.Popen([sys.executable, me, dev, "selftest-holder", "--",
+                              "python3", "-c", "import time;time.sleep(3)"])
+    time.sleep(1.0)
+    r = subprocess.run([sys.executable, me, dev, "selftest-contender", "--", "true"],
+                       capture_output=True, text=True)
+    ok_refused = (r.returncode == 3)
+    print(f"  contender while held : rc={r.returncode} (expect 3)  {'OK' if ok_refused else 'FAIL'}")
+    child.wait()
+    r2 = subprocess.run([sys.executable, me, dev, "selftest-after", "--", "true"],
+                        capture_output=True, text=True)
+    ok_free = (r2.returncode == 0)
+    print(f"  contender after release: rc={r2.returncode} (expect 0)  {'OK' if ok_free else 'FAIL'}")
+    # a crashed holder must NOT wedge the device
+    c2 = subprocess.Popen([sys.executable, me, dev, "selftest-crasher", "--",
+                           "python3", "-c", "import os;os._exit(1)"])
+    c2.wait(); time.sleep(0.3)
+    r3 = subprocess.run([sys.executable, me, dev, "selftest-after-crash", "--", "true"],
+                        capture_output=True, text=True)
+    ok_crash = (r3.returncode == 0)
+    print(f"  after holder CRASHED  : rc={r3.returncode} (expect 0)  {'OK' if ok_crash else 'FAIL'}")
+    good = ok_refused and ok_free and ok_crash
+    print("  self-test:", "PASS" if good else "FAIL")
+    return 0 if good else 1
+
+
+def main():
+    if "--status" in sys.argv:
+        return status()
+    if "--self-test" in sys.argv:
+        return self_test()
+    if "--" not in sys.argv or len(sys.argv) < 5:
+        sys.stderr.write(__doc__ + "\n"); return 4
+    sep = sys.argv.index("--")
+    if sep < 3:
+        sys.stderr.write("usage: with-device <device> <purpose> -- <command...>\n"); return 4
+    dev, purpose, cmd = sys.argv[1], " ".join(sys.argv[2:sep]), sys.argv[sep + 1:]
+    if not cmd:
+        sys.stderr.write("no command given after --\n"); return 4
+
+    os.makedirs(LOCKDIR, exist_ok=True)
+    lock, holder = _paths(dev)
+    fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o666)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        info = {}
+        try:
+            info = json.load(open(holder))
+        except Exception:
+            pass
+        sys.stderr.write(
+            f"DEVICE BUSY: '{dev}' is claimed by {info.get('who','?')} "
+            f"(pid {info.get('pid','?')}) since {info.get('since','?')} for: "
+            f"{info.get('purpose','?')}\nNothing was run.\n")
+        os.close(fd); return 3
+
+    with open(holder, "w") as h:
+        json.dump({"who": os.environ.get("BENCH_WHO", "jess"),
+                   "pid": os.getpid(),
+                   "since": datetime.datetime.now().isoformat(timespec="seconds"),
+                   "purpose": purpose,
+                   "cmd": cmd}, h)
+    try:
+        return subprocess.call(cmd)
+    finally:
+        # the flock drops when fd closes / the process dies — this is only tidying
+        try:
+            os.unlink(holder)
+        except OSError:
+            pass
+        os.close(fd)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
