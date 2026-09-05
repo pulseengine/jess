@@ -4,6 +4,23 @@
 # is plugged into, so two agents can only collide if they are on the SAME machine. Locking
 # is therefore a host-local problem and needs no server, no GitHub mutex and no git-CAS
 # lease. When hardware moves to another host (e.g. the Pi), the lock moves with it.
+# WHEN A CLAIM IS REQUIRED — either condition is sufficient:
+#
+#   1. It attaches a DEBUG PROBE (openocd, probe-rs, pyocd, gdb). `mdw` is not a harmless read.
+#   2. It opens a device whose data is CONSUMED BY THE READER — any tty/serial, EVEN O_RDONLY.
+#
+# Rule 2 replaces an earlier "read-only telemetry needs no claim" exemption, which was wrong.
+# gale caught it (gale#356) and jess MEASURED it on this Pixhawk:
+#     one reader alone      66,872 B in 5 s
+#     two readers together  37,787 B + 40,053 B = 77,840 B combined
+# Each reader got roughly HALF. Combined is ~16% over solo, not the ~2x that duplication
+# would give. And crucially the OS does NOT refuse the second open — both readers proceed
+# and neither sees an error. Two agents tailing one tty therefore each capture a SILENT
+# SUBSET, indistinguishable from a flaky USB link. That is precisely the failure this tool
+# exists to prevent, so exempting it was self-defeating.
+#
+# Genuinely claim-free is narrower than "reads": inspecting files, lsusb/ioreg, `pyocd list`,
+# reading a log someone already captured to disk. Not live streams.
 devices:
   stlink-v3:
     what: STLINK-V3 debug probe
@@ -16,5 +33,14 @@ devices:
     tty: /dev/cu.usbmodem01
     identify: "ioreg -p IOUSB -l -w 0 | grep 'PX4 FMU'"
     note: >
-      Vehicle. Read-only telemetry (O_RDONLY on the tty) needs no claim. Anything that
-      WRITES — ISP entry, SDP, flash — must hold this claim AND have operator consent.
+      Vehicle. Anything that WRITES — ISP entry, SDP, flash — needs this claim AND operator
+      consent. SO DOES READING THE TTY: see the claim rule below. An earlier version of this
+      file exempted read-only telemetry and that was WRONG (gale#356).
+  selftest-device:
+    what: SYNTHETIC — not real hardware. Used only by `with-device --self-test`.
+    note: >
+      Registered explicitly rather than special-cased in code. The alternative was a
+      bypass for names matching some pattern, and a bypass in a lock is exactly the hole
+      that later gets used for something real. Adding the synthetic device to the registry
+      keeps ONE rule: the registry is authoritative, no exceptions.
+

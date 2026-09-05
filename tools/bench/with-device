@@ -19,17 +19,40 @@ Exit codes: the command's own, or 3 if the device is already claimed, 4 on usage
 """
 import fcntl, json, os, sys, time, subprocess, datetime
 
+__version__ = "0.1.0"
+PROG = "with-device"
+
 LOCKDIR = os.environ.get("BENCH_LOCKDIR", "/var/tmp/pulseengine-bench")
+
+
+def _known_devices():
+    """Device names from the registry. Parsed without a yaml dependency: the file is a fixed
+    two-level shape, and adding a dep to a lock tool is a poor trade."""
+    reg = os.path.join(os.path.dirname(os.path.abspath(__file__)), "devices.yaml")
+    names, in_devices = set(), False
+    try:
+        for line in open(reg):
+            if line.startswith("devices:"):
+                in_devices = True; continue
+            if in_devices:
+                if line.strip() and not line.startswith(("  ", "\t")):
+                    break
+                if line.startswith("  ") and not line.startswith("    ") and line.rstrip().endswith(":"):
+                    names.add(line.strip()[:-1])
+    except OSError:
+        return set()          # no registry -> do not block anyone
+    return names
 
 
 def _paths(dev):
     return os.path.join(LOCKDIR, dev + ".lock"), os.path.join(LOCKDIR, dev + ".holder")
 
 
-def status():
+def status(json_out=False):
     if not os.path.isdir(LOCKDIR):
-        print("  no claims (no lock dir yet)"); return 0
-    any_held = False
+        print(json.dumps({"devices": []}) if json_out else "  no claims (no lock dir yet)")
+        return 0
+    any_held = False; rows = []
     for f in sorted(os.listdir(LOCKDIR)):
         if not f.endswith(".lock"):
             continue
@@ -39,7 +62,8 @@ def status():
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             fcntl.flock(fd, fcntl.LOCK_UN)
-            print(f"  {dev:<16} free")
+            rows.append({"device": dev, "state": "free"})
+            if not json_out: print(f"  {dev:<16} free")
         except OSError:
             any_held = True
             info = {}
@@ -48,11 +72,16 @@ def status():
             except Exception:
                 pass
             held = info.get("since", "?")
-            print(f"  {dev:<16} CLAIMED by {info.get('who','?')} pid={info.get('pid','?')} "
-                  f"since {held} — {info.get('purpose','?')}")
+            rows.append({"device": dev, "state": "claimed", "who": info.get("who"),
+                         "pid": info.get("pid"), "since": info.get("since"),
+                         "purpose": info.get("purpose")})
+            if not json_out:
+                print(f"  {dev:<16} CLAIMED by {info.get('who','?')} pid={info.get('pid','?')} "
+                      f"since {held} — {info.get('purpose','?')}")
         finally:
             os.close(fd)
-    return 0 if not any_held else 0
+    if json_out: print(json.dumps({"devices": rows}, indent=2))
+    return 0
 
 
 def self_test():
@@ -87,19 +116,58 @@ def self_test():
     return 0 if good else 1
 
 
+USAGE = f"""{PROG} — hold an exclusive claim on a shared bench device while a command runs.
+
+usage:
+  {PROG} <device> <purpose> -- <command...>   run <command> holding the claim
+  {PROG} --status [--format json]             what is claimed right now
+  {PROG} --self-test                          prove the lock excludes, and survives a crash
+  {PROG} --version | -V                       print version and exit
+  {PROG} --help | -h                          this text
+
+exit codes:
+  0   the wrapped command's status (or success for --status/--self-test)
+  2   usage error: unknown flag, bad arguments, or an unregistered device name
+  3   the device is already claimed by someone else; nothing was run
+NOTE: the wrapped command's own exit status is passed through unchanged, so a 2 or 3 may
+come from it rather than from {PROG}. Where that matters, check --status separately.
+"""
+
+
 def main():
-    if "--status" in sys.argv:
-        return status()
-    if "--self-test" in sys.argv:
+    argv = sys.argv[1:]
+    if "--help" in argv or "-h" in argv:
+        sys.stdout.write(USAGE); return 0
+    if "--version" in argv or "-V" in argv:
+        print(f"{PROG} {__version__}"); return 0
+    if "--status" in argv:
+        return status(json_out=("json" in argv))
+    if "--self-test" in argv:
         return self_test()
+    # An unknown leading flag is a usage error, not a device name.
+    if argv and argv[0].startswith("-"):
+        sys.stderr.write(f"{PROG}: unknown option '{argv[0]}'\n\n" + USAGE); return 2
     if "--" not in sys.argv or len(sys.argv) < 5:
-        sys.stderr.write(__doc__ + "\n"); return 4
+        sys.stderr.write(USAGE); return 2
     sep = sys.argv.index("--")
     if sep < 3:
-        sys.stderr.write("usage: with-device <device> <purpose> -- <command...>\n"); return 4
+        sys.stderr.write(USAGE); return 2
     dev, purpose, cmd = sys.argv[1], " ".join(sys.argv[2:sep]), sys.argv[sep + 1:]
     if not cmd:
-        sys.stderr.write("no command given after --\n"); return 4
+        sys.stderr.write(f"{PROG}: no command given after --\n\n" + USAGE); return 2
+
+    # REFUSE AN UNKNOWN DEVICE NAME. Without this, `with-device stlnk-v3 ...` (a typo)
+    # silently creates a DIFFERENT lock file and excludes nobody — the holder of the real
+    # device keeps working and both agents believe they hold it. A lock that can be bypassed
+    # by a typo is the vacuous-gate failure in lock form, and this tool had it: a stray
+    # `stlink-003B001A...` lock appeared next to `stlink-v3` from exactly that mistake.
+    known = _known_devices()
+    if known and dev not in known:
+        sys.stderr.write(
+            f"UNKNOWN DEVICE '{dev}'. Known: {', '.join(sorted(known))}\n"
+            f"Refusing: an unregistered name would create its own lock and exclude nobody.\n"
+            f"Add it to tools/bench/devices.yaml if it is real.\n")
+        return 2
 
     os.makedirs(LOCKDIR, exist_ok=True)
     lock, holder = _paths(dev)
