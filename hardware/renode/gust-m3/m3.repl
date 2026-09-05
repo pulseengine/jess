@@ -12,6 +12,18 @@
 //   initial MSP of the resident firmware 0x20002000 -> 8 KB SRAM
 // Flash is modelled at 0x0 because that is the boot alias the reset vector fetches through,
 // which is also where synth places .text.
+//
+// NO MPU IS DECLARED, AND THAT MATCHES THE SILICON. gale measured MPU_TYPE = 0x00000000
+// (DREGION 0) on this part (gale#356) and jess confirmed it independently over SWD, halted:
+//     0xE000ED90 MPU_TYPE  00000000     0xE000ED94 MPU_CTRL  00000000
+//     0xE000ED00 CPUID     411fc231     (Cortex-M3 r1p1)
+// The MPU is OPTIONAL on Cortex-M3 and this part omits it, so any design assuming MPU-based
+// isolation, region programming or deny-by-default ON THE IO COPROCESSOR cannot work there —
+// not "not yet", but by hardware.
+// Do NOT infer otherwise from qemu's lm3s6965evb, which is a Cortex-M3 WITH a PMSA MPU. Same
+// core family, different option; that trap cost gale a day.
+// passthrough-m3.robot asserts MPU_TYPE reads 0 here, so this platform cannot quietly become
+// more capable than the part it stands for.
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m3"
     nvic: nvic

@@ -1,0 +1,71 @@
+# The shared bench
+
+## `with-device` is a DIRECTORY now, not a script — read this before resolving that path
+
+`tools/bench/with-device` used to be an executable Python script. Since 2026-09-05 it is a
+**Rust crate directory** (`Cargo.toml`, `src/`, `tests/`). The path did not change; what lives
+at it did.
+
+**The trap, reported by gale on gale#356 after it cost them a debugging session:**
+
+```sh
+sib=".../jess/tools/bench/with-device"
+[ -x "$sib" ] && exec "$sib" ...      # TRUE for any traversable DIRECTORY
+```
+
+`test -x` succeeds on a directory you can `cd` into, so a resolver written the obvious way
+selects the directory, and the failure surfaces later as `permission denied` / **exit 126** —
+an error nowhere near its cause.
+
+**Resolve it like this instead:**
+
+```sh
+[ -f "$cand" ] && [ -x "$cand" ]      # -f first: a directory is not a candidate
+```
+
+## What to use instead
+
+Consume the **released binary**, not a path inside this repo:
+
+```
+release:pulseengine/jess@v0.7.1!with-device-0.2.1-<triple>.tar.gz!with-device
+```
+
+Assets are cosign-signed (`SHA256SUMS.txt` + `.cosign.bundle`) with SLSA build provenance —
+verify the signature before trusting the checksums:
+
+```sh
+cosign verify-blob \
+  --certificate-identity-regexp 'https://github.com/pulseengine/jess/\.github/workflows/release\.yml@.*' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle SHA256SUMS.txt.cosign.bundle SHA256SUMS.txt
+sha256sum -c SHA256SUMS.txt
+```
+
+Building from this directory (`cargo build --release`) is fine for development; it is not what
+another repo should pin.
+
+## The device registry is authoritative, and it is HOST-LOCAL
+
+A claim only means something on the machine the hardware is plugged into, so each host has its
+own registry:
+
+| host | registry | devices |
+|---|---|---|
+| this repo (Mac) | `tools/bench/devices.yaml` | `stlink-v3` (NUCLEO-G474RE), `pixhawk-6xrt`, `selftest-device` |
+| `fourpi` (Pi 4) | `~/.config/pulseengine/bench-devices.yaml` — committed copy in `devices-fourpi.yaml` | `pixhawk-6xrt`, `stlink-v1` (STM32VLDISCOVERY), `selftest-device` |
+
+**Use the registered name exactly.** An unregistered name is refused (exit 2) rather than
+silently given its own lock file — gale hit this immediately, having invented
+`stlink-v1-f100` where the registry says `stlink-v1`. Under the old prototype those were two
+different locks: both agents would have claimed successfully, neither excluding the other, and
+the bench would have looked protected while being completely unguarded.
+
+## Prove you hold the claim
+
+`with-device` exports `WITH_DEVICE_CLAIM` into the wrapped command, so a script can assert its
+own precondition instead of trusting that someone remembered:
+
+```sh
+with-device --require-claim pixhawk-6xrt   # exits 2, with what to do, if not held
+```
