@@ -4854,6 +4854,23 @@ artifacts:
         4. With HLA a memory read on a RUNNING target returns nothing at all rather than erroring,
            which reads exactly like a dead probe. Halt first.
       All of it ran under a `with-device stlink-v1` claim; the probe is shared with gale.
+
+      *** WHY THIS RESULT IS LOAD-BEARING, NOT A CONVENIENCE (operator correction, 2026-09-05) ***
+      The operator flagged that the 6X is STM-only while the 6X-RT is NXP *and* STM. Checked against
+      PX4's 6X-RT page, and it refines the picture in a way that raises this artifact's weight:
+          i.MX RT1176 (M7+M4)     NXP   reachable  - the SINGLE FMU Debug port (JST SM10B):
+                                                    SWDIO, SWCLK, SWO + console
+          STM32F100 IO coproc     ST    NOT reachable - no exposed debug port on the board
+          EdgeLock SE051          NXP   secure element
+      PX4 flashes the IO coprocessor's firmware FROM THE FMU over serial, not over SWD, so the F100
+      on the vehicle has no debug access at all.
+      CONSEQUENCE: the STM32VLDISCOVERY is not a cheaper stand-in for on-vehicle F100 work - it is the
+      ONLY route to F100-on-silicon evidence that exists. There is no on-vehicle fallback for this leg,
+      so this result and the real-geometry Renode model (AFD-088) carry the entire M3 rung of
+      REQ-PIX-004 PART-P02 between them. Weight them accordingly.
+      NOTE, not a claim: the board carries a dedicated secure element (SE051) and HAB is locked
+      (AFD-092). Those are two measured facts that form a coherent picture; jess has NOT measured any
+      causal link between them and should not assert one.
     tags: [h2, silicon, stm32f100, cortex-m3, synth, test-pix-028, afd-088, negative-control, on-target, execution]
     fields:
       detected-by: jess running the pipeline's output on real F100 silicon after operator consent, 2026-09-05
