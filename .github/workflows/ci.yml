@@ -230,6 +230,29 @@ jobs:
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
         run: /tmp/renode/renode-test hardware/renode/synth507-brtable/brtable-507.robot
+      # AFD-088: assert the image FITS the real part before running it on the model. m3.repl
+      # used to declare 256 KB of SRAM while an STM32F100 has 8 KB, so an image whose stack
+      # sat at 0x20020000 — outside physical RAM — passed this gate for six weeks. The
+      # geometry check is cheap and runs first; if it fails, the robot's green would be about
+      # a machine that cannot exist.
+      # The geometry gate disassembles <entry> to read the linear-memory base. A plain x86_64
+      # binutils cannot decode ARM, and the check then prints "(not located in <entry>)" and
+      # passes — a check that silently does not check, which is the shape this whole gate
+      # exists to catch. ~15 s of apt buys the assertion actually running.
+      - name: arm-none-eabi binutils (so the geometry gate can decode ARM)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils-arm-none-eabi
+      # NEGATIVE CONTROL, because the first version of this gate was itself vacuous: it shelled
+      # out to objcopy, which on a runner without ARM binutils cannot read the ELF, and then
+      # reported "initial MSP: 0000000000  ok" and exited 0 — a PASS on a file it never parsed.
+      # Assert it still REFUSES a file it cannot read before trusting anything it says.
+      - name: F100 geometry gate — negative control (must refuse an unreadable file)
+        run: |
+          if hardware/renode/gust-m3/check-fits-real-f100.sh /dev/null; then
+            echo "the geometry gate reported success on an unparseable file — it is vacuous"; exit 1
+          fi
+          echo "negative control OK: the gate refuses what it cannot parse"
+      - name: F100 geometry gate — the image fits real silicon (AFD-088)
+        run: hardware/renode/gust-m3/check-fits-real-f100.sh
       - name: gust F100/M3 byte-exact pass-through oracle (REQ-PIX-004 PART-P02, TEST-PIX-028)
         run: /tmp/renode/renode-test hardware/renode/gust-m3/passthrough-m3.robot
       - name: inter-core NavState crossing oracle (REQ-PIX-007, TEST-PIX-030)

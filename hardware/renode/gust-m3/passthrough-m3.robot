@@ -10,21 +10,29 @@ Test Setup        Boot Gust Passthrough
 # The safety-critical case is the rank-3 rotor-out row with motors 0 AND 2 ZEROED: the
 # zeros MUST survive un-re-mixed (a re-mix reintroduces the relay v1.114 parasitic moment).
 #
-# ABI: synth v0.49 self-contained linear-memory base = 0x20000100 (a 0x100 reserved
-# prefix). The pass-through reads the 4 inputs at +0..12 and writes the 4 outputs at
-# +16..28. The ELF + this base are a matched pair — rebuild both together if the ELF is
-# regenerated on a newer synth (see build.sh; the base is printed as fp in `entry`).
+# ABI: synth v0.58 self-contained, built --stack-layout low --stack-size 1024, so the stack
+# is reserved at the BOTTOM of SRAM (SP init 0x20000400) and linear memory sits ABOVE it at
+# 0x20000500. The pass-through reads the 4 inputs at +0..12 and writes the 4 outputs at
+# +16..28. The ELF + these bases are a matched pair — rebuild both together (build.sh; the
+# base is the movw/movt pair for fp in `entry`).
+#
+# THE PLATFORM IS NOW THE REAL PART'S GEOMETRY, NOT A GENEROUS ONE (AFD-088). m3.repl used
+# to declare 256 KB of SRAM; a real STM32F100 has 8 KB, measured over SWD on the bench
+# (DBGMCU_IDCODE 0x10016420, flash-size reg 0x0080 = 128 KB, existing firmware MSP
+# 0x20002000). The previous image put its stack at 0x20020000 — outside physical SRAM — and
+# passed anyway, because the emulator was more permissive than the hardware. It now runs in
+# 8 KB, which is what makes 'on-target' mean something here.
 # Test vectors are real rows from relay's fixture hardware/gust/fixtures/f100-passthrough-v1.csv.
 
 *** Variables ***
-${IN0}      0x20000100
-${IN1}      0x20000104
-${IN2}      0x20000108
-${IN3}      0x2000010C
-${OUT0}     0x20000110
-${OUT1}     0x20000114
-${OUT2}     0x20000118
-${OUT3}     0x2000011C
+${IN0}      0x20000500
+${IN1}      0x20000504
+${IN2}      0x20000508
+${IN3}      0x2000050C
+${OUT0}     0x20000510
+${OUT1}     0x20000514
+${OUT2}     0x20000518
+${OUT3}     0x2000051C
 
 *** Keywords ***
 Boot Gust Passthrough

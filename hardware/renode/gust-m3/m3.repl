@@ -1,11 +1,23 @@
-// Minimal Cortex-M3 (STM32F100-class = the F100 gust failsafe core): flash @0x0,
-// 256 KB SRAM @0x20000000 (covers synth's linear memory + initial SP 0x20020000).
+// Cortex-M3 with the REAL STM32F100 geometry — the F100 gust failsafe core, as measured on
+// silicon rather than as convenient for the image (AFD-088).
+//
+// This file used to declare 256 KB of flash and 256 KB of SRAM "to cover synth's linear
+// memory + initial SP 0x20020000". That is backwards: the platform was sized to fit the
+// artifact, so the gate could not reproduce the failure the hardware would have, and an
+// image whose stack sat outside physical RAM passed for six weeks.
+//
+// Measured on an STM32F100 over SWD, 2026-09-05:
+//   DBGMCU_IDCODE 0x10016420  -> DEV_ID 0x420, value line
+//   flash size reg 0x1FFFF7E0 -> 0x0080 = 128 KB
+//   initial MSP of the resident firmware 0x20002000 -> 8 KB SRAM
+// Flash is modelled at 0x0 because that is the boot alias the reset vector fetches through,
+// which is also where synth places .text.
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m3"
     nvic: nvic
 nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     -> cpu@0
 flash: Memory.MappedMemory @ sysbus 0x0
-    size: 0x40000
+    size: 0x20000
 sram: Memory.MappedMemory @ sysbus 0x20000000
-    size: 0x40000
+    size: 0x2000
