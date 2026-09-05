@@ -4407,3 +4407,90 @@ artifacts:
         target: DD-027
       - type: corrects
         target: AFD-081
+
+  - id: AFD-084
+    type: ai-found-defect
+    title: the shipped binary reported SUCCESS for commands it never ran — mode flags were matched after `--`, and --self-test was green throughout because it never wraps a command carrying one
+    status: open
+    description: |-
+      2026-09-05. Operator: "ensure we do the right testing similar to our other tools it might further
+      evolve." Surveyed what the PulseEngine Rust tools actually do rather than guessing: rivet, loom,
+      meld, synth, ordeal and sigil all carry a `tests/` integration directory plus in-crate `#[test]`
+      units, run `cargo test --all` in CI, and gate on `cargo llvm-cov --fail-under-lines`. with-device
+      had NONE of that - only its own `--self-test` subcommand.
+
+      *** WHAT THE FIRST RUN OF THE NEW SUITE FOUND, IN THE SHIPPED BINARY ***
+      with-device matched its mode flags across the ENTIRE argv, including everything after `--`. So a
+      wrapped command containing a flag with-device also understands hijacked the invocation. Verified
+      against the v0.7.0 RELEASE asset, not the working tree:
+        $ with-device d --registry reg.yaml -- echo --version
+        with-device 0.2.0                  <- printed its OWN version
+        rc=0                               <- and reported SUCCESS
+        $ with-device d --registry reg.yaml -- echo --status
+          no claims                        <- printed its OWN status
+        rc=0
+        $ with-device d --registry reg.yaml -- ls -h
+        <usage text>                       <- `-h` in the command opened its OWN help
+      Affected: -h, --help, -V, --version, --status, --self-test anywhere in the wrapped command.
+      SEVERITY. This is the tool's worst possible failure shape and the one it exists to prevent: a
+      caller gets exit 0 for a command THAT NEVER RAN, with the device claimed and released around
+      nothing. `with-device probe -- some-tool --version` in a version-check step, or any command
+      carrying `-h`, silently does nothing and reports success. A gate wrapped this way is vacuous.
+      FIX: split on `--` FIRST; mode flags are looked for only in the head. Everything after `--`
+      belongs to the command and is never interpreted.
+
+      *** WHY --self-test WAS GREEN THROUGHOUT, WHICH IS THE REAL LESSON ***
+      The self-test wraps `sleep`, `true`, and `sh -c kill -9 $$`. None carries a flag with-device also
+      understands, so the entire bug class sat outside every path it walks. It passed 5/5 on the
+      release asset WHILE the binary was hijacking commands. An in-binary acceptance check can only
+      ever assert the paths it happens to take; it is not a test suite, and treating it as one is how
+      this shipped. AFD-083 recorded the same shape one layer up (a negative control that did not
+      discriminate); this is that lesson applied to coverage rather than to a single control.
+
+      *** THE SUITE ***: 35 tests. 18 unit over the now-extracted pure core (argument parsing,
+      registry parsing, status rendering) and 17 behavioural in tests/cli.rs that spawn the real
+      binary, because the properties that matter are PROCESS properties - what the kernel does with an
+      flock when a holder is SIGKILLed, whether a refused claim ran anything, whether a blocked
+      claimant is sitting on devices it is not using. Line coverage 96.81%, gated at 90 (a floor
+      parked far under the real number passes no matter what rots).
+      Structural change: src/lib.rs (testable core) + a thin src/main.rs. Previously everything was in
+      main() where nothing but --self-test could reach it.
+
+      *** TWO PROPERTIES NOW ASSERTED THAT NEVER WERE ***
+        1. A BLOCKED CLAIMANT HOLDS NOTHING. AFD-083 identified no-hold-and-wait as the load-bearing
+           deadlock mechanism, and --self-test does not check it. Now directly asserted: while a
+           claimant waits on dev-b, a third party must still be able to claim dev-a.
+        2. rc 3 MEANS NOTHING RAN. Asserted by the ABSENCE of a side effect (the refused command would
+           touch a marker), not merely by the exit code.
+      Also new: repeated device names must not self-block (`with-device d d -- cmd` - on BSD a second
+      flock on the same fd succeeds, so this bug would be invisible on macOS and appear on Linux);
+      partial failure leaves nothing claimed; --wait genuinely waits and genuinely gives up; a refused
+      name creates no lock file; fail-closed with no registry; the holder record does not outlive the
+      command.
+
+      *** TWO BUGS IN MY OWN TESTS, both of which first LOOKED like tool bugs ***
+        1. Readiness by polling with a real claim (`run(...) == 3`) RACES the holder: when the probe
+           wins the lock, the HOLDER is the one refused, so the device is never held and the test
+           fails for a reason unrelated to the tool. Replaced with a marker the holder touches after
+           acquiring - observing the state without perturbing it.
+        2. The test scratch dir was named with `{:?}` of ThreadId, which renders `ThreadId(12)`. Those
+           parentheses are shell syntax, so every `sh -c` holder died at parse time and surfaced as
+           "holder never acquired" - pointing at the tool. Now shell-safe by construction and asserted
+           as such.
+      No flakes across 6 consecutive full runs.
+
+      *** RELEASE CONSEQUENCE ***: v0.7.0 / with-device 0.2.0 carries the hijack bug and its assets
+      were already recommended for pinning to varve#130 and gale#356. Superseded by 0.2.1; both
+      threads corrected rather than left standing.
+    tags: [bench, with-device, testing, vacuous-check, self-correction, cli, release, afd-083, afd-082]
+    fields:
+      detected-by: the first run of the new cargo test suite, 2026-09-05
+      severity: critical
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T11:32:11Z
+    links:
+      - type: corrects
+        target: AFD-083

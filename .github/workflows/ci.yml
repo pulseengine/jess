@@ -131,11 +131,28 @@ jobs:
           rc=0; $B --no-such-flag -- true 2>/dev/null || rc=$?
           test "$rc" = 2 || { echo "unknown flag rc=$rc, want 2"; exit 1; }
           $B --self-test
+      # The actual test suite. `--self-test` is the FIELD check that ships in the binary and
+      # runs where there is no source tree; it is not a substitute for this. The split is not
+      # academic: the suite's first run found that mode flags were matched across the whole
+      # argv, so `with-device probe -- mytool --version` printed with-device's own version and
+      # exited 0 WITHOUT RUNNING mytool — and --self-test was green throughout, because it
+      # never wraps a command containing a flag with-device also understands (AFD-084).
+      - name: cargo test (unit + behavioural)
+        working-directory: tools/bench/with-device
+        run: cargo test --all
       - name: clippy + fmt
         working-directory: tools/bench/with-device
         run: |
           cargo fmt --check
-          cargo clippy --release -- -D warnings
+          cargo clippy --release --all-targets -- -D warnings
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      # Floor matched to what the suite actually achieves (96.8% lines locally), not set far
+      # below it — a coverage gate parked well under the real number passes no matter what
+      # rots, which is the vacuous-gate failure in yet another costume.
+      - name: coverage floor
+        working-directory: tools/bench/with-device
+        run: |
+          cargo llvm-cov --summary-only --fail-under-lines 90 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
   spar-model:
