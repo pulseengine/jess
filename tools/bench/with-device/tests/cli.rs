@@ -352,11 +352,21 @@ fn version_help_and_unknown_flag_match_the_toolchain_baseline() {
 fn a_wrapped_command_may_contain_flags_with_device_also_understands() {
     let b = Bench::new("hijack");
     for flag in ["--version", "-V", "-h", "--help", "--status", "--self-test"] {
-        let o = b.run(&["dev-a"], &[], &["echo", flag]);
+        // NOT `echo <flag>`: GNU coreutils `echo` interprets `--version` and `--help`
+        // ITSELF, so on Linux the assertion failed while passing on macOS, where BSD echo
+        // prints the literal. That is a divergence in the test, not the tool — the flag had
+        // been passed through correctly and the wrapped program then acted on it. Here the
+        // flag arrives as `$1` to `sh`, which no program interprets, so what is asserted is
+        // exactly the property under test: with-device did not consume it.
+        let o = b.run(
+            &["dev-a"],
+            &[],
+            &["sh", "-c", "printf 'ran:%s' \"$1\"", "sh", flag],
+        );
         assert_eq!(rc(&o), 0, "`{flag}` in the command changed the exit code");
         assert_eq!(
-            String::from_utf8_lossy(&o.stdout).trim(),
-            flag,
+            String::from_utf8_lossy(&o.stdout),
+            format!("ran:{flag}"),
             "`{flag}` after `--` was interpreted by with-device instead of being passed on"
         );
     }
