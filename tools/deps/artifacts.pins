@@ -64,3 +64,22 @@ meld/meld                    88fb38bd1e796632b4b55c5bafc3fa82fde89fbf391171db2d7
 meld/meld                    29a052d582374f4da06c4a79fbbb5b40df589442899e3c8edaf7f079b2d47020  release:pulseengine/meld@v0.52.0!meld-v0.52.0-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
 loom/loom                    9583f530baa0d6f0a0c140b5247ac618d9d56bcbf8d42e0c8a1ba5a2a20af6f6  release:pulseengine/loom@v1.4.0!loom-v1.4.0-aarch64-apple-darwin.tar.gz!loom      platform=aarch64-apple-darwin
 loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc6fb5df15c5380  release:pulseengine/loom@v1.4.0!loom-v1.4.0-x86_64-unknown-linux-gnu.tar.gz!loom  platform=x86_64-unknown-linux-gnu
+
+[h1-bringup]
+# NXP's i.MX RT1176 FLASHLOADER — required for H1 on real silicon.
+#
+# WHY IT IS NEEDED: spsdk's own device database says the RT117x ROM speaks SDP
+# (usb 0x1FC9:0x013D) and that blhost/mboot (usb 0x15A2:0x0073) is only reachable AFTER a
+# flashloader is running. blhost's write-memory / call / read-memory — which is exactly the
+# H1 shape — therefore need this binary loaded into OCRAM first. NXP community posts claim
+# RT11xx can skip it; the database disagrees, and the first read-only nxpdevscan in ISP
+# settles which is true before anything is written.
+#
+# PROVENANCE, because this executes on the flight controller: it ships inside a TOOL repo,
+# not as a release asset. Fetched from JayHeng/NXP-MCUBootUtility and verified BYTE-IDENTICAL
+# to the copy in NXP's OWN org (nxp-mcuxpresso/mcu-boot-utility) — two independent sources,
+# one of them the vendor. Structurally checked too: valid i.MX IVT (tag 0xD1, len 32, ver
+# 0x40), entry 0x20262561 and self 0x2024FE00, both in OCRAM1 where a flashloader belongs.
+# It is UNSIGNED (csf=0), which is normal for a flashloader but worth stating.
+h1/ivt_flashloader.bin       ba6a8b06161aef7914436909185b6196b278f8e4cd16deeaab9945c1464d5f41  ghfile:nxp-mcuxpresso/mcu-boot-utility@master!src/targets/MIMXRT1176/ivt_flashloader.bin
+

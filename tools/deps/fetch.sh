@@ -125,6 +125,19 @@ while read -r path want locator rest; do
         cp "$got" "$out"
       fi
       ;;
+    ghfile:*)
+      # A file committed in a git repo, not a release asset. Needed for NXP's RT1176
+      # flashloader, which ships inside a tool repo rather than as a downloadable artifact.
+      # Format: ghfile:<owner>/<repo>@<ref>!<path>
+      spec="${locator#ghfile:}"
+      repo="${spec%%@*}"; rest2="${spec#*@}"
+      ref="${rest2%%!*}"; gpath="${rest2#*!}"
+      have gh || fail "gh is required to fetch $path"
+      echo "  fetch    $path  <- $repo@$ref :: $gpath"
+      gh api "repos/$repo/contents/$gpath?ref=$ref" --jq '.content' 2>/dev/null | base64 -d > "$out" \
+        || fail "could not fetch $gpath from $repo@$ref"
+      [ -s "$out" ] || fail "$gpath fetched empty from $repo@$ref"
+      ;;
     oci:*)
       spec="${locator#oci:}"
       ref="${spec%%!*}"; member="${spec#*!}"
