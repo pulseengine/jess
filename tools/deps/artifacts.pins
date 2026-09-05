@@ -82,4 +82,17 @@ loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc
 # 0x40), entry 0x20262561 and self 0x2024FE00, both in OCRAM1 where a flashloader belongs.
 # It is UNSIGNED (csf=0), which is normal for a flashloader but worth stating.
 h1/ivt_flashloader.bin       ba6a8b06161aef7914436909185b6196b278f8e4cd16deeaab9945c1464d5f41  ghfile:nxp-mcuxpresso/mcu-boot-utility@master!src/targets/MIMXRT1176/ivt_flashloader.bin
+# PX4's OWN command-line NSH console over MAVLink SERIAL_CONTROL. This is how `reboot -i`
+# is issued without QGroundControl. Using the vendor's tool is the same category as using
+# blhost or nxpdevscan — it is NOT jess building a second MAVLink stack, which is on the
+# do-not-repeat list. relay owns MAVLink in this org and ships a COMMAND_LONG codec, but no
+# SERIAL_CONTROL; `reboot -i` needs the console pipe, not the command interface.
+#
+# NOT READ-ONLY: mavlink_shell.py sends a heartbeat on connect (line 48,
+# `self.mav.mav.heartbeat_send(...)`) before any command is typed. Merely attaching it is a
+# WRITE to the vehicle and requires the operator's go-ahead, unlike an O_RDONLY tty capture.
+#
+# Pinned to the immutable commit that last touched the file, NOT @main, so the digest stays
+# valid when PX4 moves.
+h1/mavlink_shell.py          28cc4554d9eedf4670d1e1e200a858af4caeeab42034ed51214c3f1ab951844e  ghfile:PX4/PX4-Autopilot@de166e3a09e396a2fa1c28aa9fc014f109b25a10!Tools/mavlink_shell.py
 
