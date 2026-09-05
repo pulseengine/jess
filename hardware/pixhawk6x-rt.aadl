@@ -24,6 +24,18 @@ public
   --  falcon + the relay-hal drivers are fused wasm (meld->loom->synth->ARM) and
   --  LOAD-TO-RAM into TCM (DD-016 - small image, no XIP, no i.MX boot ROM in flight).
   --  Zephyr is reference/validation only (gale's 36 QEMU suites + optional bring-up).
+  --  DEBUG ACCESS, measured on the board 2026-09-05 (AFD-091, AFD-092). Recorded here
+  --  because it constrains what can be BUILT, not merely how we test:
+  --    * ONE debug connector on the board (JST SM10B "Pixhawk Debug Full"): SWDIO p4,
+  --      SWCLK p5, nRST p9, GND p10, plus SWO and the system console. It reaches the
+  --      RT1176 DAP only.
+  --    * The boot ROM is HAB-LOCKED. `sdphost write-file` returns
+  --      StatusCode.HAB_IS_LOCKED (2) / HabErrorReason.UNSUPPORTED_CONF_ITEM (36), so
+  --      the ROM accepts SIGNED images only. The SDP/blhost route is therefore CLOSED
+  --      to us by the part, not by tooling — load-to-RAM over SWD is the remaining path,
+  --      and DD-016's "LOAD-TO-RAM into TCM" depends on it.
+  --    * NOT yet established: whether the RT1176's debug port is fused open on this
+  --      board. Some parts fuse debug shut alongside HAB. One measurement away.
   processor FMU_M7
   end FMU_M7;
   processor implementation FMU_M7.imxrt1176
@@ -43,6 +55,21 @@ public
   --  SRAM is too small for Zephyr. Same gale-maximal-wasm model as the M7 (DD-017),
   --  just the gale-nano subset (DD-011) - so M7 and F100 are one architecture at two
   --  scales; neither runs full Zephyr in flight.
+  --  TWO PROPERTIES OF THIS PART THAT CONSTRAIN THE DESIGN, both measured rather than
+  --  assumed (AFD-091, AFD-096; gale#356):
+  --    * NO DEBUG PORT ON THE VEHICLE. The board exposes one SWD connector and it goes
+  --      to the RT1176; PX4 flashes this coprocessor FROM the FMU over serial. So the
+  --      F100 cannot be probed in situ at all, and every F100-on-silicon result comes
+  --      from a standalone STM32VLDISCOVERY on the bench. There is no on-vehicle
+  --      fallback for this leg.
+  --    * NO MPU. MPU_TYPE = 0x00000000, DREGION 0, read over SWD (halted) and
+  --      independently confirmed by gale. The MPU is OPTIONAL on Cortex-M3 and this
+  --      part omits it, so any isolation, region-programming or deny-by-default design
+  --      on the failsafe path cannot work here — by hardware, not "not yet".
+  --      Do NOT infer otherwise from qemu lm3s6965evb (a Cortex-M3 WITH a PMSA MPU) or
+  --      from a Renode platform that is silent on the matter: Renode DEFAULTS a Cortex-M
+  --      to EIGHT MPU regions, which is how jess's own m3.repl came to model an MPU this
+  --      part does not have.
   processor IO_MCU
   end IO_MCU;
   processor implementation IO_MCU.stm32f100
