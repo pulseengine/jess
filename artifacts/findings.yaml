@@ -4797,3 +4797,74 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T14:34:22Z
+
+  - id: AFD-091
+    type: ai-found-defect
+    title: "H2 ACHIEVED: the synth-compiled gust pass-through EXECUTES on real STM32F100 silicon, byte-exact 3/3 against relay's fixture — negative-controlled, and recovery proven before anything was written"
+    status: open
+    description: |-
+      2026-09-05. Operator: "It is our board and we need to bring this in. As long as we can recover
+      somehow we need to make it work." Consent given for the STM32VLDISCOVERY. Result:
+
+      *** H2 ACHIEVED. THE PULSEENGINE PIPELINE'S OUTPUT EXECUTES ON REAL SILICON. ***
+      The synth-compiled gust pass-through (passthrough_mem.elf, `synth compile --cortex-m
+      -t cortex-m3 --stack-layout low --stack-size 1024`, pinned synth 0.58.0) was flashed to an
+      actual STM32F100 and RUN. Against the same relay fixture rows the Renode oracle asserts:
+          rotor-out, motors 0+2 ZEROED   00000000 3f3ccbcb 00000000 3f3ccbcb   BYTE-EXACT
+          hover                          3f266666 3f266666 3f266666 3f266666   BYTE-EXACT
+          saturated                      3ee77cd9 3ef38916 3eeb7bad 3edf8454   BYTE-EXACT
+      3/3, including the safety-critical asymmetric row whose zeros must survive un-re-mixed (a
+      re-mix reintroduces the relay v1.114 parasitic moment).
+      This is the FIRST execution of PulseEngine pipeline output on real silicon in this campaign.
+      Scope it honestly: this is the F100/M3 failsafe core, NOT the RT1176 M7, and it is the gust
+      pass-through, NOT the falcon flight core. "No falcon code has ever executed on the RT1176"
+      remains true and unchanged.
+
+      *** THE RESULT IS NEGATIVE-CONTROLLED, AND WITHOUT THAT IT WOULD BE WORTHLESS ***
+      The outputs are READ FROM SRAM. "Outputs equal inputs" is evidence the PROGRAM wrote them only
+      if a non-run would look different; otherwise it measures whatever was already in memory. So all
+      four output words were poisoned with 0xDEADBEEF and exactly ONE variable was varied - whether
+      the CPU is resumed:
+          CPU NOT resumed : deadbeef deadbeef deadbeef deadbeef   <- the control CAN observe a non-run
+          CPU resumed     : 3f266666 3f266666 3f266666 3f266666   <- the program overwrote the sentinel
+      The first row is the one that matters. Without it, a stale-SRAM reading of the right numbers is
+      indistinguishable from success - the exact AFD-048 failure. Three different input rows also each
+      produced their own matching outputs, which stale memory cannot do, but that is corroboration,
+      not the control.
+
+      *** RECOVERY WAS MADE A FACT BEFORE ANYTHING WAS WRITTEN ***
+      The operator's condition was "as long as we can recover somehow". So: the resident firmware was
+      dumped over SWD FIRST (131,072 B, sha256 10969f5c35de715696c377c2ae367b9be5950698115f3f91adf479
+      bb12a0a78b), copied off the Pi to a second machine, and then - after the experiment - RESTORED
+      and read back. The read-back is byte-identical to the backup. Recovery is demonstrated, not
+      assumed, and the board is back on its original firmware.
+
+      *** WHAT THIS CLOSES ***
+      AFD-088 step 3. TEST-PIX-028's on-target claim no longer rests on an emulator alone: the same
+      image, the same vectors, on the part itself. Combined with the earlier half of this tick - the
+      image now FITS the real 8 KB geometry and m3.repl carries the measured geometry rather than a
+      convenient one - the M3 rung of REQ-PIX-004 PART-P02 is now witnessed by silicon and by an
+      emulator configured to match it, which is what "on-target" was supposed to mean all along.
+
+      *** FOUR GOTCHAS, each of which cost a cycle ***
+        1. The ELF links .text at 0x0 (the boot alias). Real flash is 0x08000000 - program the RAW
+           BINARY there; programming the ELF targets an address no flash bank covers.
+        2. ST-LINK V1J13S0 firmware is HLA-only: interface/stlink-hla.cfg, not stlink-dap.cfg.
+        3. nSRST is not wired - "Error: SRST error" is expected and harmless; reset over SWD.
+        4. With HLA a memory read on a RUNNING target returns nothing at all rather than erroring,
+           which reads exactly like a dead probe. Halt first.
+      All of it ran under a `with-device stlink-v1` claim; the probe is shared with gale.
+    tags: [h2, silicon, stm32f100, cortex-m3, synth, test-pix-028, afd-088, negative-control, on-target, execution]
+    fields:
+      detected-by: jess running the pipeline's output on real F100 silicon after operator consent, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T17:33:17Z
+    links:
+      - type: corrects
+        target: AFD-088
+      - type: traces-to
+        target: TEST-PIX-028
