@@ -24,19 +24,40 @@ env:
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
   SPAR_VERSION: v0.24.0
-  # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the
-  # fused-core reproducibility gate (TEST-PIX-026, meld#325/#341). The scry gate keys
-  # on scry's soundness invariants, stable across meld versions (0.33.0..0.41.3 all give
-  # 771 pts / 71 edges / 0 unsound-fallback — re-verified on 0.41.3), so the bump is safe.
-  # v0.41.3 carries the meld#341 fix (path-INDEPENDENT --reproducible), so TEST-PIX-026 now
-  # ASSERTS cross-path reproducibility (portable attestation key), not just fixed-path.
-  # KNOWN DIVERGENCE (clean-room S7, 2026-09-02): the varve pin carries meld 0.52.0 and
-  # jess reports 0.52.0 results upstream, while THIS gate still runs 0.41.3.
-  # tools/varve/check-drift.sh flags it and exits 1. It is NOT bumped here blind because
-  # this pin serves TEST-PIX-026's cross-path reproducibility assertion; moving it needs
-  # that gate re-verified, which is a separate reviewed change, not a one-line edit.
-  # Until then: cite the PINNED version upstream, never this one.
-  MELD_VERSION: v0.41.3
+  # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the fused-core
+  # reproducibility gate (TEST-PIX-026, meld#325/#341).
+  #
+  # BUMPED v0.41.3 -> v0.52.0 to CLOSE the divergence this comment used to record: the varve
+  # pin carried 0.52.0 and jess cited 0.52.0 upstream while THIS gate ran 0.41.3, so the
+  # version in a defect report was never the version CI exercised. tools/varve/check-drift.sh
+  # existed to flag exactly that. CI and the varve pin now agree.
+  #
+  # The old comment said the bump "needs that gate re-verified, which is a separate reviewed
+  # change, not a one-line edit". That re-verification is this change (AFD-094), measured on
+  # the real pinned falcon component rather than assumed:
+  #
+  #   scry gate            0.41.3 / 0.52.0 / 0.54.0  ALL IDENTICAL:
+  #                        771 pts, 175 funcs, 71 call-edges, 12 indirect,
+  #                        0 unsound-fallback, 0 diagnostics
+  #   TEST-PIX-026         PASS on all three: --reproducible byte-stable, negative control
+  #                        fires (default fusion differs run-to-run), and PATH-INDEPENDENT
+  #
+  # THE ATTESTATION KEY IS VERSION-DEPENDENT, which is worth stating plainly because the
+  # oracle's own wording ("portable attestation key") invites the opposite reading. Same
+  # input, same flags, three versions, three keys:
+  #     0.41.3  8c1617d30812b05fdc82a5267d1295ce8106b750ec955c70ca7472af27e22dc0
+  #     0.52.0  09d24df8c324f62e7dd0af43e68858dfb1177e77346ebbc126558d631a2bcee8
+  #     0.54.0  42a9362763c61cf88d8445c41c835e1b259051acab5d7d19ed59aed91f48bd75
+  # Portable across PATHS and MACHINES; NOT across meld versions. So a recorded digest is
+  # only re-verifiable alongside the meld version that produced it — which is what the varve
+  # pin is for. Safe to bump here because the oracle asserts the PROPERTY, not a golden
+  # digest, and no artifact in this repo records any of these three keys (checked).
+  #
+  # v0.54.0 is ALSO verified good (AFD-093: fuses the real 5-stage cascade to VALID wasm,
+  # all five boundaries resolve, and the composed image EXECUTES to the reference) and is
+  # ready for whenever the varve layer moves. Not adopted here: the point of this change is
+  # to make CI match the pin, not to jump ahead of it and recreate the divergence.
+  MELD_VERSION: v0.52.0
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
