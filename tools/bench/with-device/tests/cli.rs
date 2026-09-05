@@ -440,3 +440,81 @@ fn the_claim_ends_when_the_command_ends() {
     );
     assert_eq!(rc(&b.run(&["dev-a"], &[], &["true"])), 0);
 }
+
+/// The claim must be PROVABLE by the wrapped command, not merely true.
+///
+/// This exists because on 2026-09-05 jess touched the shared Pixhawk five times without a
+/// claim in one session — every one of them while chasing a bug, which is exactly when
+/// nobody is thinking about bench etiquette. A rule that only holds when you remember it is
+/// not a control. Exporting the claim lets any script assert its own precondition.
+#[test]
+fn the_wrapped_command_can_prove_it_is_claimed() {
+    let b = Bench::new("claimenv");
+    let o = b.run(
+        &["dev-b", "dev-a"],
+        &[],
+        &["sh", "-c", "printf %s \"$WITH_DEVICE_CLAIM\""],
+    );
+    assert_eq!(rc(&o), 0);
+    // sorted and deduped, matching acquisition order — not the order given on the CLI
+    assert_eq!(String::from_utf8_lossy(&o.stdout), "dev-a,dev-b");
+}
+
+#[test]
+fn require_claim_passes_inside_a_claim_and_fails_outside_it() {
+    let b = Bench::new("require");
+    let me = BIN;
+
+    // Outside any claim: must refuse, and say what to do about it.
+    let out = Command::new(me)
+        .args(["--require-claim", "dev-a"])
+        .env_remove("WITH_DEVICE_CLAIM")
+        .output()
+        .unwrap();
+    assert_eq!(rc(&out), 2, "unclaimed --require-claim must fail");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("NOT UNDER A CLAIM"),
+        "unhelpful message: {err}"
+    );
+    assert!(
+        err.contains("with-device dev-a"),
+        "does not say how to fix it: {err}"
+    );
+
+    // Inside a claim on the right device: must pass.
+    let ok = b.run(&["dev-a"], &[], &[me, "--require-claim", "dev-a"]);
+    assert_eq!(rc(&ok), 0, "claimed --require-claim must pass");
+
+    // Inside a claim on a DIFFERENT device: must still refuse. Holding something is not
+    // holding the thing you are about to drive.
+    let wrong = b.run(&["dev-a"], &[], &[me, "--require-claim", "dev-b"]);
+    assert_eq!(
+        rc(&wrong),
+        2,
+        "a claim on the wrong device must not satisfy the assertion"
+    );
+}
+
+/// Nesting must not hide the outer claim from the inner command, or a script that legitimately
+/// wraps another would start failing its own assertion.
+#[test]
+fn a_nested_claim_unions_rather_than_replaces() {
+    let b = Bench::new("nested");
+    let o = b.run(
+        &["dev-a"],
+        &[],
+        &[
+            BIN,
+            "dev-b",
+            "--registry",
+            b.reg.to_str().unwrap(),
+            "--",
+            "sh",
+            "-c",
+            "printf %s \"$WITH_DEVICE_CLAIM\"",
+        ],
+    );
+    assert_eq!(rc(&o), 0);
+    assert_eq!(String::from_utf8_lossy(&o.stdout), "dev-a,dev-b");
+}

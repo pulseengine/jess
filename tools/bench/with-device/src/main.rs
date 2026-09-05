@@ -199,6 +199,27 @@ fn main() {
             std::process::exit(0)
         }
         Mode::SelfTest => std::process::exit(self_test()),
+        Mode::RequireClaim(devs) => {
+            let held = current_claims();
+            let missing: Vec<&String> = devs.iter().filter(|d| !held.contains(*d)).collect();
+            if missing.is_empty() {
+                std::process::exit(0);
+            }
+            eprintln!(
+                "{PROG}: NOT UNDER A CLAIM for {}.\n\
+This process is not running inside `with-device`, so nothing stops another agent from \
+driving the same hardware at the same time — and a collision on a tty is SILENT: both \
+readers get a partial stream and neither errors.\n\
+Re-run as: with-device {} --purpose '<why>' -- <your command>",
+                missing
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                devs.join(" ")
+            );
+            std::process::exit(EXIT_USAGE);
+        }
         Mode::Status { json } => {
             println!("{}", render_status(&scan_status(), json));
             std::process::exit(0)
@@ -232,8 +253,15 @@ create its own lock and exclude nobody.",
             std::process::exit(EXIT_BUSY);
         }
     };
+    // Export the claim so the wrapped command can PROVE it is claimed (see CLAIM_ENV). This
+    // is what turns "always use with-device" from a rule someone remembers into one a script
+    // can assert with `--require-claim`.
+    let claimed: Vec<String> = claims.iter().map(|c| c.device.clone()).collect();
+    let claim_env = claim_env_value(std::env::var(CLAIM_ENV).ok().as_deref(), &claimed);
+
     let code = Command::new(&args.command[0])
         .args(&args.command[1..])
+        .env(CLAIM_ENV, &claim_env)
         .status()
         .map(|s| s.code().unwrap_or(1))
         .unwrap_or_else(|e| {

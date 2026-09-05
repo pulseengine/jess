@@ -65,12 +65,50 @@ const LOCK_NB: i32 = 4;
 pub const EXIT_USAGE: i32 = 2;
 pub const EXIT_BUSY: i32 = 3;
 
+/// Name of the environment variable a claim exports into the wrapped command: the
+/// comma-separated, sorted list of devices held for the lifetime of that command.
+///
+/// WHY IT EXISTS. "Always run it under with-device" is a rule that has to be REMEMBERED, and
+/// on 2026-09-05 jess broke it five times in one session — every time while chasing a bug,
+/// which is exactly when attention is elsewhere. A rule that fails under pressure needs to be
+/// checkable rather than promised. With this exported, any script can assert its own
+/// precondition (`with-device --require-claim <dev>`) and a script that touches hardware
+/// without a claim fails loudly instead of silently racing another agent.
+pub const CLAIM_ENV: &str = "WITH_DEVICE_CLAIM";
+
+/// The claim list a wrapped command should see: everything already claimed by an outer
+/// with-device, unioned with what this invocation adds. Union rather than overwrite, so that
+/// `with-device a -- with-device b -- cmd` leaves `cmd` able to assert either.
+pub fn claim_env_value(inherited: Option<&str>, newly: &[String]) -> String {
+    let mut set: BTreeSet<String> = inherited
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
+    set.extend(newly.iter().cloned());
+    set.into_iter().collect::<Vec<_>>().join(",")
+}
+
+/// Devices the current process can prove are claimed, from the environment.
+pub fn current_claims() -> BTreeSet<String> {
+    std::env::var(CLAIM_ENV)
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 pub const USAGE: &str = "\
 with-device — hold exclusive claims on shared bench hardware while a command runs.
 
 usage:
   with-device <device>... [--purpose <text>] [--wait <s>] -- <command>...
   with-device --status [--format json]
+  with-device --require-claim <device>...
   with-device --self-test
   with-device --version | -V
   with-device --help | -h
@@ -80,11 +118,16 @@ options:
   --wait <seconds>   block up to N seconds instead of failing fast (deadlock-free)
   --registry <path>  device registry (default: $BENCH_REGISTRY, then standard paths)
   --format json      machine-readable output for --status
+  --require-claim    assert this process is ALREADY inside a claim on those devices; exits 2
+                     if not. Put it at the top of any script that touches the hardware, so
+                     a forgotten claim fails loudly instead of racing silently.
 
 environment:
   BENCH_WHO          name recorded as the holder (e.g. jess, gale)
   BENCH_LOCKDIR      lock directory (default /var/tmp/pulseengine-bench)
   BENCH_REGISTRY     device registry path
+  WITH_DEVICE_CLAIM  set BY with-device for the wrapped command: the sorted, comma-separated
+                     devices held for its lifetime. Read it, do not set it yourself.
 
 exit codes:
   0   the wrapped command's status, or success for --status/--self-test
@@ -106,7 +149,12 @@ pub enum Mode {
     Help,
     Version,
     SelfTest,
-    Status { json: bool },
+    Status {
+        json: bool,
+    },
+    /// Assert that the caller is already inside a claim on these devices. For scripts that
+    /// touch hardware to fail loudly rather than race silently.
+    RequireClaim(Vec<String>),
     Run(RunArgs),
 }
 
@@ -141,6 +189,19 @@ pub fn parse_args(argv: &[String]) -> Result<Mode, String> {
     }
     if head.iter().any(|a| a == "--self-test") {
         return Ok(Mode::SelfTest);
+    }
+    if let Some(i) = head.iter().position(|a| a == "--require-claim") {
+        let devs: Vec<String> = head[i + 1..]
+            .iter()
+            .take_while(|a| !a.starts_with('-'))
+            .cloned()
+            .collect();
+        if devs.is_empty() {
+            return Err(format!(
+                "{PROG}: --require-claim needs at least one device name"
+            ));
+        }
+        return Ok(Mode::RequireClaim(devs));
     }
     if head.iter().any(|a| a == "--status") {
         let json = head
@@ -651,6 +712,30 @@ notes:
     fn empty_status_says_so_rather_than_printing_nothing() {
         assert_eq!(render_status(&[], false), "  no claims");
         assert_eq!(render_status(&[], true), "{\"devices\":[]}");
+    }
+
+    // ── the claim marker ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn claim_env_is_sorted_deduped_and_unions_with_an_outer_claim() {
+        assert_eq!(claim_env_value(None, &s(&["b", "a"])), "a,b");
+        assert_eq!(claim_env_value(Some(""), &s(&["a"])), "a");
+        // nested with-device must not hide the outer claim from the inner command
+        assert_eq!(
+            claim_env_value(Some("outer"), &s(&["inner"])),
+            "inner,outer"
+        );
+        assert_eq!(claim_env_value(Some("a,b"), &s(&["b"])), "a,b");
+        assert_eq!(claim_env_value(Some(" a , b "), &s(&["c"])), "a,b,c");
+    }
+
+    #[test]
+    fn require_claim_parses_its_device_list() {
+        assert_eq!(
+            parse_args(&s(&["--require-claim", "dev-a", "dev-b"])).unwrap(),
+            Mode::RequireClaim(s(&["dev-a", "dev-b"]))
+        );
+        assert!(parse_args(&s(&["--require-claim"])).is_err());
     }
 
     // ── the search path ─────────────────────────────────────────────────────────────────
