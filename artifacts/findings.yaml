@@ -4147,6 +4147,39 @@ artifacts:
       SDP support; (b) determine HAB state definitively rather than by elimination; (c) fall back to PX4's
       documented path, MCUXpresso Secure Provisioning Tool, which is known to work on this board and
       handles the ROM handshake itself.
+
+      *** ROOT CAUSE FOUND 2026-09-05 — IT IS A macOS PLATFORM LIMITATION, not spsdk's version, not the
+      board, and not jess's procedure. ***
+      FIRST, A VERSION ERROR OF MINE: the loop prompt specifies blhost 3.11.0. jess installed spsdk
+      3.1.0 — I read "3.11.0" as "3.1.0". Corrected to 3.11.0 and RE-RAN: IDENTICAL FAILURE. So the
+      version was wrong AND was not the cause; both facts are worth recording, because fixing the wrong
+      one would have looked like progress.
+      THE EVIDENCE, from spsdk's own debug log:
+        TX-CMD: WriteFile(address=0x2024FE00, length=80930)   <- command is well-formed and IS sent
+        OUT[1025]: 01, 04, 04, 20, 24, FE, 00, ...            <- correct SDP WriteFile header on the wire
+        RX-CMD: Timeout Error                                 <- the device NEVER ANSWERS
+      Every SDP transfer times out. Enumeration, however, works perfectly.
+      WHY: macOS binds the SDP device to the HID driver. Confirmed with ioreg — the device appears under
+      IOHIDDevice as VendorID 8137 (0x1FC9), Product "SE Blank RT Family". spsdk's SDP-over-USB is
+      SdpUSBInterface = SDPBulkProtocol, i.e. libusb bulk transfers; spsdk/sdp/protocol/ contains ONLY
+      bulk_protocol.py and serial_protocol.py — THERE IS NO HID PATH. macOS does not permit libusb to
+      detach its HID driver, so the interface can be enumerated but never claimed. That single fact
+      explains every symptom: nxpdevscan sees the device (HID enumeration), and every transfer times out
+      (libusb cannot claim it).
+      A RED HERRING WORTH RECORDING because it cost time and looked alarming: the debug log contains RX
+      packets 0xFE1CF701, 0xFE1C7601 and 0x67757374. 0xFE is the MAVLink v1 start byte and 0x67757374 is
+      ASCII "gust". Those are NOT SDP responses — they are nxpdevscan PROBING SERIAL PORTS with an mboot
+      PING and an SDP ReadStatus, hitting /dev/cu.usbmodem01, and misreading PX4 telemetry as protocol
+      data. Harmless, but it briefly looked like the ROM was returning garbage.
+      *** RESOLUTION PATHS, none of which are "try harder on macOS" ***:
+        (a) Run the SDP leg from LINUX, where libusb can detach the kernel HID driver. Most direct, and
+            jess's CI already runs ubuntu-latest — though CI has no board attached.
+        (b) NXP's MCUXpresso Secure Provisioning Tool on macOS, which is PX4's own documented path for
+            this board and does its own HID handling.
+        (c) A HID backend for spsdk's SDP — upstream work, not jess's to do.
+      *** BOARD HEALTH THROUGHOUT ***: five ISP entries, zero flash writes, and the board returned to
+      normal PX4 within ~5 s every time. Final check: 52,777 B of telemetry in 4 s. The vehicle is
+      unharmed and the whole exercise is reversible by design.
     tags: [h1, silicon, rt1176, isp, sdp, spsdk, tool-friction, blocked, hardware-verified]
     fields:
       detected-by: jess running H1 on the attached Pixhawk 6X-RT under standing operator consent, 2026-09-05
