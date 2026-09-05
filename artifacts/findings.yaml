@@ -4868,3 +4868,67 @@ artifacts:
         target: AFD-088
       - type: traces-to
         target: TEST-PIX-028
+
+  - id: AFD-092
+    type: ai-found-defect
+    title: "H1 is CLOSED BY THE PART, not by tooling: the RT1176's HAB is LOCKED, so the ROM refuses any unsigned flashloader — the SDP/blhost route is unreachable and SWD is the remaining path"
+    status: open
+    description: |-
+      2026-09-05. Operator: "we need to bring this in. As long as we can recover somehow we need to
+      make it work." H1 was run to completion: the pinned NXP flashloader was loaded over SDP on the
+      Pi. The answer is definitive, and it is NOT a tooling problem.
+
+      *** THE RT1176's HAB IS LOCKED. H1 AS SPECIFIED CANNOT SUCCEED ON THIS BOARD. ***
+      The flashloader matched its pin byte-for-byte (sha256 ba6a8b06...), and the load address was
+      taken from the image's own IVT rather than guessed:
+          header 0x402000D1   entry 0x20262561   boot_data 0x2024FE20   SELF 0x2024FE00
+      `sdphost write-file 0x2024FE00 ivt_flashloader.bin` returned, decoded from spsdk's own tables:
+          Status (HAB mode) = 2   -> StatusCode.HAB_IS_LOCKED        "HAB Is Locked"
+          Response status   = 36  -> HabErrorReason.UNSUPPORTED_CONF_ITEM
+      jump-address then failed and mboot (15A2:0073) never enumerated.
+      High Assurance Boot is CLOSED on this part, so the ROM accepts only SIGNED images. An unsigned
+      flashloader is refused by design. This is correct behaviour for a production flight controller -
+      Holybro ships it closed - and it is not a defect in spsdk, in the flashloader, or in jess's
+      procedure. We do not have the signing key and should not have it.
+
+      *** THIS RETROSPECTIVELY EXPLAINS EVERY EARLIER H1 SYMPTOM ***
+      AFD-086 recorded "the channel opens, the ROM answers, but every read returns None, and HAB
+      status decodes as UNKNOWN ERROR". That was the same fact seen from the other side: a locked HAB
+      refuses the reads too. The macOS leg (AFD-080/082) never got far enough to see it. Three ticks
+      of tooling diagnosis - libusb vs hidapi, family filters, vars(dev), a self-inflicted driver
+      detach - were all downstream of a device security state that no amount of host-side work can
+      change. The instrument was fine from AFD-086 onward; the door is locked.
+
+      *** WHAT THIS MEANS FOR THE CAMPAIGN, concretely ***
+      The loop's H1 rung ("nxpdevscan -> blhost get-property -> write-memory -> call -> read-memory")
+      is UNREACHABLE on a HAB-locked Pixhawk 6X-RT. It is not blocked on effort or on a maintainer;
+      it is closed by the part's fuses. It should be retired or rewritten, not retried.
+      The remaining route to executing our code on the RT1176 is SWD via the Pixhawk Debug Full
+      connector (JST SM10B: SWDIO pin 4, SWCLK pin 5, nRST pin 9, GND pin 10) - load to RAM and run,
+      exactly the technique that succeeded on the F100 hours earlier in this same session (AFD-091),
+      using the same openocd on the same Pi. HAB gates what the BOOT ROM will execute; it does not by
+      itself close the debug port, and PX4 developers debug these boards over SWD routinely.
+      THE BLOCKER IS THEREFORE PHYSICAL AND CHEAP: a Holybro Pixhawk Debug Adapter or an SM10B
+      breakout to reach SWDIO/SWCLK. Nothing else about the approach is unknown - the probe, the host,
+      the toolchain and the method are all proven on this bench today.
+      An honest caveat: it is NOT yet confirmed that the RT1176's debug port is open on this board.
+      Some parts fuse debug shut alongside HAB. That is one measurement away once a cable exists, and
+      until it is made the SWD route is a plan, not a result.
+
+      *** BOARD HEALTH ***: six ISP entries today, ZERO flash writes, every operation RAM-only or
+      read-only. The write-file was REFUSED by the ROM, so nothing was even loaded. The board returned
+      to normal PX4 on its own (via the PX4 bootloader for ~3 s, which is expected) and was verified
+      afterwards over the MAVLink shell: PX4 1.15.4, i.MX RT1170 rB0. Everything ran under a
+      with-device pixhawk-6xrt claim.
+    tags: [h1, silicon, rt1176, hab, secure-boot, sdp, blhost, afd-086, afd-080, swd, blocked, strategy]
+    fields:
+      detected-by: jess running H1 to completion on the Pi after operator go-ahead, 2026-09-05
+      severity: critical
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T17:41:22Z
+    links:
+      - type: corrects
+        target: AFD-086
