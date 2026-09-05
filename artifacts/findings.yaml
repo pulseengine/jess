@@ -4494,3 +4494,70 @@ artifacts:
     links:
       - type: corrects
         target: AFD-083
+
+  - id: AFD-085
+    type: ai-found-defect
+    title: "jess's release was unsignable and therefore un-ingestable: varve's deposit is fail-closed on a cosign-signed SHA256SUMS, and v0.7.0 published neither signature nor provenance nor SBOM"
+    status: open
+    description: |-
+      2026-09-05. Operator: "check also with the other releases as other stuff is also needed sign and
+      so." Audited jess's release workflow against the org's shared pattern (synth / loom / ordeal /
+      rivet / spar / sigil). jess's had FOUR of the six phases missing, and one of the gaps makes the
+      whole varve ask unfulfillable.
+
+      *** THE FINDING THAT MATTERS: jess v0.7.0 COULD NOT HAVE BEEN INGESTED BY VARVE AT ALL ***
+      ordeal's release.yml says it in its own comment: "varve's deposit workflow consumes exactly this,
+      FAIL-CLOSED" - "this" being SHA256SUMS.txt plus its cosign bundle. varve's README confirms the
+      consumer side: it fetches SHA256SUMS.txt AND SHA256SUMS.txt.cosign.bundle and cosign-verifies
+      before extracting anything.
+      jess v0.7.0 published NEITHER. So the varve#130 request - "here are the digests, please pin" -
+      was unfulfillable on its own terms, and I did not know that when I made it. I had reasoned that
+      the blocker was "it is a script, not a binary", fixed exactly that, and declared the objection
+      gone. The actual blocker was one layer past where I stopped looking. A plain SHA256SUMS.txt is
+      not a supply-chain control: an attacker who can replace an asset can replace the checksum file
+      beside it. That is why the org signs the manifest, and why the consumer refuses without it.
+
+      *** WHAT WAS MISSING, now added, matching the org phase order exactly ***
+        1. permissions: id-token: write + attestations: write   (absent - keyless signing impossible)
+        2. CycloneDX SBOM, generated BEFORE the checksums so its digest lands in the manifest and the
+           signature transitively covers it                     (absent)
+        3. SHA256SUMS.txt                                        (present, but see below)
+        4. SLSA v1 build provenance via actions/attest-build-provenance, keyless, Rekor-recorded
+                                                                 (absent)
+        5. cosign sign-blob over SHA256SUMS.txt -> .cosign.bundle + .sig + .pem
+                                                                 (absent - THE fail-closed gap)
+        6. publish                                               (present)
+      Also aligned: `sha256sum ./*` rather than `sha256sum *.tar.gz`. The `./` prefix is not cosmetic -
+      varve's documented consumer greps for `" ./<asset>$"`, so the un-prefixed manifest jess published
+      would not have matched even had it been signed.
+
+      *** WHAT JESS ADDS THAT THE ORG PATTERN DOES NOT HAVE ***
+      A `verify` job that re-downloads the PUBLISHED release into a clean runner and checks it the way
+      a consumer would: cosign verify-blob bound to this workflow's identity; `sha256sum -c` with NO
+      --ignore-missing (a dropped asset must fail, not pass quietly); an assertion that the manifest
+      actually covers all four targets and the SBOM; `gh attestation verify` per archive; and finally
+      EXECUTING the linux x86_64 binary. "cosign sign-blob exited 0" and "the published release
+      verifies" are different claims - they diverge whenever the wrong file was signed, an asset was
+      clobbered after signing, or an upload dropped the bundle. Only the second is evidence. This is
+      the same distinction as AFD-084 (--self-test green while the binary was broken), applied to
+      release plumbing.
+
+      *** THE aarch64-linux GAP IS CLOSED RATHER THAN DOCUMENTED ***
+      v0.7.0 cross-built aarch64-unknown-linux-gnu and SKIPPED its self-test, shipping the Raspberry Pi
+      target unexecuted. I had written that caveat into the workflow, the release notes and two
+      upstream issues, which is honest but is not a fix. jess is a PUBLIC repo, so `ubuntu-24.04-arm`
+      runners are free: the target is now built and fully tested on a host that executes it. All four
+      assets now have their own test suite run on matching hardware. Writing the caveat down three
+      times was easier than removing it, and I did the easy thing first.
+    tags: [release, supply-chain, cosign, slsa, sbom, varve, with-device, afd-084, self-correction]
+    fields:
+      detected-by: auditing jess's release.yml against the org shared pattern at the operator's prompt, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T11:44:14Z
+    links:
+      - type: corrects
+        target: AFD-084

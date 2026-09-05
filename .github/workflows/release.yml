@@ -1,12 +1,26 @@
 name: Release
 
-# Cuts the release assets for jess's own shipped binary: `with-device`, the shared-bench
-# claim (AFD-081, DD-027). Until now jess cut releases by hand and shipped no binary, so
-# `with-device` existed only as a file in this repo — gale could read it but not RUN it, and
-# varve could not carry it (varve#130 needs a signed release asset with a digest, not a path).
+# Cuts and SIGNS the release assets for jess's own shipped binary: `with-device`, the
+# shared-bench claim (AFD-081, DD-027).
 #
-# Asset naming follows the convention every other PulseEngine repo publishes and that
-# tools/deps/fetch.sh already parses:
+# This follows the org's shared release pattern (synth / loom / ordeal / rivet / spar / sigil),
+# not a jess invention. That matters for a concrete reason discovered late: varve's deposit
+# workflow consumes `SHA256SUMS.txt` + its cosign bundle **fail-closed**. An unsigned release —
+# which is what jess v0.7.0 was — cannot be ingested into a layer at all, whatever language the
+# binary is written in. Checksums alone do not close the gap: an attacker able to replace an
+# asset can replace a plain checksum file beside it.
+#
+# Phases, in this order and for these reasons:
+#   1. build + full test suite per target, each on a host that can EXECUTE that target
+#   2. SBOM (CycloneDX) — generated BEFORE the checksums so its digest lands in the manifest,
+#      which means the cosign signature over SHA256SUMS.txt transitively covers the SBOM
+#   3. SHA256SUMS.txt over every asset
+#   4. SLSA v1 build provenance (in-toto, keyless, recorded in Rekor)
+#   5. cosign sign-blob over SHA256SUMS.txt
+#   6. publish, then VERIFY the published artefacts from a clean download — signing is not
+#      verifying, and only the second one is evidence
+#
+# Asset naming matches every other PulseEngine repo and what tools/deps/fetch.sh parses:
 #     with-device-<version>-<target-triple>.tar.gz   +   SHA256SUMS.txt
 # so a consumer pins it exactly like synth or meld:
 #     release:pulseengine/jess@vX.Y.Z!with-device-<v>-<triple>.tar.gz!with-device
@@ -21,7 +35,7 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -31,32 +45,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
-          - { os: ubuntu-latest, target: aarch64-unknown-linux-gnu }
-          - { os: macos-14,      target: aarch64-apple-darwin }
-          - { os: macos-14,      target: x86_64-apple-darwin }
+          # Every target is built on a host that can EXECUTE it, so nothing ships
+          # unexecuted. aarch64-linux — the Raspberry Pi target — was previously
+          # cross-built with its self-test skipped; `ubuntu-24.04-arm` is free for public
+          # repos and removes that gap rather than documenting it.
+          - { os: ubuntu-latest,   target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: macos-14,        target: aarch64-apple-darwin }
+          - { os: macos-14,        target: x86_64-apple-darwin }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - name: rust target
         run: rustup target add ${{ matrix.target }}
-      # The crate has zero dependencies and calls flock(2) via a bare `extern "C"`, so a
-      # cross build needs only a linker — no sysroot, no `cross`, no container.
-      - name: aarch64 linux cross-linker
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> "$GITHUB_ENV"
       - name: build
         working-directory: tools/bench/with-device
         run: cargo build --release --target ${{ matrix.target }}
-      # Self-test only where the binary can actually execute. A cross-built artifact is
-      # shipped UNTESTED unless its host runs it; say so rather than implying coverage.
-      # x86_64-apple-darwin runs under Rosetta on macos-14, so it is exercised too.
-      - name: self-test (native + rosetta targets only)
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
+      # The full suite runs in CI on every PR; here it re-runs on the exact host that
+      # produced the artefact. No `if:` guard and no skipped target — every asset in this
+      # release has had its own tests run on hardware that executes it.
+      - name: test + self-test on the host that produced the artefact
         working-directory: tools/bench/with-device
         run: |
+          set -euo pipefail
+          cargo test --all
           BIN=target/${{ matrix.target }}/release/with-device
           "$BIN" --version
           "$BIN" --self-test
@@ -64,8 +77,6 @@ jobs:
         working-directory: tools/bench/with-device
         run: |
           set -euo pipefail
-          # Read the version from Cargo.toml, not from `--version`: the aarch64-linux
-          # artifact is cross-built and cannot be executed on this runner.
           VER=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
           test -n "$VER"
           NAME="with-device-${VER}-${{ matrix.target }}"
@@ -74,37 +85,174 @@ jobs:
           cp ../devices.yaml "/tmp/pkg/$NAME/devices.yaml.example"
           tar czf "/tmp/${NAME}.tar.gz" -C /tmp/pkg "$NAME"
           ls -l "/tmp/${NAME}.tar.gz"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pkg-${{ matrix.target }}
           path: /tmp/with-device-*.tar.gz
           if-no-files-found: error
 
   publish:
-    name: attach assets to the release
+    name: sign + publish
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      # Release-asset upload needs contents: write. Keyless cosign signing and the SLSA
+      # build-provenance attestation both need an OIDC token; the attestation also needs
+      # attestations: write. Mirrors pulseengine/ordeal and pulseengine/loom.
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with: { path: /tmp/assets, merge-multiple: true }
-      - name: SHA256SUMS.txt
-        working-directory: /tmp/assets
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Flatten release assets
         run: |
           set -euo pipefail
-          ls -1 *.tar.gz
-          sha256sum *.tar.gz > SHA256SUMS.txt
+          mkdir -p release-assets
+          find artifacts -type f -name "*.tar.gz" -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      # ── SBOM ───────────────────────────────────────────────────────────────────────────
+      # Generated BEFORE the checksums so its digest is captured in SHA256SUMS.txt and the
+      # cosign signature therefore covers it too. with-device has zero third-party
+      # dependencies, so this SBOM is deliberately near-empty — that emptiness is exactly the
+      # claim worth publishing for a binary headed into a signed layer, and it is only
+      # credible if a machine emitted it.
+      - name: Install cargo-cyclonedx
+        run: cargo install --locked cargo-cyclonedx
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          set -euo pipefail
+          VER=$(grep -m1 '^version' tools/bench/with-device/Cargo.toml | cut -d'"' -f2)
+          cargo cyclonedx --manifest-path tools/bench/with-device/Cargo.toml \
+            --format json --spec-version 1.5
+          SRC=$(find tools/bench/with-device -maxdepth 2 -name '*.cdx.json' | head -1)
+          test -n "$SRC" && test -f "$SRC"
+          cp "$SRC" "release-assets/with-device-${VER}.cdx.json"
+          ls -la release-assets/
+
+      - name: Generate SHA256 checksums
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum ./* > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - name: upload
-        working-directory: /tmp/assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+      # ── SLSA build provenance (GitHub-native) ──────────────────────────────────────────
+      # An in-toto SLSA v1 statement per archive, signed keyless via Sigstore and recorded in
+      # Rekor. Verify with `gh attestation verify <file> --repo pulseengine/jess`.
+      - name: Generate SLSA build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: "release-assets/*.tar.gz"
+
+      # ── Sigstore keyless signing (cosign) ──────────────────────────────────────────────
+      # Signs SHA256SUMS.txt so a consumer can verify the checksum file ITSELF came from this
+      # workflow. varve's deposit consumes exactly this, fail-closed. Verify with:
+      #   cosign verify-blob \
+      #     --certificate-identity-regexp \
+      #       'https://github.com/pulseengine/jess/.github/workflows/release.yml@.*' \
+      #     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+      #     --bundle SHA256SUMS.txt.cosign.bundle \
+      #     SHA256SUMS.txt
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+      - name: Sign SHA256SUMS with cosign (keyless OIDC)
         run: |
           set -euo pipefail
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
-            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber *.tar.gz SHA256SUMS.txt
-          echo "attached to $TAG:"
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
-            --jq '.assets[].name'
+          cd release-assets
+          cosign sign-blob --yes \
+            --bundle SHA256SUMS.txt.cosign.bundle \
+            --output-signature SHA256SUMS.txt.sig \
+            --output-certificate SHA256SUMS.txt.pem \
+            SHA256SUMS.txt
+          echo "::notice::SHA256SUMS signed via Sigstore keyless flow."
+          ls -la ./*
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Untrusted-input safety: the tag flows in via env: and is dereferenced through
+          # $VERSION, never expanded into the shell.
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          # Idempotent: re-running for an existing release uploads/overwrites rather than
+          # failing.
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "::notice::Release $VERSION exists; uploading assets"
+            gh release upload "$VERSION" --clobber release-assets/*
+          else
+            echo "::notice::Creating Release $VERSION with assets"
+            gh release create "$VERSION" --title "jess $VERSION" --generate-notes release-assets/*
+          fi
+
+  # ── The gate the org pattern does not have ────────────────────────────────────────────
+  # "cosign sign-blob exited 0" is not "the published release verifies". They differ whenever
+  # the wrong file was signed, an asset was clobbered after signing, or the upload dropped the
+  # bundle. This job re-downloads the PUBLISHED release into a clean runner and verifies it the
+  # way a consumer would — which is the only form of this claim that is evidence.
+  verify:
+    name: verify the published release as a consumer
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+      - name: Download the published release and verify it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          mkdir -p /tmp/dl && cd /tmp/dl
+          gh release download "$VERSION" --repo "$REPO"
+          ls -la
+
+          echo "── 1. the signature over SHA256SUMS.txt, bound to THIS workflow ──"
+          cosign verify-blob \
+            --certificate-identity-regexp \
+              "^https://github.com/${REPO}/\.github/workflows/release\.yml@.*" \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            --bundle SHA256SUMS.txt.cosign.bundle \
+            SHA256SUMS.txt
+
+          echo "── 2. every asset matches the signed manifest ──"
+          # No --ignore-missing: every line in the manifest must have its file present, so a
+          # dropped asset fails here rather than passing quietly.
+          sha256sum -c SHA256SUMS.txt
+
+          echo "── 3. the manifest actually covers all four targets + the SBOM ──"
+          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
+                   aarch64-apple-darwin x86_64-apple-darwin; do
+            grep -q "with-device-.*-${t}\.tar\.gz\$" SHA256SUMS.txt \
+              || { echo "manifest does not cover $t"; exit 1; }
+          done
+          grep -q '\.cdx\.json$' SHA256SUMS.txt || { echo "SBOM not in the manifest"; exit 1; }
+
+          echo "── 4. SLSA build provenance verifies for every archive ──"
+          for f in with-device-*.tar.gz; do
+            gh attestation verify "$f" --repo "$REPO"
+          done
+
+          echo "── 5. the linux x86_64 binary RUNS (this runner can execute it) ──"
+          tar xzf with-device-*-x86_64-unknown-linux-gnu.tar.gz
+          B=$(find . -name with-device -type f -perm -u+x | head -1)
+          "$B" --version
+          BENCH_LOCKDIR=/tmp/verify-locks "$B" --self-test
+
+          echo "ALL CHECKS PASSED — the published release verifies as a consumer sees it."
