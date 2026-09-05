@@ -4233,3 +4233,55 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T10:10:33Z
+
+  - id: AFD-082
+    type: ai-found-defect
+    title: hidapi OPENS the RT1176 SDP device that libusb cannot — but the replies are jess's own command echoed back, so H1 is still blocked; and the new bench lock accepted any device name
+    status: open
+    description: |-
+      2026-09-05. Board attached; Track A. H1 was blocked by AFD-080 (macOS binds the RT1176 SDP device to
+      the HID driver; spsdk's SDP-over-USB is libusb bulk with NO HID path, so it can enumerate but never
+      claim). This tick tested the obvious unblock: speak HID instead of fighting it.
+      *** REAL PROGRESS: hidapi OPENS the device that libusb CANNOT. *** Under a bench claim, six ISP
+      entries, all read-only commands:
+        hid.enumerate(0x1FC9, 0x013D) -> 1 interface, usage_page 0xFF00 usage 1 (the SDP HID shape)
+        h.open_path(...) -> SUCCEEDS
+      That is the precise thing spsdk fails at. It confirms AFD-080's root cause from the other side and
+      identifies a viable route on macOS that does not need Linux or the Pi.
+      *** BUT THE CHANNEL IS NOT PROVEN, AND I NEARLY REPORTED THAT IT WAS. *** The device returned
+      report id=3 to every command, which looked like the SDP HAB-mode response and read as a breakthrough.
+      It is not. Comparing what was sent against what came back, for a READ_REGISTER at 0x2024FE00:
+        sent      01 01 20 24 fe 00 20 00 00 00 10 00
+        received  00 00 00 24 fe 00 20 00 00 00 10 00
+      The reply CONTAINS MY OWN ADDRESS AND COUNT. Changing the address to 0x00200000 changed the "reply"
+      correspondingly. It is my own command echoed back, not a device response. No report id=4 (the SDP
+      response report) was ever received, and no value ever decoded to a valid HAB code
+      (0x12343412 LOCKED / 0x56787856 UNLOCKED) in either byte order.
+      So: OPEN works, REQUEST/RESPONSE does not. H1 REMAINS BLOCKED. The honest status is "the macOS
+      blocker has one layer peeled off", not "the ROM answered".
+      *** ONE THING THAT WAS RIGHT ***: the report size. spsdk's bulk trace showed OUT[1025]; padding the
+      HID output report to 1024 bytes + 1 report id produced a second reply where 16- and 64-byte reports
+      produced only one. The transfer size is 1025 and the earlier undersized writes were wrong.
+      *** A VACUOUS LOCK IN JESS'S OWN NEW BENCH TOOL, found by reading its own status output ***:
+      with-device accepted ANY device name. A typo - `with-device stlnk-v3` - would silently create a
+      DIFFERENT lock file, exclude nobody, and leave both agents believing they held the device. A stray
+      `stlink-003B001A...` lock was sitting next to `stlink-v3` from exactly that mistake, made by me
+      hours earlier. That is the vacuous-gate failure in lock form, shipped in the tool built to prevent
+      a coordination failure. FIXED: unknown names are refused (rc=4) against tools/bench/devices.yaml.
+      The fix then BROKE --self-test, because `selftest-device` was not registered - the self-test caught
+      my own change, which is what it is for. Registered it explicitly in devices.yaml rather than adding
+      a name-pattern bypass: a bypass in a lock is the hole that later gets used for something real. ONE
+      rule, no exceptions - the registry is authoritative.
+      *** BOARD HEALTH ***: six ISP entries, zero flash writes, returned to normal PX4 every time. One
+      scare worth recording: immediately after the last return, telemetry read 0 B in 3 s. Re-checked
+      after settling rather than reporting a fault - 53,686 / 52,626 / 51,080 B across three consecutive
+      4 s windows. The zero was boot time, not damage.
+    tags: [h1, silicon, sdp, hid, macos, afd-080, near-miss, vacuous-lock, bench, self-correction]
+    fields:
+      detected-by: jess testing whether hidapi bypasses the macOS HID claim limitation, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T10:49:09Z

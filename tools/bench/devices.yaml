@@ -18,3 +18,11 @@ devices:
     note: >
       Vehicle. Read-only telemetry (O_RDONLY on the tty) needs no claim. Anything that
       WRITES — ISP entry, SDP, flash — must hold this claim AND have operator consent.
+  selftest-device:
+    what: SYNTHETIC — not real hardware. Used only by `with-device --self-test`.
+    note: >
+      Registered explicitly rather than special-cased in code. The alternative was a
+      bypass for names matching some pattern, and a bypass in a lock is exactly the hole
+      that later gets used for something real. Adding the synthetic device to the registry
+      keeps ONE rule: the registry is authoritative, no exceptions.
+
