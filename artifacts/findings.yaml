@@ -4668,3 +4668,79 @@ artifacts:
     links:
       - type: corrects
         target: AFD-080
+
+  - id: AFD-088
+    type: ai-found-defect
+    title: "TEST-PIX-028's 'on-target' M3 rung is green about a machine that cannot exist: the image needs 64 KB SRAM with its stack at 0x20020000, and the real STM32F100 has 8 KB"
+    status: open
+    description: |-
+      2026-09-05. Operator, on being told the Pi bench has a real STM32F100: "possibly this should
+      improve our renode work as well." It did, immediately, and not in the way I expected - the first
+      thing real silicon bought was not a new capability but the falsification of an existing claim.
+
+      *** THE FINDING: TEST-PIX-028 IS GREEN ABOUT A MACHINE THAT CANNOT EXIST ***
+      TEST-PIX-028 runs hardware/renode/gust-m3/passthrough_mem.elf on hardware/renode/gust-m3/m3.repl
+      and is cited as the ON-TARGET execution rung for REQ-PIX-004 PART-P02 - the gust F100 failsafe
+      core, i.e. the Pixhawk 6X-RT's real STM32F100 IO coprocessor. It is wired into CI's renode-smoke
+      job and has been green since 2026-07-22.
+      m3.repl declares 256 KB of SRAM at 0x20000000. The real part has 8 KB. Measured off actual
+      STM32F100 silicon today (STM32VLDISCOVERY on the Pi bench, read over SWD, halted then resumed):
+          DBGMCU_IDCODE 0x10016420  -> DEV_ID 0x420, STM32F100 value line
+          flash size    0x1FFFF7E0  -> 0x0080 = 128 KB
+          initial MSP   0x20002000              => 8 KB SRAM, top at 0x20002000
+      Checked the image against that real geometry:
+          initial MSP   0x20020000   OUTSIDE physical SRAM - the FIRST stack push faults on silicon
+          SRAM segment  0x20000000 + 0x10000 = 0x20010000   OVERFLOWS 8 KB by 57,344 bytes
+      The image wants 64 KB of RAM and puts its stack 128 KB above the SRAM base. The target part has
+      8 KB. This firmware cannot run on the hardware the test is evidence about, and it never could
+      have. The oracle is green because the EMULATOR IS MORE GENEROUS THAN THE TARGET.
+
+      *** WHY THIS IS THE INTERESTING SHAPE OF VACUOUS EVIDENCE ***
+      The campaign has repeatedly found gates that assert nothing. This one asserts something real -
+      the pass-through IS byte-exact, the asymmetric rotor-out zeros DO survive un-re-mixed, and that
+      result is genuine Cortex-M3 semantics. What does not transfer is the word ON-TARGET. An emulator
+      configured more permissively than the part does not fail the way the part fails; it passes. So
+      the failure mode is not "the check is empty" but "the check is about the wrong machine", and
+      that is harder to see precisely because the result it reports is true.
+      IN FAIRNESS: neither m3.repl nor TEST-PIX-028 ever claimed exact-part fidelity - both say
+      "STM32F100-class". The defect is not a lie in the model, it is the inferential step from
+      "class" to "the F100 failsafe core" in a requirement's verification chain. A synthetic platform
+      is a fine place to prove ISA semantics; it is not evidence that the image fits the silicon.
+
+      *** THE GATE, so this cannot regress or be argued about ***
+      hardware/renode/gust-m3/check-fits-real-f100.sh asserts the image against the MEASURED geometry
+      (8 KB SRAM at 0x20000000, 128 KB flash): initial MSP inside physical SRAM, and every SRAM LOAD
+      segment fitting 8 KB. It exits 1 today, by design - that is the honest state, and it is a
+      mechanical check rather than a paragraph anyone has to believe.
+
+      *** WHAT THIS DOES NOT SAY ***
+      It does not say gust is wrong, or that the pass-through logic is wrong - the byte-exactness
+      result stands on its own as an ISA-level claim. It does not say Renode is defective: a synthetic
+      platform is exactly what Renode is for, and m3.repl is honest about being one. It says the V for
+      REQ-PIX-004 PART-P02 does not currently close on the target, and the artifact spine should say
+      so rather than counting an emulated 256 KB machine as the on-target rung.
+
+      *** WHAT WOULD ACTUALLY CLOSE IT ***
+        1. Rebuild the pass-through for the real geometry (8 KB SRAM, stack inside it). If synth
+           cannot yet emit an image that small, THAT is the finding and belongs upstream with numbers.
+        2. Re-run TEST-PIX-028 against a real-geometry Renode platform, so the emulated rung stops
+           being more permissive than the silicon.
+        3. Then run the same image on the STM32VLDISCOVERY over SWD and diff it against Renode - the
+           bench now has the part, so the emulator need not be the only witness. That third rung is
+           what the operator's remark was actually pointing at, and it is only reachable because the
+           first two now have a number attached.
+      NOTE the VLDISCOVERY currently has other firmware on it (flash@0x08000000 =
+      20002000 08000401 08000ad5 080013d7), so step 3 means erasing someone's board - operator
+      consent first, and it is not the vehicle.
+    tags: [renode, gust, f100, cortex-m3, test-pix-028, req-pix-004, on-target, emulator-fidelity, vacuous-evidence, silicon]
+    fields:
+      detected-by: comparing the Renode M3 platform against STM32F100 silicon read on the Pi bench, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T14:15:37Z
+    links:
+      - type: defect-against
+        target: TEST-PIX-028
