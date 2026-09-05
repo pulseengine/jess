@@ -235,6 +235,12 @@ jobs:
       # sat at 0x20020000 — outside physical RAM — passed this gate for six weeks. The
       # geometry check is cheap and runs first; if it fails, the robot's green would be about
       # a machine that cannot exist.
+      # The geometry gate disassembles <entry> to read the linear-memory base. A plain x86_64
+      # binutils cannot decode ARM, and the check then prints "(not located in <entry>)" and
+      # passes — a check that silently does not check, which is the shape this whole gate
+      # exists to catch. ~15 s of apt buys the assertion actually running.
+      - name: arm-none-eabi binutils (so the geometry gate can decode ARM)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq binutils-arm-none-eabi
       # NEGATIVE CONTROL, because the first version of this gate was itself vacuous: it shelled
       # out to objcopy, which on a runner without ARM binutils cannot read the ELF, and then
       # reported "initial MSP: 0000000000  ok" and exited 0 — a PASS on a file it never parsed.
