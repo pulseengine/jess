@@ -27,6 +27,14 @@
 cpu: CPU.CortexM @ sysbus
     cpuType: "cortex-m3"
     nvic: nvic
+    // EXPLICIT 0, and it must stay explicit. Renode DEFAULTS a Cortex-M to EIGHT MPU regions
+    // when the platform says nothing: this file omitted the parameter and the emulated core
+    // reported MPU_TYPE = 0x00000800 (DREGION 8) while the real STM32F100 reports 0x00000000.
+    // Measured, not assumed — the assertion in passthrough-m3.robot failed on its first run and
+    // that is how this was found. So "we never declared an MPU" was NOT the same as "there is
+    // no MPU here", and a gust:hal isolation design validated on this platform could have
+    // assumed eight regions the target does not have.
+    numberOfMPURegions: 0
 nvic: IRQControllers.NVIC @ sysbus 0xE000E000
     -> cpu@0
 flash: Memory.MappedMemory @ sysbus 0x0
