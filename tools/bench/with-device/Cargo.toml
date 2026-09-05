@@ -1,0 +1,20 @@
+[package]
+name = "with-device"
+version = "0.2.0"
+edition = "2021"
+description = "Hold exclusive claims on shared bench hardware for the lifetime of a command"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "with-device"
+path = "src/main.rs"
+
+# NO DEPENDENCIES, deliberately. flock(2) is declared directly in main.rs. A tool that ships
+# in a signed toolchain layer should have nothing to vendor and nothing to audit but itself.
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
