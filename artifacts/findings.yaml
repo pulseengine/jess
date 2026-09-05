@@ -4101,6 +4101,94 @@ artifacts:
       model: claude-opus-4-8
       timestamp: 2026-09-05T08:15:07Z
 
+  - id: AFD-080
+    type: ai-found-defect
+    title: "H1 on silicon: ISP entry WORKS and the ROM is confirmed SDP-only (refuting the prompt's blhost recipe on hardware) — but spsdk 3.1.0's SDP layer cannot transfer data with this ROM"
+    status: open
+    description: |-
+      2026-09-05. FIRST ATTEMPT AT H1 ON REAL SILICON, with the operator's standing consent. The board was
+      NOT harmed and is healthy: after every attempt it returned to normal PX4 mode on its own and streams
+      telemetry (31,346 B in 3 s at the end). NOTHING WAS WRITTEN TO FLASH. H1 IS NOT ACHIEVED - the
+      blocker is characterised below and is in the host tooling, not in jess's procedure.
+      *** WHAT IS NOW PROVEN ON HARDWARE ***:
+        1 ISP ENTRY WORKS AND IS REPEATABLE. `reboot -i` via PX4's own Tools/mavlink_shell.py over MAVLink
+          SERIAL_CONTROL puts the board into serial-download mode. Done three times, ~1 s each. No
+          disassembly, no BOOT button, no QGroundControl.
+        2 THE ROM IS SDP, NOT MBOOT - MEASURED, not inferred. In ISP the board enumerates as
+          "SE Blank RT Family", VID 0x1FC9 PID 0x013D, name list including mimxrt1176. That is exactly
+          what spsdk's device database predicts for `isp.rom.protocol: sdp`.
+        3 blhost CANNOT SEE THE ROM: `blhost -u -- get-property 1` -> SpsdkNoDeviceFoundError. So the H1
+          recipe in the loop prompt (nxpdevscan -> blhost get-property 1 -> write-memory -> call) IS
+          WRONG FOR THIS PART and would have failed at step 2. jess's earlier correction is confirmed on
+          silicon; the NXP community claim "from RT11xx discard sdphost, just use blhost" is refuted.
+        4 THE ROM TIMES OUT BACK TO PX4 IF LEFT IDLE. The first attempt failed because jess interleaved
+          unrelated work (merging a PR, analysing the IVT) while the board sat in ISP. Once in ISP, act
+          immediately. The subsequent runs poll for the device and proceed with no idle time.
+      *** THE BLOCKER: spsdk 3.1.0's SDP LAYER CANNOT TRANSFER DATA WITH THIS ROM ***.
+        write-file  -> "Status (HAB mode) = 2 (0x2)"  "Response status = 248 (0xf8)"
+        read-register -> read_safe() returns empty
+        jump-address  -> UNKNOWN ERROR, board stays at 0x1FC9:0x013D (flashloader never runs)
+      NEITHER 0x2 NOR 0xF8 IS A VALID SDP ResponseValue. spsdk's own enum lists WRITE_FILE_OK 0x88888888,
+      WRITE_DATA_OK 0x128A8A12, LOCKED 0x12343412, UNLOCKED 0x56787856, HAB_SUCCESS 0xF0F0F0F0. A
+      HAB-locked device would report LOCKED (0x12343412) - it does not. So this reads as a protocol/parse
+      mismatch between spsdk 3.1.0 and the RT1176 ROM rather than a secure-boot refusal, though jess has
+      NOT proven which and does not claim to.
+      *** A MISLEADING ERROR THAT COST TIME, worth reporting upstream ***: spsdk/apps/sdphost.py:133
+      raises "Error: invalid sub-command or arguments 'read-register ...'" when sdp.read_safe() returns
+      FALSY - i.e. when the READ FAILED. The message names the arguments, so a failed transfer looks like
+      a syntax mistake. jess spent several cycles re-checking argument order against the click decorators
+      before reading the source and finding the raise site.
+      *** A REAL BUG IN JESS'S OWN RUNBOOK, found by doing this ***: it hardcoded the flashloader load
+      address as 0x20240000. The image's IVT declares self=0x2024FE00 and entry=0x20262561; loading at the
+      guessed base would put the entry point outside the loaded span. Now DERIVED from the IVT's own self
+      field, with the image span and entry containment checked. This is the same class as "never guess an
+      address" that the runbook already applied to the payload target.
+      *** NEXT, in order ***: (a) try a different spsdk version - 3.1.0 may simply predate correct RT1176
+      SDP support; (b) determine HAB state definitively rather than by elimination; (c) fall back to PX4's
+      documented path, MCUXpresso Secure Provisioning Tool, which is known to work on this board and
+      handles the ROM handshake itself.
+
+      *** ROOT CAUSE FOUND 2026-09-05 — IT IS A macOS PLATFORM LIMITATION, not spsdk's version, not the
+      board, and not jess's procedure. ***
+      FIRST, A VERSION ERROR OF MINE: the loop prompt specifies blhost 3.11.0. jess installed spsdk
+      3.1.0 — I read "3.11.0" as "3.1.0". Corrected to 3.11.0 and RE-RAN: IDENTICAL FAILURE. So the
+      version was wrong AND was not the cause; both facts are worth recording, because fixing the wrong
+      one would have looked like progress.
+      THE EVIDENCE, from spsdk's own debug log:
+        TX-CMD: WriteFile(address=0x2024FE00, length=80930)   <- command is well-formed and IS sent
+        OUT[1025]: 01, 04, 04, 20, 24, FE, 00, ...            <- correct SDP WriteFile header on the wire
+        RX-CMD: Timeout Error                                 <- the device NEVER ANSWERS
+      Every SDP transfer times out. Enumeration, however, works perfectly.
+      WHY: macOS binds the SDP device to the HID driver. Confirmed with ioreg — the device appears under
+      IOHIDDevice as VendorID 8137 (0x1FC9), Product "SE Blank RT Family". spsdk's SDP-over-USB is
+      SdpUSBInterface = SDPBulkProtocol, i.e. libusb bulk transfers; spsdk/sdp/protocol/ contains ONLY
+      bulk_protocol.py and serial_protocol.py — THERE IS NO HID PATH. macOS does not permit libusb to
+      detach its HID driver, so the interface can be enumerated but never claimed. That single fact
+      explains every symptom: nxpdevscan sees the device (HID enumeration), and every transfer times out
+      (libusb cannot claim it).
+      A RED HERRING WORTH RECORDING because it cost time and looked alarming: the debug log contains RX
+      packets 0xFE1CF701, 0xFE1C7601 and 0x67757374. 0xFE is the MAVLink v1 start byte and 0x67757374 is
+      ASCII "gust". Those are NOT SDP responses — they are nxpdevscan PROBING SERIAL PORTS with an mboot
+      PING and an SDP ReadStatus, hitting /dev/cu.usbmodem01, and misreading PX4 telemetry as protocol
+      data. Harmless, but it briefly looked like the ROM was returning garbage.
+      *** RESOLUTION PATHS, none of which are "try harder on macOS" ***:
+        (a) Run the SDP leg from LINUX, where libusb can detach the kernel HID driver. Most direct, and
+            jess's CI already runs ubuntu-latest — though CI has no board attached.
+        (b) NXP's MCUXpresso Secure Provisioning Tool on macOS, which is PX4's own documented path for
+            this board and does its own HID handling.
+        (c) A HID backend for spsdk's SDP — upstream work, not jess's to do.
+      *** BOARD HEALTH THROUGHOUT ***: five ISP entries, zero flash writes, and the board returned to
+      normal PX4 within ~5 s every time. Final check: 52,777 B of telemetry in 4 s. The vehicle is
+      unharmed and the whole exercise is reversible by design.
+    tags: [h1, silicon, rt1176, isp, sdp, spsdk, tool-friction, blocked, hardware-verified]
+    fields:
+      detected-by: jess running H1 on the attached Pixhawk 6X-RT under standing operator consent, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T08:45:38Z
   - id: AFD-081
     type: ai-found-defect
     title: jess and gale share one physical bench and the org had NO reservation mechanism — added a host-local claim whose lock dies with the holder, self-tested including the crashed-holder case
