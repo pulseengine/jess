@@ -3898,3 +3898,61 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-04T18:49:11Z
+
+  - id: AFD-077
+    type: ai-found-defect
+    title: RENODE'S OWN MPU REGRESSION SUITE PASSES ON A PLATFORM WITH NO MPU ENFORCEMENT — measured both halves on the same platform, and jess's first probe would have mis-measured any platform that did enforce
+    status: resolved
+    description: |-
+      2026-09-05. AFD-076 found that Renode does not enforce the Cortex-M MPU. gale (gale#348)
+      independently confirmed it on the NIGHTLY (master, renode-1.16.1+20260904git63d4e2dd5) across m3,
+      m4 and m7 - so the finding is not "pending a release", it holds against current master. gale then
+      declined to paper over a tension: Renode SHIPS tests/unit-tests/mpu.robot, which runs four Zephyr
+      memory-protection suites and requires PROJECT EXECUTION SUCCESSFUL. Either those tests do not depend
+      on enforcement, or something differs. This resolves it.
+      *** FIRST, A DEFECT IN JESS'S OWN PROBE (AFD-076's), which would have MIS-MEASURED any platform
+      that DOES enforce ***: with PRIVDEFENA=0 a single data region is not enough. The markers sat at
+      0x20030000, OUTSIDE the only grant, and _stack_top was 0x20040000, also outside. On an enforcing
+      platform the probe would have faulted on its own bookkeeping or on exception entry - never reaching
+      the access under test - and reported an escalated HardFault that looks nothing like the real answer.
+      The result it gave was right by luck, because nothing enforced anything. REDESIGNED to gale's spike
+      shape: grant CODE and DATA, put stack and markers inside the grant, leave a HOLE granted to nobody,
+      write into the hole. A distinct 0x1E55DEAD escalation marker now catches exactly the mistake the
+      first version made.
+      *** THE DECISIVE MEASUREMENT — same Renode build, minutes apart ***:
+        platform             MPU_TYPE    granted     hole        CFSR   verdict
+        RT1176 M7            0x00000800  0x1111AAAA  0x2222BBBB  0      FELL THROUGH
+        stm32f4_discovery-kit 0x00000800 0x1111AAAA  0x2222BBBB  0      FELL THROUGH
+      stm32f4_discovery-kit is RENODE'S OWN PLATFORM for its OWN MPU test.
+      Then ran that suite, on this machine, on that platform:
+        Should Pass Zephyr mem_protect Test   OK   2.06s
+        Should Pass Zephyr protection Test    OK   0.87s
+        Should Pass Zephyr stackprot Test     OK   1.04s
+        Should Pass Zephyr userspace Test     OK   1.21s
+        renode-test rc=0
+      *** CONCLUSION: RENODE'S OWN MPU REGRESSION SUITE PASSES ON A PLATFORM WHERE AN UNGRANTED WRITE
+      DEMONSTRABLY LANDS. *** The suite does not detect absent MPU enforcement. Both halves measured on
+      the same platform, same Renode build, minutes apart - so this is not an inference across
+      configurations. gale's tension is resolved in the direction of "those tests do not depend on
+      enforcement", and "Renode has MPU tests and they pass" is not evidence that the MPU works.
+      Why the Zephyr suites still pass is NOT established here and is not claimed: the plausible reading
+      is that the prebuilt ELFs were configured without CONFIG_ARM_MPU so the protection cases never
+      execute, but jess did not inspect the binaries. What IS established is the implication, which does
+      not depend on the cause.
+      *** WHAT THIS SETTLES FOR JESS ***: the enforcement leg of the gale#348 register-write obligation
+      is HARDWARE-GATED against current Renode master, and no amount of emulation configuration reaches
+      it. AFD-028's memory-safety argument therefore has a leg that can only close on silicon. That is a
+      sharper reason for the H1-H4 rungs than any previously recorded.
+      *** UPSTREAM ***: renode/renode#177 has been open since 2021-01-31; its maintainer reply says
+      partial support existed internally and was "tested with Zephyr" - which is precisely the suite shown
+      here not to discriminate. Three independent measurements now stand against it: jess's RT1176 M7,
+      gale's M3, and gale's nightly sweep across m3/m4/m7.
+    tags: [renode, mpu, renode-177, gale-348, vacuous-test, upstream-finding, characterization, hardware-gated, self-correction]
+    fields:
+      detected-by: jess resolving the tension gale flagged on gale#348 rather than leaving it, 2026-09-05
+      severity: major
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T04:11:40Z
