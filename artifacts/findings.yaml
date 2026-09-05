@@ -5017,3 +5017,65 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T18:46:28Z
+
+  - id: AFD-094
+    type: ai-found-defect
+    title: closed the ci.yml/varve-pin meld divergence (0.41.3 -> 0.52.0) with both gates re-verified — and found the 'portable attestation key' is portable across paths and machines but NOT across meld versions
+    status: open
+    description: |-
+      2026-09-05. Closed the meld divergence ci.yml itself recorded: the varve pin carried 0.52.0 and
+      jess cited 0.52.0 upstream, while the CI gate ran 0.41.3. So the version named in a defect report
+      was never the version CI exercised - the exact hazard tools/varve/check-drift.sh exists to catch,
+      and the exact mistake that had to be corrected in public on meld#390.
+      The old comment said the bump "needs that gate re-verified, which is a separate reviewed change,
+      not a one-line edit". This is that re-verification, measured rather than assumed.
+
+      *** BOTH GATES RE-VERIFIED ON THE REAL PINNED FALCON COMPONENT, THREE VERSIONS ***
+        scry gate (REQ-PIX-018 leg b)   0.41.3 / 0.52.0 / 0.54.0 ALL IDENTICAL:
+              771 program points, 175 funcs, 71 call-edges, 12 indirect,
+              0 unsound-fallback, 0 diagnostics
+        TEST-PIX-026 (repro)            PASS on all three: --reproducible byte-stable, the negative
+              control FIRES (default fusion differs run-to-run), and cross-path PATH-INDEPENDENT
+      The ci.yml comment claimed scry stability only across "0.33.0..0.41.3". Measured, it extends to
+      at least 0.54.0.
+
+      *** THE FINDING WORTH CARRYING: THE ATTESTATION KEY IS VERSION-DEPENDENT ***
+      The repro oracle calls its output a "portable attestation key", which invites the reading that
+      the digest is a stable identity for a given input. It is not. Same input, same flags, three
+      meld versions, three different keys:
+          0.41.3  8c1617d30812b05fdc82a5267d1295ce8106b750ec955c70ca7472af27e22dc0
+          0.52.0  09d24df8c324f62e7dd0af43e68858dfb1177e77346ebbc126558d631a2bcee8
+          0.54.0  42a9362763c61cf88d8445c41c835e1b259051acab5d7d19ed59aed91f48bd75
+      Portable across PATHS and MACHINES - which is what meld#341 fixed and what the word was meant to
+      convey - but NOT across meld versions. CONSEQUENCE for the safety case: a recorded fused-core
+      digest is re-verifiable only ALONGSIDE the meld version that produced it. A digest cited on its
+      own is not a reproducible claim. That is precisely what the varve pin is for, and it is another
+      argument for closing drift rather than living with it.
+      The bump is safe despite this because the oracle asserts the PROPERTY, not a golden digest, and
+      no artifact in this repo records any of the three keys (checked by grep across yaml/sh/yml/json/md).
+
+      *** WHAT IS AND IS NOT CLOSED ***
+      CLOSED: ci.yml <-> varve pin. Both are now v0.52.0; a version jess cites upstream is now a
+      version CI runs.
+      NOT CLOSED: check-drift.sh still reports meld DRIFT because the meld on this machine's PATH is
+      0.41.3. That is a local-environment staleness, not a repo state, and jess cannot fix it by
+      editing files. Worth noting as a design question rather than acting on unilaterally: a check
+      that can NEVER go green is one people learn to ignore, which is the gate-potency failure mode in
+      slow motion. Distinguishing repo-controlled drift (varve-pin vs ci.yml) from environment drift
+      (PATH) would make the check actionable. Deliberately NOT changed in this tick - altering what the
+      drift check asserts changes how jess reports upstream, and that deserves its own review.
+      NOT ADOPTED: v0.54.0, though it is verified good (AFD-093). The point of this change is to make
+      CI match the pin; jumping to 0.54.0 would recreate the divergence in the other direction. It is
+      pre-verified for whenever the varve layer moves.
+    tags: [meld, drift, ci, test-pix-026, scry, req-pix-018, attestation, varve, toolchain-pin]
+    fields:
+      detected-by: jess discharging the re-verification the ci.yml comment demanded before a meld bump, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T18:54:12Z
+    links:
+      - type: traces-to
+        target: AFD-093
