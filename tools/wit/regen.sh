@@ -9,7 +9,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 AADL="$ROOT/hardware/pixhawk6x-rt.aadl"
 ROOTSYS="Pixhawk6XRT::Pixhawk6XRT.v2a"
-SPAR="${SPAR:-spar}"
+# Resolve spar through varve by default, NOT bare PATH.
+#
+# This used to be `SPAR="${SPAR:-spar}"`. On a machine with a stale cargo-installed spar ahead
+# of the shims, that silently selects a DIFFERENT tool than the pinned one and fails with
+# `Unknown command: codegen` — an error that names the subcommand rather than the binary, so it
+# reads like the script is wrong. Measured here: PATH spar = ~/.cargo/bin/spar (no codegen,
+# exit 1); varve-pinned spar 0.40.0 = WIT-DERIVATION OK, exit 0. Same script, same model, two
+# answers, decided by $PATH.
+#
+# Same shape as the MELD/LOOM overrides in tools/appcompose and hardware/renode/cascade-invoke:
+# an explicit SPAR= still wins (CI supplies its own pinned binary), varve is the default, and
+# bare PATH is the last resort rather than the first.
+if [ -n "${SPAR:-}" ]; then
+  :
+elif command -v varve >/dev/null 2>&1 && varve which spar >/dev/null 2>&1; then
+  SPAR="$(varve which spar | grep -oE '/[^ ]*spar' | head -1)"
+else
+  SPAR="spar"
+fi
 
 if [ "${1:-}" = "--check" ]; then
   tmp="$(mktemp -d)"
