@@ -5161,3 +5161,85 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T19:00:40Z
+
+  - id: AFD-097
+    type: ai-found-defect
+    title: "clean-room pass: 17/17 claims confirmed by an independent verifier that EXECUTED them — and a demonstrated false-FAIL/false-PASS in jess's own geometry gate, the third defect in that one script"
+    status: open
+    description: |-
+      2026-09-06. Clean-room verification (fresh-context verifier, no inherited framing) over BOTH
+      today's work and the campaign machinery — overdue: ~10 features had landed since the last pass
+      against a mandated cadence of one every ~2.
+
+      *** ALL 17 CLAIMS CONFIRMED, INCLUDING THE FOUR THAT REQUIRED EXECUTION ***
+      The verifier did not read the repo and agree with it; it ran things. It re-read MPU_TYPE off the
+      real F100 under its OWN bench claim (0xE000ED90 = 00000000, halted, CPUID 411fc231 corroborating),
+      downloaded the v0.7.1 release assets and checksummed them (5/5 OK), ran the test suite (40 tests),
+      ran the geometry gate both ways, and decoded AFD-092's SDP codes against the live spsdk tables
+      rather than against jess's transcription. It also, unprompted, re-dumped the VLDISCOVERY flash and
+      confirmed sha256 10969f5c... matches the backup - independently corroborating AFD-091's recovery
+      claim. It recorded its own tool versions, which is the check nobody runs.
+      Notably M4 came back CONFIRM: no artifact anywhere claims falcon has executed on RT1176 silicon.
+      Every such claim is qualified "emulated", and the negative statements are present and load-bearing.
+
+      *** BUT IT FOUND A DEMONSTRATED DEFECT IN JESS'S OWN GEOMETRY GATE - THE THIRD IN THAT ONE FILE ***
+      check-fits-real-f100.sh signalled overflow through /tmp/.f100fail, a FIXED WORLD-WRITABLE PATH,
+      because the LOAD-segment loop ran in a pipeline subshell and could not set `fail` in the parent.
+        DEMONSTRATED false FAIL:  `touch /tmp/.f100fail && ./check-fits-real-f100.sh` -> exit 1 on a
+                                  perfectly good image. Any process, or any leftover, turns the CI gate red.
+        INFERRED false PASS:      if that append ever fails (unwritable or full /tmp, restricted runner)
+                                  no file appears, `fail` stays 0, and a genuine INITIALISED-data
+                                  overflow prints its "fatal" line while the script exits 0 with PASS.
+      A gate that reports PASS through a /tmp race is exactly the vacuous-gate shape this script was
+      written to expose. FIXED by running the loop in the parent shell via process substitution - the
+      sentinel file is gone entirely, not merely relocated.
+      THAT IS THREE SEPARATE DEFECTS IN ONE ~90-LINE SCRIPT: it passed on a file it could not parse
+      (AFD-088 follow-up), it reported the stack pointer as the linmem base, and now this. The pattern
+      is that each was found by EXECUTING it in a new environment or with a new input, and none by
+      re-reading it. Reading a checker cannot verify a checker.
+
+      *** ALSO FIXED, all from the same pass ***
+        * Relative-path argument resolved against the SCRIPT's directory, not the caller's, because
+          `cd` preceded the argument's resolution. Latent (CI passes only /dev/null and no-arg) but it
+          silently checks a different file than the one named.
+        * run-on-silicon.sh consumed /tmp/pt.bin, which NO committed step produced - it existed only on
+          the machine where it had once been made by hand, so the script could not run from a clean
+          checkout. Same unreproducible-input defect AFD-075 recorded for appcompose, in a second place.
+          Now derived in-script; verified the derivation reproduces the verifier's independently
+          computed sha256 cc75348655d2488e680af165164d649542bcc30f7df2b5207021f08d3719810c byte for byte.
+        * README asserted "everything here runs under a with-device stlink-v1 claim" while NEITHER
+          script took one - true of how they were invoked by hand, false of the scripts as committed.
+          Documentation asserting a control that does not exist is the AFD-082 vacuous-lock shape in
+          prose. Both scripts now SELF-CLAIM by re-exec. Demonstrated: with the probe held by another
+          holder the script is refused with "DEVICE BUSY ... Nothing was run."
+        * design-decisions.yaml said "the M7 (where falcon already runs and an FPU exists)" - the one
+          unqualified phrase in 1510 artifacts that a reader could quote against "no falcon code has
+          ever executed on the RT1176". Qualified to "runs IN EMULATION".
+
+      *** A NEW RED CONTROL, because the gate could only prove it refuses what it CANNOT read ***
+      CI now also asserts the gate can still go red on an image it CAN read: SRAM_SIZE_OVERRIDE=1024
+      must make the committed good image FAIL. Both directions are now controlled.
+      AND A CORRECTION MADE MID-FIX: the first version of that override's comment claimed it exercised
+      the initialised-data-overflow branch. Measured, it does not - it trips the LINMEM-BASE check. The
+      overflow branch remains UNEXERCISED and the script now says so plainly, with what would exercise
+      it (a purpose-built ELF with a PROGBITS LOAD segment in SRAM; synth places linmem as NOBITS, so
+      no artifact jess builds today can reach it). Nearly shipped a comment that was its own vacuous claim.
+
+      *** NOT FIXED, recorded ***
+        * The bench runs with-device 0.2.1 while the crate is at 0.2.2 - one revision behind the suite
+          that gates it, and 0.2.2 carries the argv-hijack fix (AFD-084). Needs a release, then a Pi update.
+        * rivet validate PASSes with 257 warnings plus two lifecycle coverage gaps (META-REQ-001 and
+          REQ-PIX-018 missing links) and an out-of-schema field on AFD-025. PASS is real but weaker than
+          it reads.
+        * AFD-086 cites spsdk 3.1.0; the environment that produced AFD-092's codes runs 3.11.0. The
+          decode is unaffected (re-verified against the live tables) but the version string in a
+          tooling defect chain should be exact.
+    tags: [clean-room, verification, vacuous-gate, check-fits-real-f100, afd-088, afd-082, afd-075, self-correction, machinery]
+    fields:
+      detected-by: fresh-context clean-room verifier over today's work and the campaign machinery, 2026-09-06
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T22:56:21Z

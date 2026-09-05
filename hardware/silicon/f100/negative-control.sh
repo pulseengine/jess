@@ -3,6 +3,21 @@
 # is only evidence the PROGRAM wrote them if a non-run would look different. Poison the output
 # words with a sentinel first, then vary exactly one thing: whether the CPU is resumed.
 set -uo pipefail
+
+# SELF-CLAIM the probe rather than trusting the caller to. The README asserted "everything here
+# runs under a with-device stlink-v1 claim" while neither script took one — true of how they were
+# invoked by hand, false of the scripts as committed, so anyone running them straight would drive
+# a probe gale may be holding. That is the AFD-082 vacuous-lock shape in documentation form, and
+# it was found by an independent verifier, not by re-reading the file.
+#
+# Re-exec under with-device unless we are already inside it. The WD_REENTRY guard (rather than
+# $WITH_DEVICE_CLAIM) is deliberate: the bench currently runs with-device 0.2.1, which does not
+# export that variable — keying on it would make this silently never re-exec there.
+WD="${WITH_DEVICE:-$HOME/bench/with-device}"
+if [ -z "${WD_REENTRY:-}" ] && [ -x "$WD" ]; then
+  export WD_REENTRY=1
+  exec "$WD" stlink-v1 --purpose "negative control on the silicon run" -- "$0" "$@"
+fi
 OOCD="sudo -n openocd -f interface/stlink-hla.cfg -f target/stm32f1x.cfg"
 IN0=0x20000500; OUT0=0x20000510
 M=(0x3f266666 0x3f266666 0x3f266666 0x3f266666)

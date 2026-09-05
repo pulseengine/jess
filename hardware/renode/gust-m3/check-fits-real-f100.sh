@@ -18,11 +18,32 @@
 # A NOBITS reservation larger than SRAM is reported and tolerated — see the correction below.
 # Exit 0 = fits; exit 1 = the evidence does not transfer to silicon.
 set -uo pipefail
+# Resolve the argument BEFORE cd, or a RELATIVE path silently resolves against the script's
+# directory instead of the caller's — checking a different file than the one named.
+if [ -n "${1:-}" ]; then
+  case "$1" in /*) ELF="$1" ;; *) ELF="$(pwd)/$1" ;; esac
+else
+  ELF=""
+fi
 cd "$(dirname "$0")"
-ELF=${1:-passthrough_mem.elf}
+[ -n "$ELF" ] || ELF="$PWD/passthrough_mem.elf"
+
+# Real STM32F100 geometry. SRAM_SIZE_OVERRIDE shrinks the assumed SRAM so a KNOWN-GOOD image
+# can be made to fail on demand — the control that proves this gate can still go red at all.
+# BE PRECISE ABOUT WHICH BRANCH IT REACHES: with the committed image it trips the LINMEM-BASE
+# check (linmem 0x20000500 lands outside a shrunken SRAM), NOT the initialised-data-overflow
+# branch. An earlier version of this comment claimed it exercised the fatal path; measured, it
+# does not, and the wrong comment was nearly shipped.
+#
+# STILL UNEXERCISED, stated rather than glossed: the "INITIALISED data past the SRAM top"
+# branch. Reaching it needs an image with a PROGBITS LOAD segment in SRAM, and synth places
+# linear memory as NOBITS, so no artifact jess builds today can take it. It guards a real
+# hazard (a loader writing past the part's RAM) and no test covers it. Exercising it needs a
+# purpose-built ELF, which is worth doing before anything relies on that branch.
+SRAM_SIZE_OVERRIDE="${SRAM_SIZE_OVERRIDE:-}"
 
 # Real STM32F100 (value line, 128 KB flash part as measured):
-SRAM_BASE=$((0x20000000)); SRAM_SIZE=$((8 * 1024))
+SRAM_BASE=$((0x20000000)); SRAM_SIZE=$(( ${SRAM_SIZE_OVERRIDE:-0} > 0 ? SRAM_SIZE_OVERRIDE : 8 * 1024 ))
 SRAM_TOP=$((SRAM_BASE + SRAM_SIZE))
 FLASH_SIZE=$((128 * 1024))
 
@@ -74,7 +95,16 @@ else printf "ok\n"; fi
 # the real SRAM top. The gust pass-through touches fp+0 .. fp+28 and nothing else.
 # Failing on the declared reservation measures the ELF's opinion, not the hardware's. That is
 # the same error this whole finding is about, committed inside the check written to expose it.
-"$RE" -l "$ELF" 2>/dev/null | awk '/LOAD/{print $3, $5, $6}' | while read -r vaddr filesz memsz; do
+# Process substitution, NOT a pipeline. A `... | while read` loop runs in a SUBSHELL, so it
+# cannot set `fail` in the parent — the first version worked around that by touching
+# /tmp/.f100fail, a fixed world-writable path. That was a defect in both directions, and the
+# first was DEMONSTRATED by an independent verifier: a stray /tmp/.f100fail (any process can
+# create it) turned this gate RED on a perfectly good image. The other direction is worse: if
+# that append ever failed — unwritable or full /tmp, a restricted runner — no file appeared,
+# `fail` stayed 0, and a genuine INITIALISED-data overflow printed its "fatal" line while the
+# script exited 0 with "Result: PASS". A gate that reports PASS through a /tmp race is exactly
+# the vacuous-gate shape this script exists to expose.
+while read -r vaddr filesz memsz; do
   v=$((vaddr)); f=$((filesz)); m=$((memsz))
   [ "$v" -ge "$SRAM_BASE" ] || continue
   [ "$v" -lt $((SRAM_BASE + 0x10000000)) ] || continue
@@ -82,13 +112,13 @@ else printf "ok\n"; fi
   printf "SRAM reservation: %#010x + %#x = %#010x  " "$v" "$m" "$end"
   if [ "$end" -le "$SRAM_TOP" ]; then printf "fits\n"
   elif [ "$f" -eq 0 ]; then
-    printf "exceeds 8 KB but FileSiz=0 (NOBITS) — a reservation, not a load; not fatal on its own\n"
+    printf "exceeds %d KB but FileSiz=0 (NOBITS) — a reservation, not a load; not fatal on its own\n" $((SRAM_SIZE/1024))
   else
     printf "*** %d bytes of INITIALISED data past the SRAM top — written at load, fatal ***\n" \
-      $((end - SRAM_TOP)); echo OVERFLOW >> /tmp/.f100fail
+      $((end - SRAM_TOP))
+    fail=1
   fi
-done
-[ -f /tmp/.f100fail ] && { fail=1; rm -f /tmp/.f100fail; }
+done < <("$RE" -l "$ELF" 2>/dev/null | awk '/LOAD/{print $3, $5, $6}')
 
 # What the image actually TOUCHES: synth rebases fp in `entry`'s prologue, so the linear-memory
 # base is a movw/movt immediate pair. Scope the search to `entry` — a plain first-match grep
