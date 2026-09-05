@@ -4744,3 +4744,56 @@ artifacts:
     links:
       - type: defect-against
         target: TEST-PIX-028
+
+  - id: AFD-090
+    type: ai-found-defect
+    title: jess bypassed its own bench-claim rule five times in one session — every one of them mid-debugging, which is when the rule matters most; made assertable rather than remembered
+    status: open
+    description: |-
+      2026-09-05. Operator: "Ensure once you use the tooling to ensure you use with device." An honest
+      audit of the Pi session says I did not, five times.
+
+      *** THE AUDIT ***
+        CLAIMED (correct):   the read-only telemetry capture; both openocd F100 identifications; all
+                             four h1-*.sh ISP runs; the registry parse checks.
+        CLAIM-FREE (fine):   lsusb, /dev/serial listing, ROM presence polling, post-ISP state checks -
+                             these are explicitly claim-free under the devices.yaml rule.
+        *** NOT CLAIMED, AND SHOULD HAVE BEEN ***
+          1. the pyusb kernel-driver re-attach        -> opened 1fc9:013d directly
+          2. plain `sdphost error-status`             -> opened the ROM
+          3. UsbDevice.scan filter comparison         -> enumerated and opened
+          4. read-register argument-form attempts     -> opened the ROM, 4 invocations
+          5. HIDAPI_Enumerate probing                 -> opened the device
+
+      *** THE PATTERN, WHICH IS THE ACTUAL FINDING ***
+      Every single violation happened during the debugging spiral - the stretch where I was cycling
+      hypotheses about why spsdk could not see the device. Not one happened while doing the planned
+      work, where I claimed correctly every time. The rule did not fail because it was unclear or
+      disagreed with; it failed because attention was entirely on the bug. That is the general case:
+      a discipline that depends on remembering it holds exactly until the moment something goes wrong,
+      which is the moment it is most needed. jess built with-device precisely to stop two agents
+      silently colliding, then bypassed it while distracted. Promising to try harder is not a fix.
+
+      *** THE FIX: MAKE IT ASSERTABLE, NOT REMEMBERED ***
+      with-device 0.2.2 exports WITH_DEVICE_CLAIM into the wrapped command - the sorted, deduplicated
+      device list held for that command's lifetime. Any script can then assert its own precondition:
+          with-device --require-claim pixhawk-6xrt
+          -> exits 2 with: NOT UNDER A CLAIM for pixhawk-6xrt. ... Re-run as: with-device ...
+      Nesting UNIONS rather than overwrites, so `with-device a -- with-device b -- cmd` leaves cmd able
+      to assert either; without that, a script that legitimately wraps another would fail its own
+      assertion. 40 tests (20 unit + 20 behavioural). The behavioural ones cover the exported value
+      being sorted and deduped, --require-claim passing inside a claim, failing outside it, and -
+      the case that matters - FAILING WHEN THE CLAIM IS ON A DIFFERENT DEVICE, because holding
+      something is not holding the thing you are about to drive.
+      This does not retroactively make the five unclaimed accesses safe. gale was not on the bench at
+      the time so no collision is known to have occurred, but none of them had any protection against
+      one, which is worth stating rather than assuming away.
+    tags: [bench, with-device, process, self-correction, discipline, afd-081, afd-082]
+    fields:
+      detected-by: jess auditing its own hardware accesses at the operator's prompt, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T14:34:22Z
