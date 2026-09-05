@@ -90,6 +90,17 @@ _reset:
     ldr   r1, =0x51AE0003     @ [MARK+16] = about to touch the hole
     str   r1, [r10, #16]
 
+#ifdef UNPRIV
+    @ Drop to UNPRIVILEGED (CONTROL.nPRIV=1) immediately before the access under test.
+    @ gale#348: Renode ignores PRIVDEFENA and treats a PRIVILEGED background access as
+    @ granted, so a privileged probe measures that one gap rather than "the MPU". The
+    @ granted regions are AP=0b011 (full access, priv+unpriv), so this store still works.
+    mrs   r0, CONTROL
+    orr   r0, r0, #1
+    msr   CONTROL, r0
+    isb
+#endif
+
     ldr   r0, =HOLE_ADDR      @ THE ACCESS UNDER TEST — granted to nobody
     ldr   r1, =0x2222BBBB
     str   r1, [r0]

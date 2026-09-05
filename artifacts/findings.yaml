@@ -3889,6 +3889,21 @@ artifacts:
       `/^B$/` never matches and an awk-based parse silently yielded ZERO words while the log plainly held
       seven. The sibling oracles avoid this only because their python parser rstrips. Fixed with `tr -d
       '\r'`; recorded because the failure mode is an empty result that looks like a clean read.
+
+      *** WITHDRAWN 2026-09-05 — THE CENTRAL CONCLUSION OF THIS FINDING IS WRONG. See AFD-078. ***
+      Renode DOES enforce the v7-M MPU. This finding's probe ran PRIVILEGED, and Renode treats a
+      PRIVILEGED BACKGROUND access - an address matching no enabled region - as granted, i.e. as if
+      PRIVDEFENA were permanently 1. That single narrow gap was mistaken here for "the MPU is not
+      enforced at all".
+      Corrected by measurement on jess's own RT1176 model, same probe, one variable changed
+      (CONTROL.nPRIV=1 immediately before the access under test):
+        PRIVILEGED    hole 0x2222BBBB  CFSR 0x00000000  FELL THROUGH
+        UNPRIVILEGED  hole 0x00000000  CFSR 0x00000082  DENIED (DACCVIOL+MMARVALID)
+      gale caught this (gale#348) and retracted their own matching claim; jess verified it independently
+      rather than accepting it. Region permissions and XN ARE enforced, including for privileged code.
+      THE PRACTICAL REVERSAL: the gale#348 register-write obligation IS validatable in emulation, provided
+      the tenant runs UNPRIVILEGED. The "hardware-gated, only closable on silicon" conclusion recorded
+      here is WRONG and must not be cited.
     tags: [renode, mpu, gale-348, afd-028, vacuous-observable, characterization-test, emulation-limit, safety-case]
     fields:
       detected-by: jess testing whether the MPU register-write obligation gale assigned can be validated in emulation, 2026-09-04
@@ -3947,6 +3962,21 @@ artifacts:
       partial support existed internally and was "tested with Zephyr" - which is precisely the suite shown
       here not to discriminate. Three independent measurements now stand against it: jess's RT1176 M7,
       gale's M3, and gale's nightly sweep across m3/m4/m7.
+
+      *** WITHDRAWN 2026-09-05 — THE CENTRAL CONCLUSION OF THIS FINDING IS WRONG. See AFD-078. ***
+      Renode DOES enforce the v7-M MPU. This finding's probe ran PRIVILEGED, and Renode treats a
+      PRIVILEGED BACKGROUND access - an address matching no enabled region - as granted, i.e. as if
+      PRIVDEFENA were permanently 1. That single narrow gap was mistaken here for "the MPU is not
+      enforced at all".
+      Corrected by measurement on jess's own RT1176 model, same probe, one variable changed
+      (CONTROL.nPRIV=1 immediately before the access under test):
+        PRIVILEGED    hole 0x2222BBBB  CFSR 0x00000000  FELL THROUGH
+        UNPRIVILEGED  hole 0x00000000  CFSR 0x00000082  DENIED (DACCVIOL+MMARVALID)
+      gale caught this (gale#348) and retracted their own matching claim; jess verified it independently
+      rather than accepting it. Region permissions and XN ARE enforced, including for privileged code.
+      THE PRACTICAL REVERSAL: the gale#348 register-write obligation IS validatable in emulation, provided
+      the tenant runs UNPRIVILEGED. The "hardware-gated, only closable on silicon" conclusion recorded
+      here is WRONG and must not be cited.
     tags: [renode, mpu, renode-177, gale-348, vacuous-test, upstream-finding, characterization, hardware-gated, self-correction]
     fields:
       detected-by: jess resolving the tension gale flagged on gale#348 rather than leaving it, 2026-09-05
@@ -3956,3 +3986,54 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T04:11:40Z
+
+  - id: AFD-078
+    type: ai-found-defect
+    title: "WITHDRAWAL: Renode DOES enforce the MPU — jess measured one narrow gap (privileged background accesses) and generalised it to the whole mechanism, and wrongly called Renode's own suite vacuous"
+    status: resolved
+    description: |-
+      2026-09-05. WITHDRAWS the central conclusion of AFD-076 and AFD-077. Both said Renode does not
+      enforce the Cortex-M MPU. IT DOES. jess measured one gap and generalised it to the whole mechanism.
+      *** THE ERROR ***: jess's probe ran PRIVILEGED. Renode treats a PRIVILEGED BACKGROUND access - an
+      address matching no enabled region - as GRANTED, i.e. as if PRIVDEFENA were permanently 1. That is
+      one narrow, real defect. jess read it as "the MPU register file is modelled but nothing is
+      enforced", which is a much larger claim and is false.
+      *** THE MEASUREMENT THAT SETTLES IT ***, jess's own RT1176 and Renode's stm32f4_discovery-kit, one
+      variable changed (CONTROL.nPRIV=1 immediately before the access under test):
+        platform   privilege     hole write   CFSR        verdict
+        RT1176 M7  PRIVILEGED    0x2222BBBB   0x00000000  FELL THROUGH
+        RT1176 M7  UNPRIVILEGED  denied       0x00000082  DENIED (DACCVIOL+MMARVALID)
+        stm32f4    PRIVILEGED    0x2222BBBB   0x00000000  FELL THROUGH
+        stm32f4    UNPRIVILEGED  denied       0x00000082  DENIED
+      Identical on both platforms. The enforcement is real; the privilege level was the missing variable.
+      *** AFD-077's SECOND CLAIM IS ALSO WITHDRAWN ***: it said Renode's tests/unit-tests/mpu.robot
+      "passes on a platform with no MPU enforcement" and therefore "does not detect absent enforcement".
+      The suite is NOT vacuous. gale reproduced it with fault counts: mem_protect 49 PASS / 11 MPU faults,
+      protection 5/5, stackprot 2/0, userspace 39/14, and all four carry zassert_unreachable negative
+      controls ("Write to rodata did not fault", "Execute from stack did not fault") that did NOT trip.
+      `protection` has no CONFIG_USERSPACE and runs entirely PRIVILEGED, and Renode still raised 5 real
+      faults. So Renode enforces region permissions and XN for privileged code too - the gap is ONLY the
+      background region.
+      jess's inference was structurally wrong in a way worth naming: the suite passing and jess's probe
+      falling through are BOTH TRUE and are NOT in tension, because they exercise different things. jess
+      resolved an apparent contradiction by concluding the other party's test was vacuous, when the
+      actual resolution was that jess's own probe had an uncontrolled variable. Reaching for "their check
+      is vacuous" is a hazard specific to a campaign that keeps correctly finding vacuous checks.
+      *** THE PRACTICAL REVERSAL, and it is the useful half ***: the gale#348 register-write obligation
+      IS VALIDATABLE IN EMULATION, provided the wasm tenant runs UNPRIVILEGED. That is the correct
+      configuration for isolation regardless - it is precisely what gale's own security-containment
+      caveat asks for, since a privileged tenant can reprogram the MPU. So AFD-028's memory-safety leg is
+      NOT hardware-gated. Recorded in AFD-076/077 as such and now retracted there.
+      *** PROCESS ***: gale caught this and retracted their own matching claim first. jess did not take it
+      on trust - the correction above is jess's own measurement on jess's own model, with exactly one
+      variable changed from the run that produced the wrong answer. The oracle now pins BOTH behaviours
+      across both platforms and fails if EITHER changes.
+    tags: [withdrawal, self-correction, renode, mpu, gale-348, uncontrolled-variable, afd-076, afd-077, privilege-level]
+    fields:
+      detected-by: gale retracting their matching claim on gale#348; verified independently by jess before accepting, 2026-09-05
+      severity: critical
+      triage-status: closed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T04:16:02Z
