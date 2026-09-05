@@ -4561,3 +4561,100 @@ artifacts:
     links:
       - type: corrects
         target: AFD-084
+
+  - id: AFD-086
+    type: ai-found-defect
+    title: "H1 UNBLOCKED on Linux: the RT1176 ROM answers stock sdphost and the replies are not echoes — but no memory has been read yet, and three of my hypotheses were wrong (one self-inflicted)"
+    status: open
+    description: |-
+      2026-09-05. Operator moved the Pixhawk to a Raspberry Pi 4 (fourpi, Debian 13 trixie, aarch64)
+      and said ssh should work. It did - as pi@fourpi.local; the .box name does not resolve from the
+      Mac, mDNS .local does. This tick is the H1 retest on Linux, and the AFD-080 blocker IS BROKEN.
+
+      *** THE RESULT: THE RT1176 ROM ANSWERS ON LINUX ***
+      Every step that failed on macOS now works, and the evidence is the wire log, not an exit code:
+        TX-CMD: ReadStatus                             RX-PACKET: Response: 0x000C00A0
+        TX-CMD: Read(address=0x00200000, length=16)    RX-PACKET: Response: 0x000000A0
+        TX-CMD: Read(address=0x20240000, length=16)    RX-PACKET: Response: 0x000C00A0
+      The responses VARY between commands and contain NONE of the addresses sent. That is the exact
+      discriminator AFD-082 needed and failed: on macOS the "reply" was this session's own command
+      echoed back, containing my own address and count. It is not an echo this time.
+      STOCK TOOLING, NO BYPASS: `sdphost -u 0x1fc9,0x013d error-status` returns a PARSED response
+      ("Status (HAB mode) = UNKNOWN ERROR"), not "No devices found". Plain spsdk 3.11 on Linux finds
+      and talks to the ROM.
+      ROOT CAUSE OF THE MACOS FAILURE, now understood from both sides: the ROM presents interface
+      class 0x03 (HID) with 1021-byte endpoints (ep 0x81 IN / 0x02 OUT). macOS binds class 0x03 to
+      IOHIDDevice, so libusb can never claim it. Linux lets the driver be detached - and, more
+      importantly, spsdk does not need libusb at all: it enumerates via libusbsio HIDAPI_Enumerate()
+      over /dev/hidraw0.
+
+      *** H1 IS NOT DONE, AND THE HONEST BOUNDARY MATTERS ***
+      The channel opens and the device responds, but NO MEMORY HAS BEEN READ. Every sdp.read() returns
+      None, and the HAB status decodes as "UNKNOWN ERROR" rather than either documented code
+      (0x12343412 closed / 0x56787856 open). So the blocker MOVED from "cannot communicate at all" to
+      "communicates, but reads return no data". Claiming H1 complete here would be the same error as
+      claiming it on the macOS echo.
+      Two open leads, neither verified: (a) the USB product string is "SE Blank RT Family" - SE as in
+      EdgeLock secure enclave - and such a part may refuse SDP reads by policy; (b) spsdk 3.11's
+      `read-register` CLI is separately BROKEN: every documented arg form fails inside spsdk with
+      "invalid sub-command or arguments 'read-register 0X2024FE00 32 None'", COUNT defaulting to None
+      rather than the format size. That is a CLI-layer defect, not a comms failure - the API path
+      reached the device fine - and is worth an upstream report.
+
+      *** THREE WRONG HYPOTHESES I HELD ALONG THE WAY, ALL FALSIFIED BY MEASUREMENT ***
+        1. "spsdk has no USB ids for RT117x, so the family filter matches nothing." The RT117x
+           database.yaml files genuinely carry no vid/pid while mimxrt1010/1040/1189/595s do, so this
+           looked airtight. It is wrong: NXPUSBDeviceFilter.compare() on the real record returns True.
+        2. "vars(dev) returns an unusable ctypes object, so enumerate() drops it." Also wrong -
+           vars(dev) is a clean dict with vendor_id, product_id, path, the lot.
+        3. The real cause of every "No devices found" I saw was SELF-INFLICTED: my first script
+           detached the kernel HID driver via pyusb to prove libusb could claim it. That succeeded -
+           and made the device invisible to hidapi, which is what spsdk actually uses. I then spent
+           three rounds diagnosing spsdk for a hole I had dug. Re-attaching the driver made stock
+           sdphost work immediately.
+           LESSON: a diagnostic that MUTATES the system under test becomes part of the system under
+           test. The detach was a legitimate experiment; leaving it in place while testing something
+           else turned it into an uncontrolled variable, and I read the result as a property of spsdk.
+
+      *** THE BENCH IS NOW REAL, AND with-device WAS CONSUMED AS A CONSUMER WOULD ***
+      Installed on the Pi from the v0.7.1 release the way an outside user would: fetched cosign,
+      verified the SIGNATURE over SHA256SUMS.txt before trusting the checksums, checked the digests,
+      extracted, ran. Result: Verified OK, digests OK, and --self-test 5/5 PASS on REAL aarch64
+      hardware. That closes the thread AFD-085 opened - the Pi target had been built on a GitHub arm
+      runner but never run on an actual Pi. It has now.
+      Host-local registry written at ~/.config/pulseengine/bench-devices.yaml, because a claim is
+      host-local by construction and jess's committed devices.yaml describes the Mac's /dev/cu.* paths.
+
+      *** A SECOND TARGET NOBODY KNEW WAS THERE: REAL STM32F100 SILICON ***
+      The Pi also has an ST-LINK/V1 (0483:3744). The operator identified the target as an STM32F100;
+      read out over SWD (halted, then resumed):
+        DBGMCU_IDCODE 0x10016420  -> DEV_ID 0x420, STM32F100 value line
+        CPUID         0x411FC231  -> ARM Cortex-M3 r1p1
+        flash size    128 KB       initial MSP 0x20002000 -> 8 KB SRAM
+        unique id     05e12d35 30553130 43191e14
+      128 KB flash / 8 KB SRAM / Cortex-M3 with an onboard ST-LINK/V1 is an STM32VLDISCOVERY - and it
+      is THE SAME PART as the Pixhawk 6X-RT's IO coprocessor. TEST-PIX-028 (gust F100/M3 byte-exact
+      pass-through, REQ-PIX-004 PART-P02) has only ever run in Renode; this is a standalone target for
+      it on real silicon with ZERO flight risk, shared with gale. Registered as `stlink-v1`, NOT as
+      `stlink-v3`: the V3 (003B001A3235511337333439) is a different probe on the Mac, and reusing its
+      name would be a lock whose name does not match the hardware - AFD-082's vacuous lock in a new
+      costume. Caveat recorded: V1J13S0 firmware is HLA-only (openocd needs interface/stlink-hla.cfg
+      and says so itself), nSRST is not wired, and with HLA a memory read on a RUNNING target returns
+      nothing at all rather than erroring - which reads exactly like a dead probe.
+
+      *** BOARD HEALTH ***: four ISP entries this session, ZERO flash writes, every SDP command
+      read-only. The board returned to normal PX4 each time (once via the PX4 bootloader for ~3 s,
+      which is expected). Verified healthy at the end over the MAVLink shell: PX4 1.15.4, NuttX
+      11.0.0, MCU i.MX RT1170 rB0. Everything ran under a with-device claim on pixhawk-6xrt.
+    tags: [h1, silicon, sdp, linux, pi, afd-080, afd-082, stm32f100, bench, with-device, self-correction]
+    fields:
+      detected-by: jess retesting H1 on the Raspberry Pi after the operator moved the vehicle, 2026-09-05
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-05T14:06:12Z
+    links:
+      - type: corrects
+        target: AFD-080
