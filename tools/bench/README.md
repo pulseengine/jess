@@ -53,7 +53,7 @@ own registry:
 | host | registry | devices |
 |---|---|---|
 | this repo (Mac) | `tools/bench/devices.yaml` | `stlink-v3` (NUCLEO-G474RE), `pixhawk-6xrt`, `selftest-device` |
-| `fourpi` (Pi 4) | `~/.config/pulseengine/bench-devices.yaml` — committed copy in `devices-fourpi.yaml` | `pixhawk-6xrt`, `stlink-v1` (STM32VLDISCOVERY), `selftest-device` |
+| `fourpi` (Pi 4) | `~/.config/pulseengine/bench-devices.yaml` — **host-local, deliberately not committed** | `pixhawk-6xrt`, `stlink-v1` (STM32VLDISCOVERY), `selftest-device` |
 
 **Use the registered name exactly.** An unregistered name is refused (exit 2) rather than
 silently given its own lock file — gale hit this immediately, having invented
@@ -69,3 +69,26 @@ own precondition instead of trusting that someone remembered:
 ```sh
 with-device --require-claim pixhawk-6xrt   # exits 2, with what to do, if not held
 ```
+
+## Why the Pi's registry is not committed
+
+There used to be a copy at `tools/bench/devices-fourpi.yaml`, described as "for review". It had
+already drifted from the live file by the time anyone checked:
+
+```
+Pi live registry   55d7a1d6...
+committed copy     f627c2f4...
+```
+
+A hand-copied mirror of a live file is a claim that decays silently — the same defect class as a
+README asserting a control the scripts do not implement. Deleted rather than re-synced, because
+re-syncing only resets the clock on the same failure.
+
+The direction this is heading (see varve#130): split **what hardware we support** — part facts,
+quirks, canonical device names, the half that must not diverge between agents — from **what is
+deployed here** — which unit, which tty, which serial. The first belongs in a shared,
+digest-pinned artifact both agents consume by construction; the second is host-local, changes
+whenever a cable moves, and has no business in a public repo.
+
+Until that lands, the live file on each host is the single source for that host, and this
+directory carries no copy of it.

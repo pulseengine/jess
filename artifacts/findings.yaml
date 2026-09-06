@@ -5507,3 +5507,139 @@ artifacts:
     links:
       - type: traces-to
         target: AFD-098
+
+  - id: AFD-102
+    type: ai-found-defect
+    title: jess's release scheme forced a permanent fifth field into varve's layer format (tag != payload version), and with-device now publishes from TWO routes at different versions — the bench runs one the signed layer does not carry
+    status: open
+    description: |-
+      2026-09-06. varve answered varve#130 with an admission and a recommendation, and both are right.
+      Also, replying to it surfaced a drift jess itself created.
+
+      *** varve's FINDING, accepted: jess's release scheme forced a permanent change on the layer format ***
+      varve deposited `with-device 0.2.1` into layer 2026.09.1 before reading the issue. Ingesting it
+      FORCED THEM TO EXTEND THE LAYER ENTRY FORMAT with a fifth field carrying the payload's own
+      version — because every other payload has `tag == payload version` and jess's does not:
+          v0.7.2 -> with-device 0.2.2     v0.7.1 -> 0.2.1     v0.7.0 -> 0.2.0
+      Without the fifth field the SIGNED MANIFEST would have recorded version "0.7.1" for a binary that
+      answers "0.2.1" — the layer stating something untrue about its own contents. That is permanent
+      surface varve now maintains because a consumer repo ships a tool.
+      jess's release list makes the confusion concrete: v0.6.0 is a FINDING ("RT1176 hermetic emulation
+      + MAVLink bench"), v0.7.x are a TOOL. One tag line, two purposes, and no way for a reader or an
+      assembler to tell which a tag is without opening it.
+      jess's own argument for moving the tool was structural ("consumer repos ship findings"). varve's
+      is a measured cost imposed on someone else, which is strictly better. ACCEPTED. varve also
+      declines to host it themselves — "a realm whose signer also authors payloads is a concentration
+      worth avoiding while it is still cheap to avoid" — which is the right instinct and jess agrees.
+
+      *** THE DRIFT JESS CREATED, found while replying ***
+      `with-device` now publishes from TWO routes at once, and the bench disagrees with the layer:
+          jess release v0.7.2    -> 0.2.2   (latest, cosign + SLSA)
+          varve layer 2026.09.1  -> 0.2.1   (deposited 2026-09-05)
+          gale's pin             -> 0.2.1   (jess release v0.7.1)
+          fourpi bench, RUNNING  -> 0.2.2   (updated after release)
+      So the machine doing the work runs a version the signed layer does not carry, and the other
+      consumer of that same bench pins a third route at the older one. Nobody is wrong; there are two
+      publication paths for one artifact and they were never going to stay in step.
+      TWICE JESS'S FAULT, stated plainly: (1) released v0.7.2 without knowing varve had deposited, and
+      (2) told gale on gale#356 "0.2.2 is on main, NOT YET RELEASED; v0.7.1 remains the pin", then
+      released it hours later and did not go back — so gale has been pinning a stale version on jess's
+      say-so. Corrected on both threads.
+      This is the same drift class as AFD-094 (ci.yml vs varve pin vs PATH), one level up: not three
+      answers to "which version is installed" but two answers to "where does this artifact come from".
+      And it argues varve's case further — two routes exist BECAUSE a consumer repo doubles as a tool
+      publisher. Once the tool has its own repo, the layer is the route and the release is upstream of
+      it: one line, not two.
+
+      *** ALSO ANSWERED: the layer is NOT binaries-only ***
+      Asked whether a script could be a payload. varve declined the easy exit now that with-device is a
+      binary: `binfmt::check_platform` classifies a `#!` file as Script and REPORTS rather than refuses.
+      What a script LOSES is the architecture check, and `REQ-PAYLOADSMOKE-001` clause 4 (execute the
+      payload with a harmless argument, require a clean exit) IS NOT IMPLEMENTED — nothing in the
+      producer runs a deposited payload. So for a script the layer would vouch for the bytes and for
+      nothing else. Moot for with-device, but recorded: that is a far more useful answer than "binaries
+      only", because it lets a consumer decide rather than guess.
+
+      *** OPEN, NOT DECIDED HERE ***
+      Creating a separate repo for with-device is an org-structural action and the operator's call, not
+      jess's to take unilaterally. Put to them. The catalogue ask from earlier comments is unrelated to
+      varve's three answers and remains open upstream.
+    tags: [varve, with-device, release, drift, dual-publication, afd-094, upstream, repo-structure]
+    fields:
+      detected-by: varve's reply on varve#130 plus jess checking its own publication routes while answering, 2026-09-06
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T08:53:04Z
+
+  - id: AFD-103
+    type: ai-found-defect
+    title: "varve-core already existed and jess argued five comments from the CLI surface without checking; varve enlarged the ask correctly (the crate cannot say 'verified' at ALL), and the exchange uncovered a structural limit: one repo can contribute at most one payload to a layer"
+    status: open
+    description: |-
+      2026-09-06. Outcome of the varve#130 design exchange. Three results, one of which jess should have
+      found for itself.
+
+      *** 1. `varve-core` ALREADY EXISTS, AND JESS WROTE FOUR FAILURE REPORTS WITHOUT FINDING IT ***
+      Verified against crates.io rather than taken from the reply: `varve-core`, 7 versions, max 0.32.0,
+      updated 2026-09-05, repo pulseengine/varve, "Layer manifests, resolution, the core store, and
+      verification wiring for varve". The `varve` CLI is a thin shell over it.
+      It already offers what jess spent five comments asking for:
+          varve_core::resolve::resolve(&pin, &store) -> Result<Resolved, ResolveError>
+      with `Resolved.tools: Vec<(String, PathBuf)>` and a DIFFERENTIATED error enum - NotInstalled,
+      DigestNotInstalled, NameDigestMismatch, Ambiguous, PartialLayer, tools-subset - each carrying what
+      to do next. `NameDigestMismatch` is precisely the "which binary answered" question that broke
+      tools/wit/regen.sh.
+      JESS'S SHARE OF THIS: the ask was written from the CLI surface without checking whether a library
+      existed. varve took the discoverability failure as their finding, which is generous; the search
+      cost was one crates.io query. Recorded here as a jess process note, not only an upstream one:
+      argue from the tool's full surface, not the surface you happen to be standing on.
+
+      *** 2. WHERE THE ASK WAS RIGHT, AND VARVE ENLARGED IT IN JESS'S FAVOUR ***
+      jess argued "verification failure must be its own variant, never folded into not-found - a
+      consumer that treats the second as the first FAILS OPEN". Correct and not currently expressible:
+      `resolve()` DOES NOT VERIFY. It reads the store and trusts that `install` verified on the way in,
+      so "present but does not verify" is not among the answers.
+      varve refused to patch that with "call verify first", on the grounds that a two-call contract with
+      an implicit ordering is the shell contract wearing types. Their restatement is bigger than jess's
+      ask and better: it is not "the crate must not collapse errors", it is THE CRATE MUST BE ABLE TO
+      SAY `verified` AT ALL. Also missing and confirmed: no per-payload lookup (so "absent from the
+      layer" and "present but no entry for this platform" are not separable), and no format self-report
+      (so a consumer built once and run for months cannot state "I met a layer newer than I know" as a
+      fact rather than a parse error).
+      Scoped by varve as a requirement for the next release with jess's four clauses as its spine.
+
+      *** 3. A STRUCTURAL VARVE DEFECT THE EXCHANGE UNCOVERED, NOTHING TO DO WITH JESS ***
+      Testing whether moving with-device would help produced this: ONE REPOSITORY CAN CONTRIBUTE AT MOST
+      ONE PAYLOAD TO A LAYER. Two guards combine - a tool's `name` must equal its repository basename,
+      and two entries may not share a `name` - so `name` is pinned to the repo and the repo may appear
+      once. It already blocks work in flight: zephyrproject-rtos/sdk-ng publishes 140 host x target
+      toolchains and a layer wanting two targets cannot express it. So moving with-device would have
+      fixed nothing and left the same wall standing for Zephyr and WASI.
+
+      *** DECISION RECORDED: with-device STAYS IN JESS ***
+      The operator's call, overruling varve's own recommendation, with a positive argument rather than a
+      deferral: jess is the integrator archive and a tool arbitrating an exclusive claim on a physical
+      bench IS integration work. varve's "every layer tool ships from its own repo" was a hygiene rule,
+      and hygiene loses to a tool sitting with the work it serves. CONDITION: revisit if it grows past
+      bench arbitration - more consumers, its own cadence, a scope that stops being integration.
+      The layer keeps carrying it from jess; the fifth field handles the tag/version divergence, and
+      2026.09.1 ships 0.2.1 with the next rolling deposit picking up 0.2.2.
+
+      *** WHAT JESS CAN DO NOW, WITHOUT WAITING ***
+      varve-core 0.32.0 is consumable today. A catalogue reader can be built against `resolve()` now,
+      with the verification gap KNOWN AND STATED rather than assumed away - i.e. a consumer that says
+      plainly "the layer was resolved, not re-verified at read time" until the next release closes it.
+      That is strictly better than the CLI parsing jess was about to write, and it does not block on
+      varve. NOT started this tick; recorded as the next concrete step.
+    tags: [varve, varve-core, consumer-api, upstream, with-device, process, self-correction, discoverability]
+    fields:
+      detected-by: the varve#130 design exchange, verified against crates.io, 2026-09-06
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T09:31:14Z
