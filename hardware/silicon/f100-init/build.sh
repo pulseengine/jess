@@ -46,6 +46,12 @@ $ram"
 # acknowledges nothing. Needs synth >= 0.62 (verify-embedder); skipped, LOUDLY, if
 # no such binary is given, because a silently-skipped gate is a vacuous gate.
 if [ -n "${SYNTH_VERIFY:-}" ]; then
+  # Check the CHECKER exists first. A missing path otherwise surfaced as
+  # "embedder ABI violated" — the wrong diagnosis for "could not run", which is the
+  # exact confusion varve#130 recorded (exit 127 reported as a refusal).
+  command -v "$SYNTH_VERIFY" >/dev/null 2>&1 || [ -x "$SYNTH_VERIFY" ] \
+    || fail "SYNTH_VERIFY is set to '$SYNTH_VERIFY', which is not an executable — that is
+   'could not run the check', NOT 'the check failed'"
   "$SYNTH_VERIFY" verify-embedder --allow-writer reset "$OUT/f100init.elf" >"$OUT/ve.log" 2>&1     || { cat "$OUT/ve.log"; fail "embedder ABI violated (writes outside the reset establishment site)"; }
   # NEGATIVE CONTROL: without the acknowledgement the same image must be REFUSED.
   # Otherwise a verify-embedder that had lost the ability to refuse would pass above.
@@ -53,6 +59,12 @@ if [ -n "${SYNTH_VERIFY:-}" ]; then
     fail "verify-embedder ACCEPTED the image without --allow-writer — it can no longer refuse"
   fi
   echo "embedder ABI: OK (writes confined to <reset>; refusal still works unacknowledged)"
+elif [ -n "${REQUIRE_VERIFY:-}" ]; then
+  # A gate that can be silently removed is not a gate. CI sets REQUIRE_VERIFY=1, so
+  # deleting the step that installs the checker turns this into a FAILURE rather than
+  # a green run that printed "NOT CHECKED" and verified nothing.
+  fail "REQUIRE_VERIFY is set but SYNTH_VERIFY is not — refusing to report a build as
+   gated when the embedder ABI was never checked"
 else
   echo "embedder ABI: NOT CHECKED (set SYNTH_VERIFY to a synth >= 0.62)"
 fi

@@ -22,6 +22,22 @@ if [ -z "${WD_REENTRY:-}" ] && [ -x "$WD" ]; then
 fi
 
 OOCD="sudo -n openocd -f interface/stlink-hla.cfg -f target/stm32f1x.cfg"
+
+# RE-CHECK THE RECOVERY IMAGE BEFORE WRITING FLASH.
+# The sha256 above used to appear only in a comment, while both this script and the
+# README asserted the hash "is re-checked before any write" — an automated property
+# nothing performed. Found by clean-room verification. A recovery path that is only
+# claimed is not a recovery path, so it is now an executed precondition.
+BACKUP="${BACKUP:-$HOME/bench/f100-backup/original-flash.bin}"
+BACKUP_SHA=10969f5c35de715696c377c2ae367b9be5950698115f3f91adf479bb12a0a78b
+if [ -z "${SKIP_BACKUP_CHECK:-}" ]; then
+  [ -f "$BACKUP" ] || { echo "REFUSING TO WRITE: no recovery image at $BACKUP" >&2; exit 2; }
+  got=$(sha256sum "$BACKUP" | awk '{print $1}')
+  [ "$got" = "$BACKUP_SHA" ] || {
+    echo "REFUSING TO WRITE: recovery image hash mismatch" >&2
+    echo "  expected $BACKUP_SHA" >&2; echo "  got      $got" >&2; exit 2; }
+  echo "recovery image verified: $BACKUP ($BACKUP_SHA)"
+fi
 APPLY=0x20000480; RES_DATA=0x20000484; RES_GLOB=0x20000488; DONE=0x2000048C
 BIN="${BIN:-$HOME/bench/f100init.bin}"
 [ -f "$BIN" ] || { echo "missing image: $BIN"; exit 2; }
