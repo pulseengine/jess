@@ -45,6 +45,20 @@ sha256sum -c SHA256SUMS.txt
 Building from this directory (`cargo build --release`) is fine for development; it is not what
 another repo should pin.
 
+## Catalogue vs registry
+
+`hardware-catalog.yaml` is **what we support** — part identity, capabilities and the surprises,
+each fact citing the artifact that measured it. True of the *part*, not of our bench, and the half
+that must not diverge between agents: a device-name disagreement is what makes a lock vacuous.
+
+The registries below are **what is present here** — which unit, which tty, which host. They differ
+per host by design.
+
+`check-catalog.sh` asserts every registry name resolves in the catalogue and every provenance
+citation exists, and carries negative controls for both. It runs in CI. Intended future: the
+catalogue becomes a digest-pinned varve layer payload so both agents consume identical bytes by
+construction rather than by copying (varve#130).
+
 ## The device registry is authoritative, and it is HOST-LOCAL
 
 A claim only means something on the machine the hardware is plugged into, so each host has its

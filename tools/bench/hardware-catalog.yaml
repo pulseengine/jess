@@ -1,0 +1,148 @@
+# The hardware CATALOGUE — what this campaign supports, as opposed to where it is plugged in.
+#
+# THE SPLIT THIS FILE EXISTS TO MAKE (varve#130):
+#   catalogue  what we SUPPORT — part identity, capabilities, and the surprises. True of the
+#              PART, not of our bench. Shared, reviewed, and the half that must NOT diverge
+#              between agents: a device name disagreement is what makes a lock vacuous.
+#   registry   what is PRESENT HERE — which unit, which tty, which serial, which host. Differs
+#              per host by design, and belongs on the host (see README.md).
+#
+# Every fact below was MEASURED and cites the artifact that measured it. A part fact without a
+# measurement is an assertion, and this campaign has been burned by those repeatedly — a Renode
+# platform that modelled 256 KB of SRAM where the part has 8 KB, and an MPU the part does not
+# have, both because nobody had read the silicon.
+#
+# NOT IN THIS FILE, deliberately: serial numbers, tty paths, host names, unique device IDs.
+# Those identify a UNIT, not a PART, and they change when a cable moves.
+#
+# INTENDED FUTURE: a digest-pinned payload in a varve layer, so jess and gale consume identical
+# bytes by construction rather than by copying (varve#130). Until varve ships a generic held
+# payload kind and a locate contract, this file is consumed from the repo.
+schema: jess.hardware-catalog/v1
+
+parts:
+  stm32f100:
+    what: STM32F100 value-line MCU, Cortex-M3
+    role: >
+      The Pixhawk 6X-RT's I/O coprocessor, and the target of the gust failsafe pass-through
+      (REQ-PIX-004 PART-P02). Also available standalone on an STM32VLDISCOVERY, which is the
+      ONLY way to reach one — see debug-access below.
+    identity:
+      dbgmcu-idcode: 0x10016420        # DEV_ID 0x420 = value line
+      cpuid: 0x411fc231                # ARM Cortex-M3 r1p1
+    memory:
+      flash-bytes: 131072              # 128 KB, from the flash-size register at 0x1FFFF7E0
+      sram-bytes: 8192                 # 8 KB, from the resident firmware's initial MSP 0x20002000
+      sram-base: 0x20000000
+      flash-base: 0x08000000           # aliased to 0x0 at boot; the reset vector fetches through 0x0
+    capabilities:
+      mpu-present: false               # MPU_TYPE = 0x00000000, DREGION 0
+      mpu-dregion: 0
+      fpu: none                        # soft-float
+    caveats:
+      - >
+        NO MPU. The MPU is OPTIONAL on Cortex-M3 and this part omits it, so any design assuming
+        isolation, region programming or deny-by-default ON THE FAILSAFE PATH cannot work here —
+        by hardware, not "not yet".
+      - >
+        Do NOT infer MPU presence from qemu's lm3s6965evb, which IS a Cortex-M3 WITH a PMSA MPU.
+        Same core family, different option. This cost gale a day.
+      - >
+        Renode DEFAULTS a Cortex-M to EIGHT MPU regions when the platform description is silent.
+        A platform modelling this part MUST declare `numberOfMPURegions: 0` — absence in a
+        platform file is NOT absence in the model.
+      - >
+        8 KB of SRAM is the binding constraint for any image targeting this part. A wasm module
+        declaring `(memory 1)` reserves a 64 KB page; synth's `--stack-layout low` is required so
+        the initial SP lands inside physical SRAM rather than at the top of an assumed 128 KB part.
+    measured-by: [AFD-091, AFD-096, AFD-088]
+
+  imxrt1176:
+    what: NXP i.MX RT1176 crossover MCU — Cortex-M7 + Cortex-M4
+    role: The Pixhawk 6X-RT flight-management unit; jess binds the falcon cascade to the M7.
+    capabilities:
+      m7-fpu: fpv5-d16                 # double precision
+      m4-fpu: fpv4-sp                  # single precision
+      hab-locked: true
+    caveats:
+      - >
+        HAB IS LOCKED. `sdphost write-file` returns StatusCode.HAB_IS_LOCKED (2) /
+        HabErrorReason.UNSUPPORTED_CONF_ITEM (36): the boot ROM accepts SIGNED images only, so the
+        SDP/blhost route is CLOSED by the part, not by tooling. Correct behaviour for a production
+        flight controller. Load-to-RAM over SWD is the remaining path.
+      - >
+        The serial-downloader ROM enumerates as USB 1FC9:013D with interface class 0x03 (HID) and
+        1021-byte endpoints. macOS binds class 0x03 to IOHIDDevice, so libusb can NEVER claim it
+        there; spsdk reaches it on Linux via libusbsio HIDAPI over /dev/hidraw0.
+      - >
+        NOT ESTABLISHED: whether the debug port is fused open on a given board. Some parts fuse
+        debug shut alongside HAB. One measurement, once a cable exists.
+    measured-by: [AFD-092, AFD-086, AFD-080]
+
+  stlink-v1:
+    what: ST-LINK/V1 debug probe (onboard on STM32VLDISCOVERY)
+    capabilities:
+      transport: hla-only              # firmware V1J13S0
+      nsrst-wired: false
+    caveats:
+      - >
+        HLA ONLY. openocd needs `interface/stlink-hla.cfg`, NOT `stlink-dap.cfg` — it says so in
+        its own error text and names the fallback.
+      - >
+        nSRST is NOT wired. `Error: SRST error` is expected and harmless; reset over SWD.
+      - >
+        With HLA, a memory read on a RUNNING target returns NOTHING AT ALL rather than erroring —
+        it reads exactly like a dead probe. HALT FIRST. This cost both jess and gale a cycle.
+      - >
+        ST-LINK is ST-only in practice for HLA; it will not drive an NXP i.MX RT target.
+    measured-by: [AFD-091, AFD-096]
+
+  stlink-v3:
+    what: STLINK-V3 debug probe (onboard on NUCLEO-G474RE)
+    capabilities:
+      transport: dapdirect_swd         # generic ARM-DAP, unlike V1's HLA
+      nsrst-wired: unknown
+    caveats:
+      - >
+        Supports `dapdirect_swd`, a GENERIC ARM-DAP path — unlike the V1, it is not restricted to
+        HLA. pyOCD carries a native StlinkProbe backend, so it speaks the probe's protocol
+        directly rather than through ST's tools.
+      - >
+        NOT ESTABLISHED: whether it can drive an i.MX RT1176. Plausible on the dapdirect path;
+        untested, and recorded as a plan rather than a result.
+    measured-by: [AFD-092]
+
+boards:
+  pixhawk-6xrt:
+    what: Holybro Pixhawk 6X-RT flight controller
+    usb: { vid: 0x3643, pid: 0x001d, product: PX4 FMU v6XRT.x }
+    parts: [imxrt1176, stm32f100]
+    also-carries: NXP EdgeLock SE051 secure element
+    debug-access:
+      connectors: 1
+      connector: JST SM10B "Pixhawk Debug Full"
+      pinout: { swdio: 4, swclk: 5, nrst: 9, gnd: 10 }
+      reaches: imxrt1176
+      caveats:
+        - >
+          THE F100 HAS NO DEBUG PORT ON THIS BOARD. The single SWD connector reaches the RT1176;
+          PX4 flashes the I/O coprocessor FROM the FMU over serial. So the F100 cannot be probed
+          in situ, and every F100-on-silicon result must come from a standalone VLDISCOVERY —
+          there is NO on-vehicle fallback for that leg.
+    measured-by: [AFD-091, AFD-092]
+
+  stm32vldiscovery:
+    what: STM32VLDISCOVERY — STM32F100 target with an onboard ST-LINK/V1
+    parts: [stm32f100, stlink-v1]
+    role: >
+      The only instrument that can establish an F100 part fact, since the vehicle's F100 has no
+      debug port. Zero flight risk; nothing about it is on the flight path.
+    measured-by: [AFD-091]
+
+# Synthetic entries. Declared HERE rather than special-cased in the checker, for the same reason
+# `selftest-device` is in the registry rather than pattern-matched in with-device: a bypass in a
+# check is the hole that later gets used for something real. One rule, no exceptions — every name
+# a registry may use appears in this catalogue.
+synthetic:
+  selftest-device:
+    what: SYNTHETIC — not hardware. Used only by `with-device --self-test`.

@@ -171,6 +171,14 @@ jobs:
       - name: cargo test (unit + behavioural)
         working-directory: tools/bench/with-device
         run: cargo test --all
+      # The catalogue is the SHARED VOCABULARY between jess and gale; the registries are
+      # host-local. If a registry names a device the catalogue does not contain, two agents can
+      # name the same hardware differently and neither lock excludes the other — the AFD-082
+      # vacuous-lock failure, which gale hit on first contact with `stlink-v1-f100`. Run on
+      # ubuntu only: it is a YAML/artifact check, not platform-dependent.
+      - name: hardware catalogue agrees with the registry (+ its own negative controls)
+        if: matrix.os == 'ubuntu-latest'
+        run: tools/bench/check-catalog.sh --self-test
       - name: clippy + fmt
         working-directory: tools/bench/with-device
         run: |

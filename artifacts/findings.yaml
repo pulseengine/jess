@@ -5643,3 +5643,76 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-06T09:31:14Z
+
+  - id: AFD-104
+    type: ai-found-defect
+    title: "built the hardware catalogue: what we SUPPORT split from where we DEPLOY it, every fact citing the artifact that measured it, and a cross-host name-agreement gate with both negative controls observed failing"
+    status: open
+    description: |-
+      2026-09-06. Built the half of the catalogue design that needs nobody else. varve has not yet
+      shipped a generic held-payload kind or a locate contract, and jess has never produced a catalogue
+      — so the reader had nothing to read. Producing it is fully unblocked and is the prerequisite for
+      everything else.
+
+      *** WHAT WAS BUILT: tools/bench/hardware-catalog.yaml ***
+      The split the operator drew (varve#130): what we SUPPORT vs where we DEPLOY it.
+        catalogue   part identity, capabilities, and the surprises. True of the PART. Shared, reviewed,
+                    and the half that must not diverge between agents — a device-name disagreement is
+                    what makes a lock vacuous.
+        registry    which unit, which tty, which serial, which host. Differs per host by design.
+      Four parts (stm32f100, imxrt1176, stlink-v1, stlink-v3), two boards (pixhawk-6xrt,
+      stm32vldiscovery), and the synthetic selftest-device declared explicitly rather than special-cased
+      in the checker — a bypass in a check is the hole that later gets used for something real.
+      NOTHING DEPLOYMENT-SPECIFIC IS IN IT: no serials, no tty paths, no host names, no unique IDs.
+      Those identify a UNIT, not a PART, and they change when a cable moves. Serials leaving the public
+      repo is a consequence of correct placement rather than a privacy patch.
+
+      *** EVERY FACT CITES THE ARTIFACT THAT MEASURED IT ***
+      `measured-by: [AFD-091, AFD-096, AFD-088]` and so on, per entry. A part fact without a measurement
+      is an assertion, and this campaign has been burned by exactly those twice in a week: a Renode
+      platform modelling 256 KB of SRAM where the part has 8 KB, and an 8-region MPU the part does not
+      have — both because nobody had read the silicon and the platform file was silent.
+      The catalogue is where those readings now live, so the next person gets them without re-measuring:
+          stm32f100   flash 128 KB, SRAM 8 KB, MPU_TYPE 0 / DREGION 0, CPUID 411fc231
+          imxrt1176   HAB LOCKED (StatusCode 2 / HabErrorReason 36), ROM is USB HID class 0x03
+          stlink-v1   HLA-only (V1J13S0), nSRST not wired, HLA read on a RUNNING target returns NOTHING
+          pixhawk-6xrt ONE debug connector, reaches the RT1176; THE F100 HAS NO DEBUG PORT on the board
+      Also recorded as NOT ESTABLISHED, rather than omitted: whether the RT1176's debug port is fused
+      open, and whether an STLINK-V3 can drive an i.MX RT target.
+
+      *** THE GATE, WITH BOTH NEGATIVE CONTROLS ***
+      tools/bench/check-catalog.sh asserts (1) every device name a registry uses resolves in the
+      catalogue, and (2) every measured-by citation names an artifact that exists. A citation pointing
+      at nothing is worse than no citation: it reads as evidence and is not.
+      Both assertions are negative-controlled in --self-test, and both were OBSERVED TO FAIL on injected
+      input before the real run was trusted:
+          NC1 ok: an unknown registry name is refused        (renamed a device in a temp copy)
+          NC2 ok: a citation to a non-existent artifact is refused  (AFD-091 -> AFD-99999)
+          real: names 3/3 resolve, provenance 6/6 exist
+      CROSS-HOST CHECK, which is the point of a shared vocabulary: run against the PI's registry as well
+      as the Mac's — different device sets (stlink-v1 vs stlink-v3) — and both resolve 3/3. That is the
+      property that would have refused gale's `stlink-v1-f100` at the vocabulary level rather than at
+      the lock.
+      Wired into CI on the ubuntu leg (a YAML/artifact check, not platform-dependent).
+
+      *** WHAT WAS DELIBERATELY NOT DONE ***
+        * devices.yaml was NOT split or moved. with-device reads it, gale reads it, and gale is mid-
+          flight on run-wdg-f100.sh. Moving another agent's registry out from under them to satisfy a
+          design jess drew this morning is not a change to make unilaterally. The catalogue is ADDITIVE
+          and breaks nothing.
+        * The Pi's live registry was NOT edited.
+        * No varve-core dependency yet. The reader is the next step and needs varve's held-payload kind
+          to have something to read; varve is scoping that for the next release with jess's four clauses
+          as its spine (AFD-103).
+      ACCEPTED DUPLICATION, stated rather than hidden: some caveats now appear both in the catalogue and
+      in the Pi's registry prose. That is a drift surface. It resolves when the registries shrink to
+      bindings only, which is gale's call to agree to, not jess's to impose.
+    tags: [bench, catalogue, varve, vocabulary, provenance, negative-control, afd-082, afd-088, afd-096]
+    fields:
+      detected-by: jess building the unblocked half of the varve#130 catalogue design, 2026-09-06
+      severity: minor
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T10:46:21Z
