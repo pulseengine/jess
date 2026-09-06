@@ -5444,3 +5444,66 @@ artifacts:
     links:
       - type: corrects
         target: AFD-099
+
+  - id: AFD-101
+    type: ai-found-defect
+    title: rivet v0.36.0 is clean on jess's store, but REQ-320 (declare rules you do not model) does NOT cover jess's case — the guard correctly refused the declaration, and adopting it on the changelog line would have taken CI down
+    status: open
+    description: |-
+      2026-09-06. Release-watch: rivet v0.36.0 shipped this morning carrying
+      `feat(coverage): let a project declare rules it does not model (REQ-320)` — which reads exactly
+      like the fix for AFD-098's "unsatisfiable by construction" rows. Tested against jess's REAL store
+      rather than adopted on the changelog. It does NOT fit jess's case, and rivet's own guard is what
+      proved it.
+
+      *** v0.36.0 VERDICT ON JESS'S STORE: CLEAN, NO REGRESSION ***
+        validate   exit 0, Result: PASS (258 warnings)   — identical to 0.32.0, so REQ-322's stricter
+                   required-backlink resolution ("let validate fail") does NOT newly fail jess.
+        coverage   64.8% (0.36.0) vs 63.9% (0.32.0) on the SAME store — a real 0.9-point version delta.
+                   Worth noting because ci.yml's comment cites "64.8% >= 60" as jess's evidence: that
+                   number came from a different binary than the one on PATH, which is the drift hazard
+                   in miniature. Both clear the floor of 60.
+
+      *** REQ-320 DOES NOT COVER JESS'S CASE, AND THE GUARD CAUGHT ME TRYING ***
+      Declared the two AFD-098 rules unmodelled, with reasons, in rivet.yaml. rivet refused the run:
+          error: unmodelled-rule declaration(s) no longer hold:
+            test-spec-verifies-req: declared unmodelled (...)
+      Correctly. REQ-320's staleness contract is "the rule now has SOURCE artifacts — the project said
+      it doesn't model this, then modelled it". jess HAS 25 test-specs and 9 safety-goals. jess models
+      the sources perfectly well.
+      THE DISTINCTION THAT MATTERS, and it is a different defect class from the one REQ-320 closes:
+        REQ-320's case   I have NO artifacts of the rule's source type. (aspice SWE.3 with no detail
+                         design: the row is empty forever and indistinguishable from neglect.)
+        JESS'S case      I HAVE the source artifacts. What I do not use is the rule's required LINK
+                         TYPE and TARGET TYPES. test-spec-verifies-req wants
+                         `fully-verifies -> stkh-req|feat-req|comp-req|aou-req`; jess writes
+                         `verifies -> requirement`. Same intent, different vocabulary, and the V is
+                         genuinely CLOSED where the rule reports 0.0%.
+      So the row is not "a level I skipped" but "a level I model in another dialect", and REQ-320 has
+      no way to say that. Reported to rivet#895 with this as the worked case.
+      NOTE THE GUARD WORKED EXACTLY AS DESIGNED. It refused a declaration that would have been false,
+      which is precisely the "exemption that outlives its reason" failure REQ-320's author set out to
+      prevent. The declaration was reverted; it would have broken CI (coverage exits non-zero while a
+      stale declaration stands), so this is also a caution: adopting REQ-320 blind, on the strength of
+      a changelog line that matches your problem's description, would have taken jess's compliance gate
+      down.
+
+      *** NOT ADOPTED THIS TICK ***
+      ci.yml still pins RIVET_VERSION v0.25.0 while the varve layer carries 0.34.0 and PATH has 0.32.0
+      — three answers, unchanged from AFD-094's meld case which was fixed by aligning ci.yml to the
+      pin. The same alignment for rivet is a separate reviewed change: 0.36.0 changes the coverage
+      NUMBER (63.9 -> 64.8) and jess's floor was chosen against neither. Bumping it would also need the
+      triage-status vocabulary gate and the compliance-report generator re-verified, exactly as the
+      meld bump did. Recorded, not taken.
+    tags: [rivet, release-watch, coverage, afd-098, req-320, vocabulary-mismatch, drift, upstream]
+    fields:
+      detected-by: jess testing rivet v0.36.0 against the real store instead of adopting the changelog, 2026-09-06
+      severity: minor
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T06:46:02Z
+    links:
+      - type: traces-to
+        target: AFD-098
