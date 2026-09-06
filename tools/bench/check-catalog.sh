@@ -17,6 +17,25 @@ cd "$(dirname "$0")/../.."
 CAT=tools/bench/hardware-catalog.yaml
 REG=${REG:-tools/bench/devices.yaml}
 
+# PREFLIGHT. Name EVERY missing dependency at once, before doing any work — the pattern the
+# on-target CI jobs already use. Discovering them one at a time costs a run per gap and names
+# only one of them; and a bare `ModuleNotFoundError: yaml` traceback reads like a bug in this
+# script rather than a missing package on the runner.
+preflight() {
+  local missing=""
+  command -v python3 >/dev/null 2>&1 || missing="$missing python3"
+  python3 -c 'import yaml' 2>/dev/null || missing="$missing python3-yaml(PyYAML)"
+  command -v rivet   >/dev/null 2>&1 || missing="$missing rivet"
+  if [ -n "$missing" ]; then
+    echo "  PREFLIGHT FAIL — missing:$missing"
+    echo "    This check needs python3 + PyYAML to read the catalogue, and rivet to confirm"
+    echo "    every measured-by citation names a real artifact. Refusing to report a pass on"
+    echo "    claims it could not check."
+    return 1
+  fi
+  return 0
+}
+
 run_check() {
   local cat="$1" reg="$2"
   python3 - "$cat" "$reg" <<'PY'
@@ -42,9 +61,15 @@ for sect in ('parts', 'boards'):
     for e in (cat.get(sect) or {}).values():
         cited.update(e.get('measured-by') or [])
 if cited:
-    out = subprocess.run(['rivet', 'list', '--format', 'json'], capture_output=True, text=True).stdout
+    # FAIL CLOSED, and with a NAMED reason rather than a traceback. The first version put
+    # subprocess.run OUTSIDE the try, so a missing `rivet` raised FileNotFoundError and the
+    # script died with a stack trace instead of the refusal it was designed to print — the
+    # operator then has to read Python internals to learn that a tool was absent. "Cannot
+    # verify" is a verdict this check is allowed to reach; crashing is not.
     try:
         import json
+        out = subprocess.run(['rivet', 'list', '--format', 'json'],
+                             capture_output=True, text=True).stdout
         d = json.loads(out); arts = d if isinstance(d, list) else d.get('artifacts', d)
         have = {a['id'] for a in arts}
         dangling = sorted(cited - have)
@@ -53,12 +78,19 @@ if cited:
             fail = 1
         else:
             print(f"  provenance: {len(cited)} cited artifacts all exist")
+    except FileNotFoundError:
+        print("  provenance: CANNOT VERIFY — `rivet` is not on PATH.")
+        print("    This check needs it to confirm every measured-by citation names a real")
+        print("    artifact. Refusing to report a pass on a claim it could not check.")
+        fail = 1
     except Exception as e:
         print(f"  provenance: CANNOT VERIFY ({type(e).__name__}) — refusing to report a pass")
         fail = 1
 sys.exit(fail)
 PY
 }
+
+preflight || { echo "CATALOG FAIL"; exit 1; }
 
 if [ "${1:-}" = "--self-test" ]; then
   echo "== negative controls: both assertions must be observed to FAIL =="

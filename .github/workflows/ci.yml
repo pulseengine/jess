@@ -106,6 +106,17 @@ jobs:
       - name: triage-status vocabulary gate (AFD-062)
         working-directory: jess
         run: tools/rivet/triage-gate.sh
+      # The catalogue is the SHARED VOCABULARY between jess and gale; the registries are
+      # host-local. A registry naming a device the catalogue does not contain lets two agents
+      # name the same hardware differently, so neither lock excludes the other — the AFD-082
+      # vacuous-lock failure gale hit on first contact with `stlink-v1-f100`.
+      #
+      # LIVES HERE, not in bench-tool: it verifies every `measured-by` citation names a real
+      # artifact, which needs `rivet` on PATH. bench-tool does not install it, so the first
+      # placement failed closed with "CANNOT VERIFY" — correct refusal, wrong job.
+      - name: hardware catalogue agrees with the registry (+ its own negative controls)
+        working-directory: jess
+        run: tools/bench/check-catalog.sh --self-test
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so
@@ -171,14 +182,6 @@ jobs:
       - name: cargo test (unit + behavioural)
         working-directory: tools/bench/with-device
         run: cargo test --all
-      # The catalogue is the SHARED VOCABULARY between jess and gale; the registries are
-      # host-local. If a registry names a device the catalogue does not contain, two agents can
-      # name the same hardware differently and neither lock excludes the other — the AFD-082
-      # vacuous-lock failure, which gale hit on first contact with `stlink-v1-f100`. Run on
-      # ubuntu only: it is a YAML/artifact check, not platform-dependent.
-      - name: hardware catalogue agrees with the registry (+ its own negative controls)
-        if: matrix.os == 'ubuntu-latest'
-        run: tools/bench/check-catalog.sh --self-test
       - name: clippy + fmt
         working-directory: tools/bench/with-device
         run: |
