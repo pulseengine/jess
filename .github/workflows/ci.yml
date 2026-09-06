@@ -375,6 +375,45 @@ jobs:
           REQUIRE_ON_PIN=1 MELD=.scratch/meld/meld LOOM=.scratch/loom/loom \
             hardware/renode/cascade-invoke/build.sh
       # The gate. A wrong lowering, a broken embedder promise, or a stale image all fail here.
+      # RQ-62-VERIFYEMBED (synth #1132). jess's embedder objects are compiled with
+      # -ffixed-r9/-r10/-r11 and the contract was BELIEVED on the strength of those flags —
+      # synth's own help names the hazard exactly: "a flag that silently stopped applying looks
+      # exactly like one that works". This checks the EMITTED code instead.
+      #
+      # CHECKED with synth 0.62.0, BUILT with the pinned synth. That asymmetry is deliberate and
+      # not drift: the subject under test is jess's embedder (harness.c + boot.S + the linker
+      # script), not synth's output, so using a newer synth to inspect a pinned build changes no
+      # artifact. Bumping the build pin is a separate reviewed change that needs the cascade
+      # oracles re-verified.
+      #
+      # _reset is the legitimate establishment site (boot.S sets R9/R10/R11 before the first
+      # export runs); --allow-writer records that a human accepted that obligation for exactly
+      # that symbol, and for no other.
+      - name: fetch synth 0.62.0 (for verify-embedder only — the build stays on the pin)
+        run: |
+          set -euo pipefail
+          gh release download v0.62.0 --repo pulseengine/synth \
+            --pattern '*x86_64-unknown-linux-gnu*' --pattern 'SHA256SUMS.txt' --dir /tmp/s062
+          cd /tmp/s062
+          exp=$(grep 'x86_64-unknown-linux-gnu' SHA256SUMS.txt | awk '{print $1}')
+          act=$(sha256sum ./*x86_64-unknown-linux-gnu*.tar.gz | awk '{print $1}')
+          test -n "$exp" && test "$exp" = "$act" || { echo "checksum mismatch"; exit 1; }
+          tar xzf ./*x86_64-unknown-linux-gnu*.tar.gz
+          install -m755 "$(find . -name synth -type f -perm -u+x | head -1)" /usr/local/bin/synth062
+          synth062 --version
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: embedder ABI — no code writes R9/R10/R11 outside the establishment site
+        run: synth062 verify-embedder --allow-writer _reset .scratch/invoke/invoke.elf
+      # NEGATIVE CONTROL: the check must still REFUSE when the establishment site is not
+      # acknowledged. Without this, a verify-embedder that had quietly become incapable of
+      # refusing would pass the step above and prove nothing.
+      - name: embedder ABI — negative control (must refuse without --allow-writer)
+        run: |
+          if synth062 verify-embedder .scratch/invoke/invoke.elf; then
+            echo "verify-embedder ACCEPTED an image whose boot code writes R9/R10/R11 — it can no longer refuse"; exit 1
+          fi
+          echo "negative control OK: unacknowledged reserved-register writes are refused"
       - name: TEST-PIX-032 — cascade stage executes and matches relay's SIL reference
         run: hardware/renode/cascade-invoke/run-oracle.sh
         env:
