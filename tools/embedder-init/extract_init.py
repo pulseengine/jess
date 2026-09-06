@@ -28,7 +28,12 @@ def parse_globals(text: str):
     """Global initialisers, in declaration order (the R9 table's layout)."""
     out = []
     for i, line in enumerate(l for l in text.splitlines() if re.match(r'\s*\(global ', l)):
-        m = re.search(r'\(global \(;(\d+);\)\s+(\(mut\s+)?(\w+)\)?\s+(\w+)\.const\s+(-?\d+)', line)
+        # The `$name` is OPTIONAL: `wasm-tools print` keeps a symbolic name when the
+        # module carries one (`(global $g (;0;) ...)`) and omits it when stripped. The
+        # cascade is stripped, so requiring the stripped form parsed every real input
+        # and rejected every hand-written one — a named const global was refused with
+        # "a non-const initialiser cannot be seeded", which is the wrong reason.
+        m = re.search(r'\(global\s+(?:\$[^\s()]+\s+)?\(;(\d+);\)\s+(\(mut\s+)?(\w+)\)?\s+(\w+)\.const\s+(-?\d+)', line)
         if not m:
             raise SystemExit(f"unparsed global (line {i}): {line.strip()}\n"
                              "  A non-const initialiser cannot be seeded from a static table;\n"
@@ -46,7 +51,8 @@ def parse_data(path: str, text: str):
     """
     segs, pending = [], None
     for line in text.splitlines():
-        m = re.match(r'\s*\(data \(;(\d+);\) \(i32\.const (\d+)\)\s*(.*)', line)
+        # Same optional-`$name` tolerance as parse_globals, for the same reason.
+        m = re.match(r'\s*\(data\s+(?:\$[^\s()]+\s+)?\(;(\d+);\)\s+\(i32\.const (\d+)\)\s*(.*)', line)
         if m:
             if pending: segs.append(pending)
             pending = {"index": int(m.group(1)), "offset": int(m.group(2)), "raw": m.group(3)}
@@ -117,12 +123,50 @@ def emit_c(segs, globs, module, out_c):
     return total
 
 
+SELF_TEST_CASES = [
+    # (label, WAT line as `wasm-tools print` emits it, expected parse or None to refuse)
+    ("anonymous global", "  (global (;0;) (mut i32) i32.const 1515847680)", 0x5A5A0000),
+    # THE REGRESSION: `wasm-tools print` keeps a symbolic name when the module carries
+    # one. The cascade is name-stripped, so the old pattern matched every real input and
+    # refused every hand-written one — reporting a plain const global as "a non-const
+    # initialiser", which is a wrong diagnosis, not just a miss.
+    ("named global", "  (global $g (;0;) (mut i32) i32.const 1515847680)", 0x5A5A0000),
+    ("immutable named", "  (global $c (;1;) i32 i32.const 7)", 7),
+    # Negative control: a genuinely non-const initialiser MUST still be refused. Without
+    # this row, a regex loosened until everything matches would pass the two rows above.
+    ("global.get init (must refuse)", "  (global (;0;) (mut i32) global.get 0)", None),
+]
+
+
+def self_test() -> int:
+    ok = True
+    for label, line, want in SELF_TEST_CASES:
+        try:
+            got = parse_globals(line)
+            got = got[0]["value"] if got else "no-match"
+        except SystemExit:
+            got = None
+        hit = (got == want)
+        ok &= hit
+        shown = got if got is None else (got if isinstance(got, str) else hex(got))
+        wanted = want if want is None else (want if isinstance(want, str) else hex(want))
+        print(f"  [{'ok ' if hit else 'FAIL'}] {label:<32} got={shown} want={wanted}")
+    print("SELF-TEST:", "PASS" if ok else "FAIL")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("module")
-    ap.add_argument("--out-c", required=True)
-    ap.add_argument("--out-manifest", required=True)
+    ap.add_argument("module", nargs="?")
+    ap.add_argument("--out-c")
+    ap.add_argument("--out-manifest")
+    ap.add_argument("--self-test", action="store_true",
+                    help="parser regression cases incl. a must-refuse negative control")
     a = ap.parse_args()
+    if a.self_test:
+        raise SystemExit(self_test())
+    if not (a.module and a.out_c and a.out_manifest):
+        ap.error("module, --out-c and --out-manifest are required")
 
     text = wat(a.module)
     segs, globs = parse_data(a.module, text), parse_globals(text)

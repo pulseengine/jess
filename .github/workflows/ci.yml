@@ -414,6 +414,70 @@ jobs:
             echo "verify-embedder ACCEPTED an image whose boot code writes R9/R10/R11 — it can no longer refuse"; exit 1
           fi
           echo "negative control OK: unacknowledged reserved-register writes are refused"
+      # The embedder-init rung (AFD-107). extract_init.py emitted tables that NOTHING
+      # consumed; apply_init.c is the loop that consumes them. CI builds and gates the
+      # image; the SILICON leg cannot run here (no ST-Link on a hosted runner) and that
+      # gap is named rather than implied — see hardware/silicon/f100-init/README.md.
+      - name: embedder-init — parser self-test (incl. a must-refuse negative control)
+        run: python3 tools/embedder-init/extract_init.py --self-test
+      - name: embedder-init — build the F100 image on the PIN, gated by verify-embedder
+        run: |
+          set -euo pipefail
+          REQUIRE_VERIFY=1 SYNTH=.scratch/fg60/synth SYNTH_VERIFY=/usr/local/bin/synth062 \
+            hardware/silicon/f100-init/build.sh
+      # The tables must be NON-EMPTY. An extractor that silently produced a zero-segment,
+      # zero-global init would satisfy the obligation vacuously and link just as cleanly.
+      - name: embedder-init — the cascade's real tables are non-empty and link clean
+        run: |
+          set -euo pipefail
+          python3 tools/embedder-init/extract_init.py .scratch/invoke/c.loom.wasm \
+            --out-c /tmp/ct.c --out-manifest /tmp/ct.json
+          segs=$(python3 -c "import json;print(len(json.load(open('/tmp/ct.json'))['segments']))")
+          globs=$(python3 -c "import json;print(len(json.load(open('/tmp/ct.json'))['globals']))")
+          echo "cascade tables: $segs segment(s), $globs global(s)"
+          [ "$segs" -gt 0 ] && [ "$globs" -gt 0 ] || { echo "EMPTY init tables — vacuous"; exit 1; }
+          CPU="-mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
+          arm-none-eabi-gcc -c $CPU -ffreestanding -O2 /tmp/ct.c -o /tmp/ct.o
+          arm-none-eabi-gcc -c $CPU -ffreestanding -O2 hardware/silicon/f100-init/apply_init.c -o /tmp/ap.o
+          .scratch/fg60/synth compile .scratch/invoke/c.loom.wasm -t cortex-m4f --cortex-m \
+            --relocatable --embedder-data-init --embedder-global-init -o /tmp/casc.o
+          arm-none-eabi-ld -r /tmp/casc.o /tmp/ap.o /tmp/ct.o \
+            "$(arm-none-eabi-gcc $CPU -print-libgcc-file-name)" -o /tmp/linked.o
+          test -f /tmp/linked.o
+          n=$(arm-none-eabi-nm /tmp/linked.o | wc -l)
+          [ "$n" -gt 0 ] || { echo "nm saw no symbols — the next check would be vacuous"; exit 1; }
+          u=$(arm-none-eabi-nm /tmp/linked.o | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)
+          [ -z "$u" ] || { echo "undefined after linking: $u"; exit 1; }
+          # NOTE: 0 undefined holds only because libgcc is linked in above; the cascade
+          # object alone leaves __aeabi_f2lz/__aeabi_l2f/__aeabi_ul2f — the known AFD-046
+          # obligation, not a regression.
+          echo "cascade + generic apply loop (with libgcc): $n symbols, 0 undefined"
+      # EXECUTE the apply loop, do not merely link it. Clean-room verification showed the
+      # step above still passes with jess_wasm_apply_init gutted to `return;` — it gates
+      # LINKABILITY, not CONSUMPTION. This runs the real loop over the real cascade tables
+      # on the host and compares the result against wasmtime's own instantiated memory,
+      # plus an anti-splat check that a byte outside every declared segment is untouched.
+      - name: embedder-init — the apply loop is EXECUTED and matches wasmtime
+        run: |
+          set -euo pipefail
+          cc -O2 -o /tmp/hostapply /tmp/ct.c hardware/silicon/f100-init/apply_init.c \
+            tools/embedder-init/host_apply_main.c
+          /tmp/hostapply /tmp/mem.bin /tmp/glob.bin
+          python3 tools/embedder-init/check_apply.py .scratch/invoke/c.loom.wasm \
+            /tmp/ct.json /tmp/mem.bin /tmp/glob.bin
+      # NEGATIVE CONTROL: a no-op apply loop must be REFUSED. Without this row the step
+      # above could quietly lose its ability to detect exactly what it exists to detect.
+      - name: embedder-init — negative control (a gutted apply loop must FAIL)
+        run: |
+          set -euo pipefail
+          printf 'typedef unsigned char u8; typedef unsigned int u32;\nvoid jess_wasm_apply_init(u8*l,u32*g){(void)l;(void)g;}\n' > /tmp/noop.c
+          cc -O2 -o /tmp/hostnoop /tmp/ct.c /tmp/noop.c tools/embedder-init/host_apply_main.c
+          /tmp/hostnoop /tmp/nmem.bin /tmp/nglob.bin
+          if python3 tools/embedder-init/check_apply.py .scratch/invoke/c.loom.wasm \
+               /tmp/ct.json /tmp/nmem.bin /tmp/nglob.bin; then
+            echo "a NO-OP apply loop PASSED the check — it can no longer detect non-consumption"; exit 1
+          fi
+          echo "negative control OK: a gutted apply loop is refused"
       - name: TEST-PIX-032 — cascade stage executes and matches relay's SIL reference
         run: hardware/renode/cascade-invoke/run-oracle.sh
         env:
