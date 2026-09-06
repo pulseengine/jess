@@ -5374,3 +5374,73 @@ artifacts:
     links:
       - type: corrects
         target: AFD-098
+
+  - id: AFD-100
+    type: ai-found-defect
+    title: jess's CI compliance gate (coverage --fail-under 60, passing at 63.9%) is 84% about GALE's and RELAY's artifacts, not jess's — and three 100% rows are entirely another repo's work
+    status: open
+    description: |-
+      2026-09-06. Completing the audit AFD-098/AFD-099 started. The local/external split was computed
+      for EVERY coverage rule rather than sampled, and the result is worse than either earlier finding.
+
+      *** JESS'S CI COMPLIANCE GATE IS 84% ABOUT OTHER REPOS' ARTIFACTS ***
+        ci.yml gates on:  rivet coverage --fail-under 60   ->  63.9%, PASSES by 3.9 points
+        scope:            1511 artifacts = 227 jess-owned + 1284 EXTERNAL (84% external)
+      The externals are gale's and relay's, resolved by `rivet sync` from the git-links in rivet.yaml.
+      They belong in the STORE - the cross-repo trace is the point, and jess's hazards genuinely trace
+      to gale:L-1/H-2. They do NOT belong in a number jess publishes as its own compliance evidence and
+      gates its own CI on.
+      CONSEQUENCES, all live today:
+        * jess's build can go RED because GALE regressed, with nothing wrong in jess.
+        * jess can stay GREEN while jess's own coverage rots, carried by upstream volume - 84% of the
+          denominator is not jess's to improve or to break.
+        * ci.yml's own comment cites "64.8% >= 60" as evidence the gate holds. That number is not jess's.
+      This is the evidence-transfer class again: a true, non-vacuous, passing measurement that is ABOUT
+      A DIFFERENT SUBJECT than the claim it is filed under. The gate is not broken; it is answering a
+      question nobody asked.
+
+      *** THE GREEN ROWS MISLEAD IN THE SAME WAY THE RED ONES DO, WHICH I DID NOT EXPECT ***
+      Per-rule local/external, measured:
+        controller-constraint-has-uca         16/16 100%   local 0  external 16   ENTIRELY GALE'S
+        strategy-decomposes-goal                1/1 100%   local 0  external  1   ENTIRELY EXTERNAL
+        solution-supports-goal                  4/4 100%   local 0  external  4   ENTIRELY EXTERNAL
+        controller-constraint-has-requirement  0/16   0%   local 0  external 16   ENTIRELY GALE'S
+        uca-has-controller-constraint         16/21  76%   local 2  external 19
+        constraint-has-requirement             0/11   0%   local 5  external  6
+        stpa-losses-have-safety-goals           3/8  38%   local 5  external  3
+      So three rows report 100% for work jess did not do, and one reports 0% for work jess cannot do.
+      AFD-098 and AFD-099 both treated this as a problem with the FAILING rows. It is symmetric: a 100%
+      carried entirely by another repo is exactly as misleading as a 0% jess cannot close, and is more
+      dangerous because nobody audits a green row.
+      CORRECTION TO MY OWN PREDICTION: AFD-099 said controller-constraint-has-requirement was "likely
+      the same shape" as constraint-has-requirement (5 local + 6 external) and explicitly recorded that
+      as UNVERIFIED. Verified now: it is NOT the same shape - it is 0 local and 16 external, strictly
+      worse. Jess's obligation there is 0/0, not 0/16. Good that it was not assumed.
+
+      *** WHAT JESS'S OWN COVERAGE ACTUALLY IS: UNKNOWN, AND THAT IS THE HONEST ANSWER ***
+      rivet offers no local-only view (rivet#895), so the number jess would need in order to gate on
+      its OWN work cannot currently be computed with the shipped tool. I am NOT estimating it. A
+      plausible-looking local figure derived by hand here would be exactly the kind of unbacked number
+      this finding is about.
+      WHAT SHOULD HAPPEN, in order:
+        1. rivet: local-vs-external coverage (filed, rivet#895, two comments).
+        2. jess: once available, re-point the CI floor at jess's OWN coverage and re-derive a threshold
+           from it. 60 was chosen against a mixed number and means nothing for a local one.
+        3. Until then the ci.yml comment claiming "64.8% >= 60" as jess's evidence should be read as
+           what it is - a mixed-scope number - and NOT cited as jess's compliance position.
+      NOT CHANGED IN THIS TICK: the gate itself. Lowering, raising or re-scoping a compliance floor
+      changes what jess claims to satisfy, and doing that unilaterally on the strength of my own audit
+      is precisely the authorship-and-verification collapse the clean-room skill warns about. Recorded
+      for a decision, not taken.
+    tags: [rivet, coverage, ci-gate, cross-repo, evidence-transfer, vacuous-metric, compliance, afd-098, afd-099]
+    fields:
+      detected-by: jess computing the local/external split for every coverage rule instead of sampling, 2026-09-06
+      severity: critical
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T02:58:58Z
+    links:
+      - type: corrects
+        target: AFD-099
