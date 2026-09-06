@@ -5854,3 +5854,131 @@ artifacts:
     links:
       - type: traces-to
         target: AFD-105
+
+  - id: AFD-107
+    type: ai-found-defect
+    title: "the two instantiation promises AFD-046 owed synth are now DISCHARGED ON REAL SILICON — extract_init.py emitted tables that NOTHING consumed, and the apply loop had never executed anywhere"
+    status: open
+    description: |-
+      2026-09-07. AFD-046 lowered the full cascade for Cortex-M by passing synth
+      `--embedder-data-init` (#1041) and `--embedder-global-init` (#1052). Those flags emit
+      BYTE-IDENTICAL code: they convert a refusal into an acknowledgement that the EMBEDDER owes
+      memory 0's active data segments and the R9 globals table. They are promises.
+
+      *** WHAT WAS ACTUALLY MISSING ***
+      `tools/embedder-init/extract_init.py` emitted the TABLES and was verified against wasmtime's
+      instantiated memory. `tools/embedder-init/run.sh` then lowered, compiled and LINKED them, and
+      stopped there. Nothing anywhere CONSUMED the tables — there was no apply loop in the repo at
+      all — and nothing had ever executed with them applied. By this campaign's own rule ("it links
+      is not it works") the promises were undischarged, and the pipeline read as complete because
+      every step it did run was green.
+
+      *** WHAT NOW RUNS: hardware/silicon/f100-init/ ***
+      apply_init.c is the missing half — generic over the emitted tables, not a fixture. probe.wat
+      exports two functions that synth lowers to exactly two loads, so an unkept promise is a WRONG
+      VALUE rather than a drift:
+          read_data    -> ldr r0, [r11, #0x100]   the active data segment
+          read_global  -> ldr r0, [r9]            globals table slot 0
+
+      ON REAL STM32F100 SILICON (STM32VLDISCOVERY, ST-LINK/V1, fourpi bench), 2026-09-07:
+          LEG (only the APPLY word differs)  read_data   read_global  completion
+            init APPLIED (baseline)          44332211    5a5a0000     c0ffee00   OK
+            init SKIPPED (negative control)  deadbeef    deadbeef     c0ffee00   OK
+      44332211 is the segment \11\22\33\44 read back little-endian; 5a5a0000 is the declared global.
+      Both are exactly the emitted table values.
+
+      *** WHY THE CONTROL IS NOT VACUOUS (three properties, each one a past failure here) ***
+      1. Both legs run the BYTE-IDENTICAL FLASHED IMAGE. The apply decision is a RUNTIME input — one
+         word the host writes at 0x20000480 before `resume` — not a build flag. Exactly one variable
+         differs (AFD-048).
+      2. Both regions are POISONED with 0xDEADBEEF before the decision. Without the poison, "not
+         applied" could read as an accidental zero and be indistinguishable from a legitimately-zero
+         value. The failing case must be observable for the passing case to mean anything.
+      3. The completion marker c0ffee00 is present in BOTH legs, so the control measured "init was
+         not applied" and NOT "the CPU never resumed" — exactly the confusion AFD-048 found already
+         shipped in a merged safety artifact.
+
+      *** TWO DEFECTS FOUND IN JESS'S OWN MACHINERY WHILE DOING THIS ***
+      (a) extract_init.py refused a NAMED const global. `wasm-tools print` keeps a symbolic name when
+          the module carries one — `(global $g (;0;) (mut i32) i32.const ...)` — and the regex
+          required the stripped form. The cascade is name-stripped, so the parser matched every real
+          input and refused every hand-written one, reporting a plain const global as "a non-const
+          initialiser cannot be seeded": a WRONG DIAGNOSIS, not merely a miss. parse_data carried the
+          same gap. Both fixed; `--self-test` added with a must-refuse negative control
+          (`global.get` init) so the regex cannot be loosened into accepting everything. Red-first
+          demonstrated: exit 1 with the old regex, exit 0 with the fix, control refusing in both.
+      (b) A named label `skip_apply:` in boot.S entered the symbol table, and synth's verify-embedder
+          attributed the three ABI-establishing writes to <skip_apply> rather than <reset> — so
+          `--allow-writer reset` did NOT match and the check refused a conforming image. An
+          acknowledgement that names the wrong symbol acknowledges nothing. Fixed with a numeric
+          local label; build.sh now gates on verify-embedder AND on its negative control.
+
+      *** SCOPE — stated narrowly on purpose ***
+      EXECUTED: Cortex-M3, real silicon, the two-export probe.
+      NOT executed: the falcon cascade, and nothing on the RT1176. The cascade's OWN tables (13
+      segments / 43,005 bytes / 12 globals) compile for cortex-m4f and link clean against the same
+      generic apply loop with 0 undefined — that is LINKS, not RUNS. No falcon code has executed on
+      an RT1176; the debug adapter is still in transit.
+
+      *** REPRODUCIBILITY ***
+      The flashed image is byte-identical whether built with the campaign pin (synth 0.60.0) or with
+      0.63.0 — md5 44cbc79c49735d1a616eec6b34a6cdd3 — so the silicon result is not an artifact of an
+      off-pin toolchain. Recovery backup hash re-checked before writing flash.
+
+      CI gates the parser self-test, the pinned build under verify-embedder + its negative control,
+      and a non-empty-tables assertion on the real cascade. The SILICON leg cannot run on a hosted
+      runner; that gap is named in the README rather than implied away.
+    tags: [embedder-abi, on-target, silicon, stm32f100, afd-046, afd-048, negative-control, synth, cortex-m3]
+    fields:
+      detected-by: building the apply loop AFD-046's flags promised and running it on real F100 silicon, 2026-09-07
+      severity: major
+      triage-status: confirmed
+
+  - id: AFD-108
+    type: ai-found-defect
+    title: "synth v0.63.0 fixes a SILENT WRONG-ADDRESS STORE on jess's exact Thumb-2 path (memarg >= 2^31 was clamped to 0); measured reach on the real cascade is ZERO, proven with a control that fires"
+    status: open
+    description: |-
+      2026-09-07. Per-piece release-watch of synth v0.63.0 (published 2026-09-06).
+
+      *** THE PIECE THAT REACHES JESS ***
+      RQ-63-ARMI64OFF (synth #1165). Three defects, only one of which is on jess's path:
+        - A32 word/sub-word immediates MASKED (`& 0xFFF` / `& 0xFF`) — exit 0, wrong address. NOT
+          jess's exposure: that arm is reached by `synth compile -b arm` with no --target. jess always
+          passes `-t cortex-mX --cortex-m`, which is the Thumb-2 encoder.
+        - A32 i64 pair offsets DECLINED. Same reason: not jess's path.
+        - *** Thumb-2 `i64_effective_base` CLAMPED a memarg >= 2^31 to 0. *** THIS is jess's path.
+      Measured directly, cortex-m7dp, `i64.store offset=0xfffffff8`:
+          0.62.0:  add.w r12, r11, r0                      <- offset DROPPED ENTIRELY
+                   str.w r2, [r12]                            exit 0, writes the WRONG address
+          0.63.0:  movw r12,#0xfff8 ; movt r12,#0xffff
+                   add.w r12,r0,r12 ; add.w r12,r12,r11
+                   str.w r2, [r12]                            full materialisation
+      A silently mis-addressed STORE is memory corruption, not a bad read.
+
+      *** REACH ON THE REAL CASCADE: ZERO — AND THE MEASUREMENT IS NOT VACUOUS ***
+      Per-core matrix on .scratch/invoke/c.loom.wasm (63,156 B), jess's real flags
+      (`--relocatable --embedder-data-init --embedder-global-init`), 0.62.0 vs 0.63.0:
+          cortex-m7dp   exit 0, 0 skips   BYTE-IDENTICAL   (41,140 B, md5 5362d831...)
+          cortex-m4f    exit 0, 0 skips   BYTE-IDENTICAL   (42,562 B, md5 90e8fa9b...)
+          cortex-m3     exit 1, 14 skip lines, unchanged
+      A byte-identical result is only evidence if the differential CAN fire. POSITIVE CONTROL: a
+      module with `i64.load/store offset=0xfffffff8` DIFFERS on all three cores (+36 B in 0.63.0).
+      A first control at offset=65528 did NOT fire — the trigger is the 2^31 sign boundary, not the
+      LDRD immediate limit — so the control was corrected against synth's own red-first oracle rather
+      than kept as a passing no-op.
+      SECOND, INDEPENDENT LINE: the maximum memarg anywhere in the image is 53,344, five orders of
+      magnitude below 2^31 (scan sees 353 offsets, so it is not silently matching nothing).
+
+      VERDICT: jess was never exposed, on either the A32 arm (wrong invocation shape) or the Thumb-2
+      arm (no qualifying memarg). No image needs rebuilding. But the defect class — compiler emits a
+      silently wrong store, exit 0 — is exactly what no jess gate would have caught, and the only
+      reason the answer is "zero" rather than "unknown" is that the reach was measured.
+
+      Pin unchanged (campaign 0.60.0 / varve layer 0.58.0 / latest 0.63.0), consistent with AFD-106.
+      The divergence is now three releases wide and is the standing argument for the layer catching up.
+    tags: [synth, release-watch, per-core-matrix, thumb2, positive-control, drift, afd-106, no-regression]
+    fields:
+      detected-by: per-piece release-watch of synth v0.63.0 against the real fused cascade, 2026-09-07
+      severity: minor
+      triage-status: confirmed
