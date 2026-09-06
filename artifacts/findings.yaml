@@ -5716,3 +5716,73 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-06T10:46:21Z
+
+  - id: AFD-105
+    type: ai-found-defect
+    title: "synth 0.62.0's verify-embedder found a real W^X defect on its first run: link.ld folded rodata into .text, mapping 43,005 bytes of wasm data blob EXECUTABLE — and it proved the -ffixed-r9/r10/r11 flags jess had only believed"
+    status: open
+    description: |-
+      2026-09-06. Release-watch on synth v0.62.0 (shipped today). It carries RQ-62-VERIFYEMBED (#1132),
+      `synth verify-embedder` — "the embedder side of the register contract, mechanically checked".
+      jess HAS an embedder keeping that contract, so this was testable against the real build rather
+      than read about. It found a real defect in jess's linked image on the first run.
+
+      *** WHAT SYNTH'S OWN HELP SAYS, AND WHY IT NAMED JESS'S SITUATION EXACTLY ***
+        "Run it over the final linked image — it checks the emitted code the way -ffixed-r9/-r10/-r11
+         cannot (a flag that silently stopped applying looks exactly like one that works)."
+      jess's build.sh compiles harness.c and init.c with exactly `-ffixed-r9 -ffixed-r10 -ffixed-r11`
+      and the contract has been BELIEVED on the strength of those flags since AFD-051. Believed, never
+      checked. That is the vacuous-check shape one level up: not a gate that cannot fail, but a
+      compiler flag nobody had confirmed still applies.
+
+      *** RESULT: THE FLAGS DO APPLY — AND THE IMAGE HAD A REAL W^X DEFECT ANYWAY ***
+      First run, 11 refusals, in two distinct classes:
+        3 x <_reset> writes to r9/sl/fp  -> the LEGITIMATE establishment site (boot.S sets the three
+            registers before the first export runs). `--allow-writer _reset` acknowledges exactly that
+            symbol and clears them. That is the flag working as designed.
+        8 x "undecodable bytes in an executable region - refused (fail-closed)" in
+            <jess_wasm_data_blob> and <jess_wasm_data_segs>.
+      The second class is the finding. Root cause in link.ld:
+            .text : { *(.text*) *(.rodata*) } > ITCM
+      rodata was FOLDED INTO .text, so the output section inherited AX and 43,005 bytes of wasm data
+      blob were mapped EXECUTABLE. `nm` reported jess_wasm_data_blob as `T`, not `R`. synth could not
+      decide - it must disassemble an executable region, hits data, and refuses fail-closed. That
+      refusal is correct behaviour, and the W^X violation was real regardless of who noticed it.
+      It matters on the real target rather than only aesthetically: the RT1176's M7 HAS an MPU (unlike
+      the F100, AFD-096), and DD-016 loads to RAM in TCM. A deny-by-default region policy is precisely
+      what would forbid a 43 KB executable data blob.
+
+      *** FIX AND VERIFICATION ***
+      link.ld now gives rodata its own output section:
+            .text   : { *(.text*) }   > ITCM      0x9c6e  AX
+            .rodata : { *(.rodata*) } > ITCM      0xa919  A     <- allocatable, NOT executable
+            jess_wasm_data_blob:  T -> R
+            verify-embedder OK: 0 reserved-register writes in 167 instructions across 26 symbols,
+                                with _reset's 3 acknowledged.
+      So the -ffixed-r9/-r10/-r11 flags ARE applying — now demonstrated rather than assumed, which is
+      the whole value of the check.
+
+      *** WIRED AS A GATE, WITH A NEGATIVE CONTROL ***
+      CI now runs verify-embedder on the linked image, plus a control asserting it still REFUSES when
+      the establishment site is NOT acknowledged (exit 1 without --allow-writer, exit 0 with it —
+      verified locally both ways). Without that control a verify-embedder that had become incapable of
+      refusing would pass the gate and prove nothing.
+      CHECKED with 0.62.0, BUILT with the pinned synth 0.60.0. The asymmetry is deliberate and is not
+      drift: the subject under test is JESS'S EMBEDDER (harness.c + boot.S + link.ld), not synth's
+      output, so inspecting a pinned build with a newer synth changes no artifact. Bumping the build
+      pin is a separate reviewed change needing the cascade oracles re-verified.
+
+      *** WHAT IS NOT ESTABLISHED HERE ***
+      The image has NOT been executed since the linker change - Renode is not available on this machine,
+      so TEST-PIX-032/033 in CI are the verdict on whether execution still matches relay's SIL
+      reference. "It links and passes the ABI check" is not "it works", and the linker change moved
+      section addresses. If CI goes red the fix is wrong and the finding stands alone.
+    tags: [synth, release-watch, embedder-abi, w-xor-x, linker, negative-control, afd-051, dd-016]
+    fields:
+      detected-by: release-watch on synth v0.62.0, run against jess's real linked image, 2026-09-06
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T14:47:13Z
