@@ -5243,3 +5243,72 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-05T22:56:21Z
+
+  - id: AFD-098
+    type: ai-found-defect
+    title: two of the five permanently-0% coverage rules are UNSATISFIABLE BY CONSTRUCTION (score/safety-case vocabularies jess has zero artifacts of); the other three are real V holes whose satisfying link type rivet does not document
+    status: open
+    description: |-
+      2026-09-06. The session-start report has carried five coverage rules at 0.0% for the whole
+      campaign. They read as a to-do list. Audited them, and they are TWO DIFFERENT THINGS that should
+      not be reported as one.
+
+      *** TWO OF THE FIVE ARE UNSATISFIABLE BY CONSTRUCTION - jess has ZERO of the required types ***
+        test-spec-verifies-req   0/25   from the SCORE schema (Eclipse S-CORE):
+              required-link: fully-verifies   target-types: [stkh-req, feat-req, comp-req, aou-req]
+              jess has stkh-req 0, feat-req 0, comp-req 0, aou-req 0 - none of the four exists here,
+              and jess uses `verifies` -> `requirement` (the dev vocabulary) instead.
+              THE V IS ACTUALLY CLOSED where this rule reports 0: all 25 test-specs carry an outgoing
+              `verifies`, and REQ-PIX-004 shows `Incoming: verified-by <- TEST-PIX-028 (verifies)`.
+              The rule is measuring an S-CORE-shaped V that jess does not use. It can never pass.
+        goal-has-context         0/9    from the SAFETY-CASE schema:
+              required-backlink: scoped-by   from-types: [safety-context]
+              jess has safety-context 0. Same shape: no artifact of the required type exists.
+      These two lines are NOISE. Not "work not done yet" - work that CANNOT be done without adopting a
+      vocabulary jess deliberately does not use. A permanently-0% line in a report every session is how
+      people learn to ignore the report; it is the gate-potency failure mode in slow motion, on the
+      measurement side rather than the gate side.
+
+      *** THREE ARE REAL GAPS - both endpoint types exist and are unconnected ***
+        constraint-has-requirement            0/11   system-constraint(11) -> requirement(24)
+        controller-constraint-has-requirement 0/16   controller-constraint(16) -> requirement(24)
+        stpa-constraints-provide-evidence     0/11   system-constraint(11)
+      The STPA side is fully wired BACKWARD - constraint-has-hazard 11/11, controller-constraint-has-uca
+      16/16, hazard-has-constraint 11/11, all 100%. SC-001..004 each carry `prevents -> H-00x`. What is
+      missing is entirely FORWARD: not one safety constraint traces to a requirement. So the hazard
+      analysis and the requirements are two disconnected halves, and the safety analysis is not driving
+      the requirements it exists to justify. That is a genuine V-model hole and worth closing.
+
+      *** WHY IT IS NOT CLOSED IN THIS TICK: THE SATISFYING LINK TYPE IS NOT DISCOVERABLE ***
+      These three rules come from the EMBEDDED BRIDGE schemas (stpa-dev.bridge, safety-case-stpa.bridge).
+      `rivet docs schema/<name>` serves every other schema but returns nothing for the bridges, and the
+      rules do not appear under any documented topic - so a user can see the rule fail in the report and
+      has no way to look up what would satisfy it. Confirmed empirically rather than assumed: a
+      semantically correct link (REQ-PIX-004 `satisfies` SC-002 - REQ-PIX-004's PART-P02(a) requires the
+      gust failsafe to forward per-motor commands BYTE-EXACT with no re-mix, which is exactly what
+      SC-002 "actuator commands shall stay within authority and be correctly mixed" constrains) left the
+      metric at 0/11. The link was UNLINKED again immediately rather than left in place.
+      I deliberately did NOT brute-force the remaining link types. Guessing links into a safety artifact
+      store until a counter moves is the vacuous-metric failure this campaign keeps finding, and it
+      would produce a 100% that means nothing. The correct move is to learn the intended semantics and
+      link truthfully, which needs the rule definition. Filed upstream.
+
+      *** WHAT SHOULD HAPPEN ***
+        1. rivet: make bridge-schema rules discoverable (upstream, filed).
+        2. jess: once the intended link is known, wire SC-* and CC-* forward to requirements - TRUTHFULLY,
+           one at a time, not to satisfy a counter.
+        3. jess: decide whether loading the score schema is intended at all. If jess will never use
+           S-CORE types, its rules should not be scoring jess's report. That is a rivet.yaml decision and
+           is deliberately NOT taken unilaterally here - it changes what the compliance report claims.
+      NOTE the arithmetic is also worth a second look: `rivet query '(= type "system-constraint")'`
+      returned 5 while coverage counts 11 over the same store. Not chased this tick; recorded so the
+      next person does not assume either number.
+    tags: [rivet, coverage, vacuous-metric, stpa, v-model, schema, tool-friction, gate-potency]
+    fields:
+      detected-by: jess auditing the session-start coverage report line by line, 2026-09-06
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T02:48:01Z
