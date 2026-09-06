@@ -5312,3 +5312,65 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-06T02:48:01Z
+
+  - id: AFD-099
+    type: ai-found-defect
+    title: "CORRECTION to AFD-098: the 0/11 constraint gap is 5 jess constraints plus 6 that belong to GALE — the coverage rule scores jess on another repo's artifacts, and jess's real obligation is 0/5"
+    status: open
+    description: |-
+      2026-09-06. Follow-up on AFD-098, and a CORRECTION to it. AFD-098 flagged that
+      `rivet query '(= type "system-constraint")'` returns 5 while `rivet coverage` counts 11, and
+      recorded it as an unchased arithmetic oddity. Chased it. It is not an arithmetic bug and it
+      materially changes what AFD-098 said.
+
+      *** THE 11 IS 5 JESS CONSTRAINTS PLUS 6 THAT BELONG TO GALE ***
+        query  -> SC-001..SC-005                       jess's own
+        list   -> SC-001..SC-005 + gale:SC-1..gale:SC-6
+      The six carry a `gale:` prefix and appear in no jess artifact file; they are CROSS-REPO
+      EXTERNALS resolved by `rivet sync` from the git-link declared in rivet.yaml into .rivet/repos/gale.
+      They are gale's kernel safety constraints: scheduler returns highest-priority ready thread, mutex
+      priority inheritance, semaphore count bounded, blocking primitives support timeout, stack bounds
+      checked, arithmetic overflow-checked. So `query` scoping to the local store and `list`/`coverage`
+      including resolved externals is a defensible difference, not a defect.
+
+      *** BUT THE COVERAGE RULE IS THEREFORE SCORING JESS ON WORK JESS DOES NOT OWN ***
+      `constraint-has-requirement 0/11` asks for every system-constraint IN SCOPE to trace forward to a
+      requirement, and 6 of the 11 are gale's. Even if jess wired all five of its own constraints
+      perfectly, the rule would read 5/11 = 45.5% and stop - the remaining six are in gale's lane and
+      jess cannot close them without inventing links from gale's kernel constraints to jess's flight
+      requirements, which would be false.
+      So this is a SECOND form of "unsatisfiable by construction", subtler than the score-vocabulary one
+      in AFD-098: the rule is satisfiable in principle but not BY JESS, and the report does not say so.
+      The hazard it creates is specific: the obvious way to make the number go up is to link gale's
+      constraints to jess's requirements, and those links would be fabrications.
+
+      *** CORRECTION TO AFD-098 ***
+      AFD-098 (merged as c647ce6) states the real gap as "system-constraint(11) -> requirement(24)".
+      That is wrong in the denominator. THE REAL JESS-OWNED GAP IS 0/5, not 0/11. The three "real gap"
+      rules are still real - not one of jess's own five constraints traces forward to a requirement, and
+      the STPA analysis is still disconnected from the requirements it exists to justify - but the size
+      of jess's obligation was overstated by more than double, and the missing distinction is ownership,
+      not counting.
+      Same likely applies to `controller-constraint-has-requirement 0/16`; not verified this tick, and
+      recorded as unverified rather than assumed by analogy - the whole point of this finding is that
+      assuming the denominator is yours is what went wrong.
+
+      *** WHAT THIS ASKS OF THE TOOL ***
+      Added to rivet#895 rather than filed separately, since both are about a coverage report that
+      cannot be acted on from what it prints: a coverage row should distinguish LOCAL from EXTERNAL
+      subjects, or offer a local-only view. A single 0/11 that silently mixes two repos' obligations
+      invites exactly the fabricated links it should prevent. The `external-anchor` type already exists
+      in the common schema for "the chain hands off to a supplier here" - the same idea applied to
+      coverage denominators.
+    tags: [rivet, coverage, cross-repo, externals, vacuous-metric, self-correction, afd-098, stpa]
+    fields:
+      detected-by: jess chasing the query-vs-coverage count discrepancy it had recorded as unchased, 2026-09-06
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T02:52:57Z
+    links:
+      - type: corrects
+        target: AFD-098
