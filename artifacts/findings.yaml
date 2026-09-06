@@ -5786,3 +5786,71 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-09-06T14:47:13Z
+
+  - id: AFD-106
+    type: ai-found-defect
+    title: "synth v0.62.0 per-piece watch: TABLEDANGLE/MEMISOLATE/LOOPCONFORM do not reach jess's paths — emitted objects are BYTE-IDENTICAL to 0.60.0 on m7dp and m4f; pin deliberately not bumped because it would widen the varve-layer gap"
+    status: open
+    description: |-
+      2026-09-06. Second half of the synth v0.62.0 release-watch. AFD-105 tested ONE piece (the new
+      `verify-embedder` subcommand, which found a real W^X defect). The loop's rule is per-piece, so
+      this covers the rest: the three behaviour-changing artifacts in the release that could touch
+      jess's paths — RQ-62-TABLEDANGLE (#1102, refuse a funcref table naming a DECLINED function on the
+      host-linked paths), RQ-62-MEMISOLATE (#1145, per-memory region table as data) and
+      RQ-62-LOOPCONFORM (#1136, release loop-conformance).
+
+      *** VERDICT: CLEAN NO-REGRESSION, AND STRONGER THAN "SAME BEHAVIOUR" ***
+      Surface diff first: `compile` gained NO new flags between 0.60.0 and 0.62.0; the only new
+      subcommand is verify-embedder. So the three artifacts above are behaviour changes and had to be
+      differentiated by running them, not by reading help text.
+      Ran AFD-046's per-core matrix on the REAL fused cascade (.scratch/invoke/c.loom.wasm, 63,156 B —
+      falcon v1.135.0 -> meld --pack-rebase -> loom), `--relocatable --embedder-data-init
+      --embedder-global-init`, on both versions:
+          cortex-m7dp   0.60.0 exit 0, 0 skips, 0 undefined   |  0.62.0 identical
+          cortex-m4f    0.60.0 exit 0, 0 skips, 3 undefined   |  0.62.0 identical
+          cortex-m3     0.60.0 exit 1, 14 skip lines          |  0.62.0 identical
+      And the strong form: THE EMITTED OBJECTS ARE BYTE-IDENTICAL between the two synth versions on
+      both cores jess targets (m7dp and m4f, `cmp` clean). That is a stronger no-regression statement
+      than matching exit codes and counts, which is what a per-piece watch is for.
+      The m4f obligation is unchanged and is exactly the three symbols AFD-046 named, reported by
+      SYMBOL NAME as the loop requires:
+          __aeabi_f2lz   __aeabi_l2f   __aeabi_ul2f
+      The m3 declines are unchanged too (func_14..func_21 among them) and remain correct behaviour, not
+      a defect: falcon was never targeted at a soft-float core.
+      So TABLEDANGLE / MEMISOLATE / LOOPCONFORM do not reach jess's paths. Worth knowing rather than
+      assuming — a release whose notes name three new refusal gates is exactly the kind that is assumed
+      to change something.
+
+      *** THE PIN IS DELIBERATELY *NOT* BUMPED, AND THE REASON MATTERS ***
+      The obvious follow-through is 0.60.0 -> 0.62.0 in tools/deps/artifacts.pins, and the evidence
+      would support it. Not taken, because it moves the WRONG WAY on drift:
+          varve layer      synth 0.58.0
+          campaign pin     synth 0.60.0     <- already a documented, deliberate divergence
+          latest           synth 0.62.0
+      The pins file states the divergence in its own comment. Bumping to 0.62.0 would WIDEN the gap
+      with the layer, and the only gain is removing one CI fetch step (AFD-105 fetches 0.62.0 solely to
+      run verify-embedder against a 0.60.0-built image — an asymmetry that is deliberate, since the
+      subject under test is jess's embedder, not synth's output).
+      AFD-094 fixed the meld case by aligning ci.yml TO the varve pin, not by running ahead of it. Doing
+      the opposite here on the strength of a byte-identical diff would be churn in the wrong direction.
+      The right move is the layer catching up; recorded for when it does.
+      NOTE the pin path is `fg60/synth` — a VERSION ENCODED IN A FILENAME, so any bump also renames a
+      path that build.sh and check.sh both hardcode. That is the same tag/version conflation varve
+      raised about jess's releases (AFD-102), in a second place. Not fixed here; recorded.
+
+      *** WHAT THIS TICK DID NOT ESTABLISH ***
+      The 0.62.0-built objects were NOT executed. They are byte-identical to the 0.60.0 ones on both
+      targeted cores, so execution equivalence follows from the bytes rather than from a run — which is
+      sound for identical objects and is stated that way rather than as "0.62.0 executes correctly".
+    tags: [synth, release-watch, per-core-matrix, drift, varve, afd-046, afd-105, no-regression]
+    fields:
+      detected-by: per-piece release-watch of synth v0.62.0 against the real fused cascade, 2026-09-06
+      severity: minor
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-09-06T18:45:49Z
+    links:
+      - type: traces-to
+        target: AFD-105
