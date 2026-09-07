@@ -133,6 +133,10 @@ jobs:
       # 2026.09.2 exists. This loop bumps pins on evidence; a rule that lives only in a
       # release note is one it will not see.
       - name: varve realm/pin agree (trust root can verify the pinned layer)
+        # This job checks out to `path: jess`, so every step that touches the repo needs
+        # working-directory. Omitting it cost a red run: exit 127, "No such file or
+        # directory", which reads like a missing script rather than a wrong cwd.
+        working-directory: jess
         run: |
           tools/varve/check-realm.sh --self-test
           tools/varve/check-realm.sh
