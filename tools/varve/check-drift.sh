@@ -23,7 +23,7 @@ ci_pin() { # tool -> the version ci.yml downloads, or empty
 }
 ver() { "$@" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
 
-compared=0; single=0
+compared=0; single=0; advisory=0
 printf '%-8s  %-12s  %-12s  %-12s  %s\n' TOOL PATH VARVE-PIN CI-YML STATUS
 for t in rivet spar meld synth loom sigil; do
   p="$(ver "$t")"
@@ -48,23 +48,52 @@ for t in rivet spar meld synth loom sigil; do
   #     nothing is not agreement either. It is now "single-source (not compared)".
   #   - if EVERY tool was absent the script still exited 0 with "no drift", i.e. a green
   #     verdict on a toolchain it never inspected. Tracked below and now an error.
+  # SEVERITY SPLIT. One undifferentiated "DRIFT" conflated two very different things,
+  # and the row that mattered was invisible inside the row that never goes away:
+  #
+  #   BLOCKING  ci.yml != varve pin. CI qualifies the project against a DIFFERENT
+  #             toolchain than the pin claims. Both are committed files, so this is
+  #             actionable and can actually be driven to green.
+  #   ADVISORY  only PATH disagrees. A developer's stale shell binary. It cannot be
+  #             fixed by editing the repo, so it is permanently red on any machine
+  #             without varve shims — which is why the single verdict carried no
+  #             information and went unread for weeks.
+  #
+  # PATH still MATTERS: it is what caused meld#390 (a report filed against the PATH
+  # binary's version). So advisory is loud, and --strict still fails on it. What
+  # changed is that it no longer masks the blocking class.
   n_sources=${#seen[@]}
   if   [ "${uniq_n:-0}" -eq 0 ]; then st="absent (not checked)"
   elif [ "$n_sources" -eq 1 ]; then st="single-source (not compared)"; single=$((single+1))
   elif [ "${uniq_n:-0}" -eq 1 ]; then st="ok"; compared=$((compared+1))
-  else st="DRIFT"; drift=1; fi
+  elif [ -n "$v" ] && [ -n "$c" ] && [ "$v" != "$c" ]; then
+    st="DRIFT-BLOCKING (ci.yml != pin)"; drift=1; compared=$((compared+1))
+  else
+    st="drift-advisory (PATH only)"; advisory=$((advisory+1)); compared=$((compared+1))
+  fi
   printf '%-8s  %-12s  %-12s  %-12s  %s\n' "$t" "${p:--}" "${v:--}" "${c:--}" "$st"
 done
 
 echo
+if [ "$advisory" -gt 0 ]; then
+  echo "ADVISORY: $advisory tool(s) differ ONLY on PATH — ci.yml and the varve pin agree."
+  echo "  Harmless for the BUILD (scripts resolve explicitly or via varve), but it is exactly"
+  echo "  what produced meld#390: a defect filed against the PATH binary's version."
+  echo "  Before citing ANY version upstream, quote \`varve run <tool> --version\`, not PATH."
+fi
 if [ "$drift" -ne 0 ]; then
   cat <<'MSG'
-DRIFT: at least one tool resolves to different versions depending on where you look.
-Reconcile before reporting any result upstream — a defect report cites a version, and
-a wrong citation costs a supplier's attention (AFD-045, meld#390).
+
+DRIFT-BLOCKING: ci.yml and the varve pin name DIFFERENT versions. CI is qualifying this
+project against a toolchain the pin does not claim, so a green board is a verdict about
+a toolchain nobody declared. Both are committed files — fix one of them (AFD-045).
   varve run <tool> ...   runs the PINNED binary regardless of PATH
   varve verify           re-checks the pinned layer and reports PATH shadowing
 MSG
+  exit 1
+fi
+if [ -n "${STRICT:-}" ] && [ "$advisory" -gt 0 ]; then
+  echo "STRICT: advisory drift is fatal in this mode (use before citing a version upstream)." >&2
   exit 1
 fi
 if [ "$compared" -eq 0 ]; then
@@ -72,6 +101,6 @@ if [ "$compared" -eq 0 ]; then
   echo "A 'no drift' verdict here would be green on a toolchain never inspected." >&2
   exit 2
 fi
-echo "no drift: all $compared tool(s) found in 2+ sources agree."
+echo "no blocking drift: ci.yml and the varve pin agree for every tool compared ($compared)."
 [ "$single" -gt 0 ] && echo "($single row(s) 'single-source' and any 'absent' rows were compared against nothing — not evidence.)"
 exit 0
