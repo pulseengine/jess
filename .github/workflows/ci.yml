@@ -127,6 +127,19 @@ jobs:
           sh -c 'exit 3' | cat || rc=$?
           [ "$rc" = "3" ] || { echo "pipefail is NOT active: a failing left-hand side reported $rc — piped gates can report green while failing"; exit 1; }
           echo "pipefail active: a failing left-hand side propagates (rc=$rc)"
+      # varve's rolling trust root rotated in v0.32.1. The published varve-realms.toml is
+      # byte-identical to ours EXCEPT the trust-root line, so vendoring it reads as a
+      # one-line no-op diff and would orphan our pin (`No valid signatures`) until layer
+      # 2026.09.2 exists. This loop bumps pins on evidence; a rule that lives only in a
+      # release note is one it will not see.
+      - name: varve realm/pin agree (trust root can verify the pinned layer)
+        # This job checks out to `path: jess`, so every step that touches the repo needs
+        # working-directory. Omitting it cost a red run: exit 127, "No such file or
+        # directory", which reads like a missing script rather than a wrong cwd.
+        working-directory: jess
+        run: |
+          tools/varve/check-realm.sh --self-test
+          tools/varve/check-realm.sh
       - name: rivet sync + validate
         working-directory: jess
         run: |
