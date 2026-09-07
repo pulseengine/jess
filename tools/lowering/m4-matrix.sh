@@ -14,7 +14,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/m4matrix}"; mkdir -p "$OUT"
-SYNTH="${SYNTH:-$ROOT/.scratch/fg60/synth}"
+SYNTH="${SYNTH:-$ROOT/.scratch/synthpin/synth}"
 FUSED="${FUSED:?set FUSED to a loom-optimised fused cascade .wasm}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 

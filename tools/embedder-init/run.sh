@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/einit}"; mkdir -p "$OUT"
 PY="${PY:-python3}"
 MOD="${MOD:?set MOD to the fused, loom-optimised module}"
-SYNTH="${SYNTH:-$ROOT/.scratch/fg60/synth}"
+SYNTH="${SYNTH:-$ROOT/.scratch/synthpin/synth}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 [ -f "$MOD" ] || fail "module not found: $MOD"
 command -v wasm-tools >/dev/null || fail "wasm-tools not on PATH"
