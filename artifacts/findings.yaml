@@ -6261,3 +6261,72 @@ artifacts:
       detected-by: clean-room verification of AFD-109/AFD-110 plus a retrospective check-drift run, 2026-09-07
       severity: critical
       triage-status: confirmed
+
+  - id: AFD-112
+    type: ai-found-defect
+    title: "varve v0.32.1 rotated the rolling trust root and the correct consumer action is DO NOTHING — but the new realms file differs from ours by one line, so taking it reads as a no-op diff and would orphan the pin; guarded"
+    status: open
+    description: |-
+      2026-09-07. varve v0.32.1 (published 11:36) is NOT the consumer-API release jess asked for on
+      varve#130. Its own notes: "There is no code change from v0.32.0 — no behaviour, no CLI, no
+      format." It exists to publish a rotated rolling trust root, 4e771dc6... -> 7d3b892e...
+
+      *** JESS'S CORRECT ACTION IS TO DO NOTHING, AND THAT IS VARVE'S OWN INSTRUCTION ***
+      Layers 2026.08.0 .. 2026.09.1 are signed by the OLD root; 2026.09.2 will be the first signed
+      by the new one. jess pins layer 2026.08.4 and carries the OLD root, which is the CORRECT
+      pairing. Verified rather than assumed: `varve verify` reports "layer 2026.08.4 ... verified:
+      signature OK, 11 tool(s) match their signed digests". (It exits 1 only on REQ-SHADOW-001 PATH
+      shadowing of 7 tools — the ADVISORY class AFD-111 just separated from blocking drift, so the
+      two checkers agree.)
+      Ran varve's own falsification test from the release notes: the published rolling.pub and the
+      published varve-realms.toml name the same root — AGREE.
+
+      *** THE HAZARD, AND WHY IT WARRANTS EXECUTABLE GUARDING ***
+      The published varve-realms.toml is BYTE-IDENTICAL to jess's except the trust-root line
+      (measured: diff is empty once that line is masked). So "vendor the new realms file" reads in
+      review as a one-line no-op, and produces:
+          error: manifest signature verification failed: ... No valid signatures
+      This repo runs an autonomous 4h loop that bumps pins on evidence — it bumped rivet and spar to
+      the pin in AFD-111 the same day. A rule that exists only in a release note is a rule that loop
+      will not see. tools/varve/check-realm.sh makes it executable: it refuses a realm/pin pairing
+      whose root cannot verify the pinned layer, in EITHER direction, plus an unrecognised root.
+      --self-test exercises five rows and BOTH failure modes are OBSERVED failing, including the
+      trap itself. The layer comparison is numeric, not lexical: 2026.09.10 must sort ABOVE the
+      2026.09.2 boundary and a string compare puts it below.
+
+      *** varve-core 0.32.1 AGAINST JESS'S FOUR ASKS: TWO LANDED ***
+      (a) generic held-payload kind + locate -> LANDED. `kind::PayloadKind` has 8 variants
+          (Tool/Crate/Wit/ZephyrModule/Sdk/WasmComponent/Vsix/Layer), `is_dispatchable()` true only
+          for Tool, and `UnknownKind` for forward compatibility. Its doc restates jess's own
+          argument: "Every other kind is held, not dispatched — its identity is (name, version,
+          platform)". Locate exists at the LIBRARY level via `store::payload_rel_path` and
+          `Store::find_anywhere`, which reach kinds the CLI has no export verb for (there are
+          export-cargo/-vsix/-bazel/-crates-vendor/-bazel-distdir, but none for wit/sdk/zephyr).
+          That is exactly the "consume the crate instead of parsing a command" the operator asked
+          for.
+      (b) the crate must be able to say `verified` at ALL -> LANDED. `reverify::verify_installed(
+          store, layer, verifier, platform) -> Result<usize, ReverifyError>` re-verifies an
+          installed layer against the trust root and returns the number of binaries checked, and
+          `verify::PinnedKeyVerifier` is a PUBLIC constructible impl of the `ManifestVerifier`
+          trait. So a jess reader can make a real verified claim instead of the weaker sentence
+          jess promised on varve#130 ("layer resolved, not re-verified at read time").
+      (c) crate/format version self-report -> NOT LANDED. No `pub fn version`, no FORMAT_VERSION
+          constant; the only version is the Cargo package version, which a consumer reads for its
+          OWN build, not for the crate's contract. This was the operator's framing: "with device
+          version x and varve crate y, and if varve changes to z we have one way to detect".
+      (d) query by type/field -> NOT LANDED beyond `discover::find_pin`.
+
+      *** THE CATALOGUE-READER PREMISE IS STILL NOT MET — CHECKED, NOT ASSUMED ***
+      The plan recorded on varve#130 was to build jess's catalogue reader against `resolve()`. No
+      layer carries a hardware-catalogue payload. The pinned layer's only held payloads are
+      `rivet-sdlc/0.34.0` (966,866 B) and `spar-aadl/0.40.0` (4,673,917 B), single .crate files that
+      jess consumes NEITHER of today. Building "consume the catalogue from varve" now would be
+      building against nothing — the same stale-premise error as AFD-107, checked this time before
+      writing code rather than after.
+      Incidental confirmation: those held payload versions are spar 0.40.0 and rivet 0.34.0, the
+      exact versions AFD-111 aligned CI to.
+    tags: [varve, trust-root, supply-chain, varve-core, premise-check, afd-111, varve-130]
+    fields:
+      detected-by: assessing varve v0.32.1 and varve-core 0.32.1 against jess's four consumer asks, 2026-09-07
+      severity: major
+      triage-status: confirmed
