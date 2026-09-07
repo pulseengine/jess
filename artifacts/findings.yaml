@@ -6100,3 +6100,65 @@ artifacts:
       detected-by: implementing gust:hal as real MMIO and running it on F100 silicon, 2026-09-07
       severity: major
       triage-status: confirmed
+
+  - id: AFD-110
+    type: ai-found-defect
+    title: "jess's cascade fusion was NOT REPRODUCIBLE — two consecutive fuses of identical inputs produced different binaries, making the attestation chain unfalsifiable; fixed with --reproducible, and the lowered objects are byte-identical to the recorded baseline"
+    status: open
+    description: |-
+      2026-09-07. Per-piece release-watch of meld v0.55.0 (2026-09-07), which adopts
+      validation-by-default on the --memory shared paths — the change jess argued for on
+      meld#390/#391. jess fuses with --pack-rebase, so this is jess's build path.
+
+      *** THE DEFECT WAS JESS'S, AND IT WAS INVISIBLE ***
+      hardware/renode/cascade-invoke/build.sh did not pass --reproducible (meld#325). Measured on
+      the real five stage inputs, two CONSECUTIVE fuses with jess's exact invocation:
+          run 1  md5 57a7cefe4ed956579194a789010575c7
+          run 2  md5 8123737100fea61640748dfd4ab93ee8
+      Every rebuild produced a different binary, because meld derives the attestation id from a
+      random UUID and the timestamp from the wall clock. That makes the attestation chain this
+      campaign rests on UNFALSIFIABLE: you cannot claim a shipped image came from these inputs if
+      rebuilding never reproduces it. Nothing in jess would have reported this — the artifact was
+      never compared against a second build of itself.
+      WITH --reproducible: two fuses agree exactly (md5 44eea1de03760aa01a43c7ab42ef3083). The flag
+      is supported by the PIN (0.52.0), so this needed no version bump.
+
+      *** WHAT IT COSTS, MEASURED RATHER THAN ASSUMED ***
+      --reproducible is NOT metadata-only. `component-provenance` changes too:
+          without:  .scratch/v1341/iekf.wasm, .scratch/v1341/rate.wasm, ...
+          with:     component-8, component-0, ...
+      Input NAMES become positional placeholders. The input HASHES are preserved, and those are the
+      real identity — tools/deps/artifacts.pins already maps 43982be4...=rate, 076b8a81...=mixer,
+      d85c325f...=attitude, 32a45a53...=position, 600f9047...=iekf. The discarded names were local
+      .scratch paths, not stable identities, so the trade is favourable and was taken deliberately.
+      The flag's help text describes only the attestation id and timestamp, so this behaviour is
+      undocumented; raised as the second half of meld#401.
+
+      *** NOTHING THAT REACHES SILICON CHANGED — THE DECISIVE CHECK ***
+      Code and data are byte-identical with and without the flag (module diffed with BOTH metadata
+      sections stripped: 7,949 identical lines). And the lowered ARM objects match the AFD-106
+      baseline exactly, despite the fused wasm shrinking 63,156 -> 61,167 B:
+          cortex-m7dp  md5 5362d8318f0066266d7dc29ba0c7563c  41,140 B   (AFD-106 baseline)
+          cortex-m4f   md5 90e8fa9bee4b31c54a64e9306685b955  42,562 B   (AFD-106 baseline)
+      A size change in the fused artifact with an unchanged lowered object is exactly the shape that
+      would otherwise read as a regression; recording both numbers is what makes it legible.
+
+      *** THE GATE ***
+      build.sh now fuses TWICE and requires byte-equality. A flag that silently stopped applying
+      looks exactly like one that works, and nothing else in the pipeline would notice. The failing
+      case is demonstrated observable by the two differing md5s above — the gate is not vacuous.
+
+      *** meld v0.55.0 PER-PIECE VERDICT: CLEAN, with one incomplete fix ***
+      - fused CODE+DATA byte-identical 0.52.0 -> 0.55.0 on jess's real inputs; validation-by-default
+        cost nothing and would not have been wanted opt-in.
+      - the "Fusing N components" fix jess reported on #390 is CONFIRMED on the console (10 -> 5 for
+        5 input files) but does NOT reach the attestation, which still records components_fused=10
+        under 0.55.0 (modules_merged=5 is correct in both). The corrected number reaches the line a
+        consumer reads once while building, and not the artifact that is shipped, signed and
+        audited. Filed as meld#401. Not blocking jess: jess reads modules_merged.
+      Pin unchanged at 0.52.0 — the fused payload is identical, so a bump buys nothing today.
+    tags: [meld, release-watch, reproducibility, attestation, supply-chain, meld-325, meld-401, afd-106]
+    fields:
+      detected-by: per-piece release-watch of meld v0.55.0 against the real fused cascade, 2026-09-07
+      severity: major
+      triage-status: confirmed
