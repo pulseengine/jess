@@ -6405,3 +6405,68 @@ artifacts:
       detected-by: running gale-nano 0.7.0's dispatch loop on F100 silicon against the wasmtime reference, 2026-09-07
       severity: major
       triage-status: confirmed
+
+  - id: AFD-114
+    type: ai-found-defect
+    title: "synth 0.64.0 fixes a SILENT WRONG-ANSWER bug on the ARM direct selector — 'every --relocatable compile', which is every lowering jess does; campaign pin bumped 0.60.0 -> 0.64.0 and PROVEN behaviour-neutral (all six artifacts byte-identical)"
+    status: open
+    description: |-
+      2026-09-07. Per-piece release-watch of synth v0.64.0 (published 18:42).
+
+      *** THE PIECE THAT REACHES JESS: #1189 / RQ-64-JOINALIAS ***
+      On the ARM DIRECT SELECTOR — which synth's own PR describes as "every --relocatable compile
+      per #197", i.e. every lowering jess performs — an if/else join register could ALIAS a live
+      register-homed local. `local.get` of a register-homed local pushes the home register
+      UNCOPIED; when that is the then-arm result of a value-carrying if/else, the join
+      `mov R_then, R_else` on the else path WRITES THE LOCAL. Exit 0, no decline, wrong answer.
+      Reproduced on jess's exact invocation (-t cortex-m3 --cortex-m --relocatable):
+          0.60.0 (jess's pin)          0.64.0
+            c: mov  r0, r2               6: mov  r2, r0     <- home copied to a temp first
+            e: adds r3, r0, r0           e: mov  r2, r3     <- join writes the TEMP
+               ^ join wrote r0, which    10: adds r4, r2, r0 <- r0 intact
+                 IS local 0's home
+      So ir0(9, 0) returns 10 under the pin where 14 is correct.
+
+      *** WAS JESS EXPOSED? NO — AND THE MEASUREMENT IS NOT VACUOUS ***
+      Every artifact jess lowers is BYTE-IDENTICAL across 0.60.0 -> 0.64.0:
+          fused cascade   cortex-m7dp   md5 5362d831... (the AFD-106 baseline)
+          fused cascade   cortex-m4f    md5 90e8fa9b... (the AFD-106 baseline)
+          gale-nano 0.7.0 cortex-m3     4,775 B, same 6 undefined symbols
+          f100-init probe / gust:hal probe  cortex-m3
+          gust passthrough (self-contained) md5 13495328... — ALSO still matches the COMMITTED
+            .elf, i.e. the image that has run on real F100 silicon is unchanged
+      A byte-identical result is only evidence if the differential CAN fire. POSITIVE CONTROL: a
+      module carrying the #1189 `ir0` shape DIFFERS (504 -> 510 B) on jess's exact invocation.
+      synth's fix changes output only where the bug fired, so byte-identity across every jess
+      artifact means the shape does not occur in any function jess lowers.
+
+      *** THE PIN IS BUMPED, REVERSING THE STANDING POSITION, AND WHY ***
+      AFD-106 and AFD-108 declined bumps because the output was byte-identical and a bump widened
+      the varve-layer gap. Both those releases were no-regression watches. This one is different:
+      the pin CONTAINS a silent wrong-answer class on jess's exact path, and the bump is PROVABLY
+      behaviour-neutral today (six artifacts, byte-identical, verified end-to-end through
+      tools/deps/fetch.sh + check.sh and a full cascade rebuild: exit 0, 89,816 B linked,
+      0 undefined, 5/5 key symbols, fusion still byte-reproducible). Zero delta now, and the
+      wrong-answer class excluded later. The layer gap (varve 0.58.0) widens and is accepted;
+      artifacts.pins already records that synth is deliberately NOT varve-pinned.
+
+      *** TWO PIECES OF ACCRETION REMOVED IN THE SAME CHANGE ***
+      (a) The pin directory was named `fg60`, encoding 0.60.0 in a path — the version-in-a-filename
+          hazard AFD-106 flagged and did not fix. Renamed to `synthpin` (version-neutral) across
+          all 16 references in 6 files, so the next bump cannot produce a lying filename.
+      (b) CI fetched synth 0.62.0 SEPARATELY, purely because the old pin predated verify-embedder.
+          The pin now carries it, so that download was a stale version left behind by an earlier
+          bump — the exact drift-by-accretion this repo keeps finding. Removed; build and check now
+          use ONE synth. Verified locally that the pinned binary both accepts with --allow-writer
+          (exit 0) and still REFUSES without it (exit 1).
+
+      *** WHAT v0.64.0 DOES NOT FIX ***
+      synth#1191 (filed by jess at 14:54, before this 18:42 release) is untouched: gale-nano's
+      lowering under 0.64.0 is BYTE-IDENTICAL to 0.60.0 — the same six undefined symbols, and still
+      no symbol for the `gust:os/time@0.1.0` export the component declares. H3's second half
+      remains blocked there (AFD-113).
+    tags: [synth, release-watch, wrong-answer, arm, relocatable, pin-bump, drift, afd-106, afd-113]
+    fields:
+      detected-by: per-piece release-watch of synth v0.64.0 against every jess-lowered artifact, 2026-09-07
+      severity: critical
+      triage-status: confirmed

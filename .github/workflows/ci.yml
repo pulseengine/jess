@@ -430,37 +430,22 @@ jobs:
       # synth's own help names the hazard exactly: "a flag that silently stopped applying looks
       # exactly like one that works". This checks the EMITTED code instead.
       #
-      # CHECKED with synth 0.62.0, BUILT with the pinned synth. That asymmetry is deliberate and
-      # not drift: the subject under test is jess's embedder (harness.c + boot.S + the linker
-      # script), not synth's output, so using a newer synth to inspect a pinned build changes no
-      # artifact. Bumping the build pin is a separate reviewed change that needs the cascade
-      # oracles re-verified.
+      # CHECKED AND BUILT with the SAME pinned synth (0.64.0). This used to fetch 0.62.0
+      # separately because the pin (0.60.0) predated verify-embedder; the pin now carries it, so
+      # the second download was pure accretion — a stale version left behind by a bump is exactly
+      # the drift this repo keeps finding.
       #
       # _reset is the legitimate establishment site (boot.S sets R9/R10/R11 before the first
       # export runs); --allow-writer records that a human accepted that obligation for exactly
       # that symbol, and for no other.
-      - name: fetch synth 0.62.0 (for verify-embedder only — the build stays on the pin)
-        run: |
-          set -euo pipefail
-          gh release download v0.62.0 --repo pulseengine/synth \
-            --pattern '*x86_64-unknown-linux-gnu*' --pattern 'SHA256SUMS.txt' --dir /tmp/s062
-          cd /tmp/s062
-          exp=$(grep 'x86_64-unknown-linux-gnu' SHA256SUMS.txt | awk '{print $1}')
-          act=$(sha256sum ./*x86_64-unknown-linux-gnu*.tar.gz | awk '{print $1}')
-          test -n "$exp" && test "$exp" = "$act" || { echo "checksum mismatch"; exit 1; }
-          tar xzf ./*x86_64-unknown-linux-gnu*.tar.gz
-          install -m755 "$(find . -name synth -type f -perm -u+x | head -1)" /usr/local/bin/synth062
-          synth062 --version
-        env:
-          GH_TOKEN: ${{ github.token }}
       - name: embedder ABI — no code writes R9/R10/R11 outside the establishment site
-        run: synth062 verify-embedder --allow-writer _reset .scratch/invoke/invoke.elf
+        run: .scratch/synthpin/synth verify-embedder --allow-writer _reset .scratch/invoke/invoke.elf
       # NEGATIVE CONTROL: the check must still REFUSE when the establishment site is not
       # acknowledged. Without this, a verify-embedder that had quietly become incapable of
       # refusing would pass the step above and prove nothing.
       - name: embedder ABI — negative control (must refuse without --allow-writer)
         run: |
-          if synth062 verify-embedder .scratch/invoke/invoke.elf; then
+          if .scratch/synthpin/synth verify-embedder .scratch/invoke/invoke.elf; then
             echo "verify-embedder ACCEPTED an image whose boot code writes R9/R10/R11 — it can no longer refuse"; exit 1
           fi
           echo "negative control OK: unacknowledged reserved-register writes are refused"
@@ -473,7 +458,7 @@ jobs:
       - name: embedder-init — build the F100 image on the PIN, gated by verify-embedder
         run: |
           set -euo pipefail
-          REQUIRE_VERIFY=1 SYNTH=.scratch/fg60/synth SYNTH_VERIFY=/usr/local/bin/synth062 \
+          REQUIRE_VERIFY=1 SYNTH=.scratch/synthpin/synth SYNTH_VERIFY=$PWD/.scratch/synthpin/synth \
             hardware/silicon/f100-init/build.sh
       # The tables must be NON-EMPTY. An extractor that silently produced a zero-segment,
       # zero-global init would satisfy the obligation vacuously and link just as cleanly.
@@ -489,7 +474,7 @@ jobs:
           CPU="-mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb"
           arm-none-eabi-gcc -c $CPU -ffreestanding -O2 /tmp/ct.c -o /tmp/ct.o
           arm-none-eabi-gcc -c $CPU -ffreestanding -O2 hardware/silicon/f100-init/apply_init.c -o /tmp/ap.o
-          .scratch/fg60/synth compile .scratch/invoke/c.loom.wasm -t cortex-m4f --cortex-m \
+          .scratch/synthpin/synth compile .scratch/invoke/c.loom.wasm -t cortex-m4f --cortex-m \
             --relocatable --embedder-data-init --embedder-global-init -o /tmp/casc.o
           arm-none-eabi-ld -r /tmp/casc.o /tmp/ap.o /tmp/ct.o \
             "$(arm-none-eabi-gcc $CPU -print-libgcc-file-name)" -o /tmp/linked.o
@@ -534,7 +519,7 @@ jobs:
       - name: gust:hal — build the F100 MMIO image on the PIN, gated by verify-embedder
         run: |
           set -euo pipefail
-          REQUIRE_VERIFY=1 SYNTH=.scratch/fg60/synth SYNTH_VERIFY=/usr/local/bin/synth062 \
+          REQUIRE_VERIFY=1 SYNTH=.scratch/synthpin/synth SYNTH_VERIFY=$PWD/.scratch/synthpin/synth \
             hardware/silicon/f100-gust-hal/build.sh
       # NEGATIVE CONTROL for the seam assertion: a probe that does NOT call out to gust:hal
       # must be REFUSED. Without this, the "seam present" check could quietly stop detecting
@@ -545,7 +530,7 @@ jobs:
           d=$(mktemp -d)
           printf '(module (func (export "read_idcode") (result i32) (i32.const 66)))\n' > "$d/probe.wat"
           cp hardware/silicon/f100-gust-hal/{gust_hal.c,boot.S,link.ld,build.sh} "$d/"
-          if SYNTH=$PWD/.scratch/fg60/synth OUT="$d/out" "$d/build.sh" >"$d/log" 2>&1; then
+          if SYNTH=$PWD/.scratch/synthpin/synth OUT="$d/out" "$d/build.sh" >"$d/log" 2>&1; then
             echo "a probe with NO gust:hal imports was ACCEPTED — the seam assertion is vacuous"; exit 1
           fi
           grep -q 'gust:hal seam is absent' "$d/log" \
@@ -560,7 +545,7 @@ jobs:
           G=.scratch/galenano7/gale-nano-0.7.0.wasm
           test -f "$G"
           for core in cortex-m3 cortex-m4f cortex-m7dp; do
-            .scratch/fg60/synth compile "$G" -t $core --cortex-m --relocatable --all-exports \
+            .scratch/synthpin/synth compile "$G" -t $core --cortex-m --relocatable --all-exports \
               --embedder-data-init --embedder-global-init -o /tmp/gn.$core.o > /tmp/gn.$core.log 2>&1
             n=$(grep -ci 'skip' /tmp/gn.$core.log || true)
             [ "$n" = "0" ] || { echo "$core: $n skip line(s)"; cat /tmp/gn.$core.log; exit 1; }

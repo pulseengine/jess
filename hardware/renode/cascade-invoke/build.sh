@@ -15,7 +15,7 @@ D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
 # rather than from whatever happens to be in .scratch (AFD-065).
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
 OUT="${OUT:-$SCRATCH/invoke}"; mkdir -p "$OUT"
-SYNTH="${SYNTH:-$SCRATCH/fg60/synth}"
+SYNTH="${SYNTH:-$SCRATCH/synthpin/synth}"
 PY="${PY:-python3}"
 # RELEASE-WATCH overrides. Empty = use the varve-pinned dispatch. AFD-066 added this for
 # synth only, which meant loom and meld could not be release-watched at all without editing
@@ -52,17 +52,17 @@ command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 # release), that one pin is set aside EXPLICITLY and the version actually used is printed.
 # The input pins — the falcon stages and gale-nano — are still enforced, because a
 # toolchain differential is only meaningful if the inputs are identical.
-PINNED_SYNTH="$SCRATCH/fg60/synth"
+PINNED_SYNTH="$SCRATCH/synthpin/synth"
 if [ "$SYNTH" = "$PINNED_SYNTH" ]; then
   SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" >/dev/null 2>&1 \
     || fail "external artifacts do not match tools/deps/artifacts.pins"
 else
-  SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" --exclude fg60/synth >/dev/null 2>&1 \
+  SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" --exclude synthpin/synth >/dev/null 2>&1 \
     || fail "input artifacts do not match tools/deps/artifacts.pins (synth pin excluded)"
-  export DEPS_EXCLUDE="fg60/synth"   # threaded to the sub-oracles' own preflights
+  export DEPS_EXCLUDE="synthpin/synth"   # threaded to the sub-oracles' own preflights
   echo "!! OFF-PIN TOOLCHAIN — release-watch mode"
   echo "!!   synth in use : $("$SYNTH" --version 2>&1 | head -1)  ($SYNTH)"
-  echo "!!   pinned synth : $(grep '^fg60/synth' "$ROOT/tools/deps/artifacts.pins" | awk '{print $3}' | sed 's/.*@//;s/!.*//')"
+  echo "!!   pinned synth : $(grep '^synthpin/synth' "$ROOT/tools/deps/artifacts.pins" | awk '{print $3}' | sed 's/.*@//;s/!.*//')"
   echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
   echo "!!   not a campaign result, until the pin is updated."
   [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and synth is off-pin"

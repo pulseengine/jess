@@ -28,7 +28,7 @@
 #   release:<owner>/<repo>@<tag>!<asset>[!<member-inside-tarball>]
 #   oci:<ref>!<file-in-artifact>
 #
-# PLATFORM-SPECIFIC PINS: fg60/synth is a compiled BINARY, so its digest differs per host.
+# PLATFORM-SPECIFIC PINS: synthpin/synth is a compiled BINARY, so its digest differs per host.
 # There is therefore ONE LINE PER PLATFORM, each tagged `platform=`, and both check.sh and
 # fetch.sh act only on the line matching the running host and SKIP the others visibly. A
 # single-platform pin was what blocked the on-target oracles from becoming a CI gate
@@ -49,10 +49,25 @@ v1341/iekf.wasm              600f9047dba73f278d80b8a0a904bb2066eea33073902fee84a
 galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f  oci:ghcr.io/pulseengine/gale-nano:0.7.0!fused-gustos.component.wasm
 
 [synth]
-# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.60.0.
+# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.64.0.
+#
+# BUMPED 0.60.0 -> 0.64.0 for synth#1189: on the ARM DIRECT SELECTOR — which is "every
+# --relocatable compile", i.e. every lowering jess does — an if/else join register could
+# ALIAS a live register-homed local, so `local.get` after the join read the join's value.
+# Exit 0, no decline, WRONG ANSWER. Measured under 0.60.0:
+#     c: mov  r0, r2      <- join writes r0, which IS local 0's home
+#     e: adds r3, r0, r0  <- if-result + local.get 0, both r0
+# 0.64.0 copies the home into a temp first and reads r0 intact.
+#
+# THE BUMP IS PROVABLY BEHAVIOUR-NEUTRAL TODAY. Every artifact jess lowers is BYTE-IDENTICAL
+# across 0.60.0 -> 0.64.0: the fused cascade (m7dp, m4f), gale-nano 0.7.0 (m3), the
+# f100-init and gust:hal probes (m3), and the passthrough image that runs on real F100
+# silicon (which also still matches its committed .elf, md5 13495328...). And the
+# differential is NOT vacuous: a module carrying the #1189 shape DOES differ (504 -> 510 B).
+# So jess was never exposed, and the pin now excludes a silent wrong-answer class.
 # That divergence is real and is why this is pinned by digest here (AFD-053 S5).
-fg60/synth                   01dd072f1ae31dac9a1cffd0ac00ea4d343d044f2d91ff489b3844a22da33759  release:pulseengine/synth@v0.60.0!synth-v0.60.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
-fg60/synth                   8f7266f659cf1ef4687381563d4f6f1339dc2ee8382e33bf5af9d8886c81c743  release:pulseengine/synth@v0.60.0!synth-v0.60.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
+synthpin/synth               fa96245bf55e562d70b058e72316dcef6e3c9413d83cdff1019b5a41e1134d02  release:pulseengine/synth@v0.64.0!synth-v0.64.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
+synthpin/synth               5f7042ac07d30b40d58161ec0e7ed5fec23020bfc1589051a1a752c94bc6156c  release:pulseengine/synth@v0.64.0!synth-v0.64.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
 
 [toolchain]
 # The lowering toolchain, pinned per platform so a CI runner can reconstruct the SAME BYTES

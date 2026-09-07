@@ -13,7 +13,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/fusion}"; mkdir -p "$OUT"
-SYNTH="${SYNTH:-$ROOT/.scratch/fg60/synth}"
+SYNTH="${SYNTH:-$ROOT/.scratch/synthpin/synth}"
 DIR="${DIR:-$ROOT/.scratch/v1341}"
 RATE="${RATE:-$DIR/rate.wasm}";         MIXER="${MIXER:-$DIR/mixer.wasm}"
 ATT="${ATT:-$DIR/attitude.wasm}";       POS="${POS:-$DIR/position.wasm}"
