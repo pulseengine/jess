@@ -6031,3 +6031,72 @@ artifacts:
       detected-by: per-piece release-watch of synth v0.63.0 against the real fused cascade, 2026-09-07
       severity: minor
       triage-status: confirmed
+
+  - id: AFD-109
+    type: ai-found-defect
+    title: "H3 first half ON SILICON: gust:hal read32/write32 performed REAL MMIO on an STM32F100 — the part's own IDCODE (0x420) read back, and the write path isolated by a PHYSICAL one-variable control (unclocked peripheral drops the write)"
+    status: open
+    description: |-
+      2026-09-07. `app/gust-hal-stub` returns `addr ^ 0x1E55_0000` for read32 and drops write32;
+      its own comment says "No silicon off-target. Real MMIO is the on-target rung, not this one."
+      This is that rung — H3's first half.
+
+      *** THE SEAM ***
+      probe.wat imports `gust:hal/mmio`; synth lowers those to UNDEFINED symbols `read32`/`write32`,
+      which is exactly the embedder seam jess owns. The native side is two volatile accesses:
+          read32:   ldr r0, [r0, #0] ; bx lr
+          write32:  str r1, [r0, #0] ; bx lr
+      compiled -ffixed-r9/-r10/-r11 because it runs BETWEEN synth-lowered calls that hold the
+      linmem base/size and globals table in those registers; gated by verify-embedder, which
+      inspects the emitted code rather than trusting the flags.
+
+      *** ON REAL STM32F100 SILICON (STM32VLDISCOVERY, ST-LINK/V1, fourpi bench) ***
+          LEG (only the CLOCK_EN word differs)     IDCODE      GPIOC_ODR   completion
+            GPIOC clocked (baseline)               10016420    00000300    c0ffee00   OK
+            clock NOT enabled (negative control)   10016420    00000000    c0ffee00   OK
+
+      IDCODE 0x10016420 -> DEV_ID[11:0] = 0x420, the STM32F100 medium-density value line. That
+      number is the load-bearing one: it appears NOWHERE in the program, and the stub would have
+      returned 0xE0042000 ^ 0x1E55_0000 = 0xFE512000. A read that never reached the bus cannot
+      produce it.
+
+      *** WHY THIS CONTROL IS STRONGER THAN THE USUAL SHAPE ***
+      The varied quantity is PHYSICAL, not a flag jess interprets: without RCC_APB2ENR.IOPCEN the
+      GPIOC peripheral is unclocked and the BUS drops the writes. Four properties:
+        1. both legs run the BYTE-IDENTICAL flashed image; one host-written word differs (AFD-048);
+        2. IDCODE reads correctly in BOTH legs, so the control isolates the WRITE path rather than
+           breaking everything — a control that killed both paths would only show "something broke";
+        3. the completion marker is present in both legs: the control measured "writes dropped",
+           not "the CPU never ran";
+        4. the result words are poisoned 0xDEADBEEF at reset, so the 0 read-back is a REAL zero and
+           not an unwritten word.
+      build.sh also ASSERTS both symbols are undefined in the lowered object before linking, with a
+      CI negative control (a probe with no gust:hal imports must be refused, and refused for that
+      reason) — otherwise a probe that had quietly stopped calling the HAL would still build and
+      the rung would measure nothing.
+
+      *** H3 SECOND HALF: MEASURED, NOT DONE ***
+      Against the PINNED gale-nano 0.7.0 (sha256 546531952a5c...), synth 0.60.0:
+          cortex-m3 / m4f / m7dp   exit 0, 0 skips, 4775 / 4779 / 4779 B
+      confirming the brief's "lowers 0 skips on all 3 cores" — BUT ONLY with --embedder-data-init
+      and --embedder-global-init. Without them synth correctly refuses (#1041: 11 active data
+      segments). My first run omitted them, exited 1 on all three cores, and reporting THAT as
+      "gale-nano does not lower" would have been a false report against a supplier. Reading the
+      error rather than the exit code is what prevented it.
+      DERIVED RESIDUAL — what jess still owes to run gale-nano on target, by symbol name:
+          read32                                        <- SUPPLIED FOR REAL by this rung
+          poll-task                                     gust:os/taskdisp (polarity in AFD-067)
+          deadline, set-deadline, slept-status, state   timer/task state, gated on DD-025/gale#224
+      Four of those names carry hyphens (WIT kebab-case emitted verbatim), so a C embedder cannot
+      declare them: GCC's __asm__("poll-task") alias emits an unquoted `.type poll-task, %function`
+      and the assembler rejects it. NOT reported upstream as friction, because jess already uses the
+      fix on the export side (cascade-invoke/build.sh objcopy --redefine-sym); a quoted symbol in a
+      hand-written .S also works. Both verified here so the next rung does not rediscover them.
+
+      SCOPE: EXECUTED on silicon = read32/write32 against real peripherals on a Cortex-M3.
+      NOT executed = gale-nano itself (it lowers; nothing has run it), and nothing on the RT1176.
+    tags: [gust-hal, on-target, silicon, stm32f100, mmio, h3, gale-nano, negative-control, cortex-m3]
+    fields:
+      detected-by: implementing gust:hal as real MMIO and running it on F100 silicon, 2026-09-07
+      severity: major
+      triage-status: confirmed

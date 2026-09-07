@@ -478,6 +478,49 @@ jobs:
             echo "a NO-OP apply loop PASSED the check — it can no longer detect non-consumption"; exit 1
           fi
           echo "negative control OK: a gutted apply loop is refused"
+      # H3 first half (AFD-109). gust:hal read32/write32 as REAL MMIO. CI builds and gates
+      # the image and asserts the SEAM exists; the silicon leg needs an ST-Link and is
+      # hand-run against the bench (see hardware/silicon/f100-gust-hal/README.md).
+      - name: gust:hal — build the F100 MMIO image on the PIN, gated by verify-embedder
+        run: |
+          set -euo pipefail
+          REQUIRE_VERIFY=1 SYNTH=.scratch/fg60/synth SYNTH_VERIFY=/usr/local/bin/synth062 \
+            hardware/silicon/f100-gust-hal/build.sh
+      # NEGATIVE CONTROL for the seam assertion: a probe that does NOT call out to gust:hal
+      # must be REFUSED. Without this, the "seam present" check could quietly stop detecting
+      # a probe that had been inlined or stubbed, and the rung would measure nothing.
+      - name: gust:hal — negative control (a probe with no HAL imports must be refused)
+        run: |
+          set -euo pipefail
+          d=$(mktemp -d)
+          printf '(module (func (export "read_idcode") (result i32) (i32.const 66)))\n' > "$d/probe.wat"
+          cp hardware/silicon/f100-gust-hal/{gust_hal.c,boot.S,link.ld,build.sh} "$d/"
+          if SYNTH=$PWD/.scratch/fg60/synth OUT="$d/out" "$d/build.sh" >"$d/log" 2>&1; then
+            echo "a probe with NO gust:hal imports was ACCEPTED — the seam assertion is vacuous"; exit 1
+          fi
+          grep -q 'gust:hal seam is absent' "$d/log" \
+            || { echo "refused, but NOT for the seam reason:"; tail -5 "$d/log"; exit 1; }
+          echo "negative control OK: a probe that never calls gust:hal is refused, by that reason"
+      # The gale-nano lowering claim, verified against the PINNED artifact rather than the
+      # brief. NOTE the embedder-init flags: without them synth correctly refuses (#1041,
+      # 11 active data segments) and the result reads as "gale-nano does not lower".
+      - name: gust:hal — gale-nano lowers 0 skips on all 3 cores, residual by symbol
+        run: |
+          set -euo pipefail
+          G=.scratch/galenano7/gale-nano-0.7.0.wasm
+          test -f "$G"
+          for core in cortex-m3 cortex-m4f cortex-m7dp; do
+            .scratch/fg60/synth compile "$G" -t $core --cortex-m --relocatable --all-exports \
+              --embedder-data-init --embedder-global-init -o /tmp/gn.$core.o > /tmp/gn.$core.log 2>&1
+            n=$(grep -ci 'skip' /tmp/gn.$core.log || true)
+            [ "$n" = "0" ] || { echo "$core: $n skip line(s)"; cat /tmp/gn.$core.log; exit 1; }
+            echo "$core: exit 0, 0 skips, $(stat -c%s /tmp/gn.$core.o) B"
+          done
+          u=$(arm-none-eabi-nm /tmp/gn.cortex-m3.o | awk '$1=="U"||$2=="U"{print $NF}' | sort -u | tr '\n' ' ')
+          echo "gale-nano native residual: $u"
+          # read32 must be among them: it is the symbol this rung supplies for real, and if it
+          # stopped appearing the H3 burn-down above would be describing something else.
+          echo "$u" | grep -qw read32 || { echo "read32 is NOT in gale-nano's residual"; exit 1; }
       - name: TEST-PIX-032 — cascade stage executes and matches relay's SIL reference
         run: hardware/renode/cascade-invoke/run-oracle.sh
         env:
