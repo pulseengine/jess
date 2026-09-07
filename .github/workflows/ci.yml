@@ -12,6 +12,21 @@ concurrency:
 permissions:
   contents: read
 
+# EVERY `run:` gets `bash -eo pipefail`, not GitHub's default `bash -e {0}`.
+#
+# Without this, a step written as `oracle.sh | tee -a "$GITHUB_STEP_SUMMARY"` reports
+# TEE's exit status, so the oracle can fail and the step still goes green. Six steps
+# here are written exactly that way, including `cargo llvm-cov --fail-under-lines 90`,
+# TEST-PIX-026 (fuse-repro-oracle) and TEST-PIX-029 (sigil-gate) — three enforcement
+# gates that could not go red. Found by clean-room verification.
+#
+# This repo has a standing rule that "a piped exit code is the PIPE's, not the
+# script's", and it was being applied to shell commands while CI violated it in six
+# places. The `pipefail is active` guard in rivet-validate keeps it from regressing.
+defaults:
+  run:
+    shell: bash
+
 env:
   # Pinned PulseEngine tool releases — bumped explicitly via PR. Bumped v0.22.1 ->
   # v0.25.0: needed for GIT-LINK external resolution — `rivet sync` git-fetches the
@@ -19,11 +34,24 @@ env:
   # (v0.22.1 resolved externals only via `path:`, requiring manual sibling checkouts).
   # Verified: jess store validates clean + `coverage --fail-under 60` still gates
   # (64.8% >= 60) on v0.25.0.
-  RIVET_VERSION: v0.25.0
+  # Aligned to the varve pin (0.34.0). CI was on v0.25.0 while varve.toml's layer carried
+  # 0.34.0, so CI qualified this project against a toolchain the pin does not claim — and the
+  # clean-room skill's own example is `rivet validate` flipping verdict between rivet versions
+  # on an unchanged tree. Measured before bumping, same unchanged tree:
+  #   0.25.0 / 0.32.0 / 0.34.0 / 0.36.0 -> all PASS (266 warnings), coverage 63.9% >= 60.
+  # So this closes a latent hazard, not an active defect. tools/varve/check-drift.sh now
+  # reports ci.yml-vs-pin disagreement as BLOCKING, separately from PATH staleness.
+  RIVET_VERSION: v0.34.0
   # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
-  SPAR_VERSION: v0.24.0
+  # Aligned to the varve pin (0.40.0); CI was on v0.24.0, sixteen minors behind, and spar
+  # GENERATES the WIT. CI has no varve, so tools/wit/regen.sh falls through to PATH and the
+  # WIT-derivation gate ran 0.24.0's codegen while a developer got the pinned 0.40.0.
+  # Measured before bumping: both emit BYTE-IDENTICAL wit/ from hardware/pixhawk6x-rt.aadl,
+  # and both report WIT-DERIVATION OK against the committed tree. 0.24.0 also predates
+  # `--version` (CLI convention #1), which is why check-drift.sh could not see it on PATH.
+  SPAR_VERSION: v0.40.0
   # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the fused-core
   # reproducibility gate (TEST-PIX-026, meld#325/#341).
   #
@@ -90,6 +118,15 @@ jobs:
           install -m755 "$(find . -name rivet -type f | head -1)" /usr/local/bin/rivet
         env:
           GH_TOKEN: ${{ github.token }}
+      # GUARD. `defaults.run.shell: bash` above is what makes every piped gate in this
+      # workflow able to fail. If it is ever removed, the gates go quietly green instead
+      # of red — the exact failure it was added to fix. Assert the property, not the key.
+      - name: pipefail is active (guards every piped gate in this workflow)
+        run: |
+          rc=0
+          sh -c 'exit 3' | cat || rc=$?
+          [ "$rc" = "3" ] || { echo "pipefail is NOT active: a failing left-hand side reported $rc — piped gates can report green while failing"; exit 1; }
+          echo "pipefail active: a failing left-hand side propagates (rc=$rc)"
       - name: rivet sync + validate
         working-directory: jess
         run: |

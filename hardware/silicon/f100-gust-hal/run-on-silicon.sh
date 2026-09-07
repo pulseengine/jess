@@ -59,7 +59,14 @@ EOF
   # would have returned 0xE0042000 ^ 0x1E55_0000 = 0xFE51_2000 instead.
   dev=$(( 0x${id:-0} & 0xFFF ))
   [ "$dev" = "$((0x420))" ] || { ok="*** IDCODE DEV_ID=0x$(printf %03x $dev), want 0x420 ***"; rc=1; }
-  [ "$((0x${odr:-0}))" = "$((0x$want))" ] || { ok="$ok *** ODR $odr, want $want ***"; rc=1; }
+  # NOT ${odr:-0}: an ABSENT reading would then compare EQUAL to the negative control's
+  # expected 0, i.e. "openocd printed nothing" would read as "the write was correctly
+  # dropped". The completion check below already caught that case, but a default that
+  # points at the expected value on the very leg whose expectation is 0 is the wrong
+  # default. Found by clean-room verification.
+  [ -n "$odr" ] || { ok="$ok *** no ODR reading ***"; rc=1; odr="<none>"; }
+  [ -n "$odr" ] && [ "$odr" != "<none>" ] && { [ "$((0x$odr))" = "$((0x$want))" ] \
+    || { ok="$ok *** ODR $odr, want $want ***"; rc=1; }; }
   [ "$c" = "c0ffee00" ] || { ok="$ok (DID NOT COMPLETE: $c)"; rc=1; }
   printf "  %-38s %-11s %-11s %-9s %s\n" "$label" "$id" "$odr" "$c" "$ok"
 done

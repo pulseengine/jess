@@ -6120,8 +6120,15 @@ artifacts:
       campaign rests on UNFALSIFIABLE: you cannot claim a shipped image came from these inputs if
       rebuilding never reproduces it. Nothing in jess would have reported this — the artifact was
       never compared against a second build of itself.
-      WITH --reproducible: two fuses agree exactly (md5 44eea1de03760aa01a43c7ab42ef3083). The flag
-      is supported by the PIN (0.52.0), so this needed no version bump.
+      WITH --reproducible: two fuses agree exactly, and the flag is supported by the PIN (0.52.0),
+      so this needed no version bump. Reproduced under the pin: md5 a3b0e67ea856ee187f9314393019e464,
+      which is also the committed .scratch/invoke/c.wasm.
+      CORRECTION (clean-room, same day): this line first recorded md5 44eea1de03760aa01a43c7ab42ef3083
+      and attributed it to the PIN. That digest is meld 0.55.0's output, not 0.52.0's. The claim
+      (reproducibility, and that the pin supports the flag) holds under both versions and was
+      re-verified; only the digest was mislabelled — but a reader reproducing the PINNED build
+      against the recorded number would have got a mismatch and had no way to tell which of the two
+      facts was wrong. Recorded rather than edited away.
 
       *** WHAT IT COSTS, MEASURED RATHER THAN ASSUMED ***
       --reproducible is NOT metadata-only. `component-provenance` changes too:
@@ -6137,7 +6144,12 @@ artifacts:
       *** NOTHING THAT REACHES SILICON CHANGED — THE DECISIVE CHECK ***
       Code and data are byte-identical with and without the flag (module diffed with BOTH metadata
       sections stripped: 7,949 identical lines). And the lowered ARM objects match the AFD-106
-      baseline exactly, despite the fused wasm shrinking 63,156 -> 61,167 B:
+      baseline exactly, despite the POST-LOOM artifact (c.loom.wasm) shrinking 63,156 -> 61,167 B:
+      CORRECTION (clean-room, same day): this said "the fused wasm". 61,167 B is c.loom.wasm, the
+      artifact AFTER loom; the FUSED wasm is c.wasm at 64,691 B. Both numbers quoted were c.loom
+      sizes, so the comparison itself was like-for-like and the conclusion stands — but the artifact
+      was named wrongly, and in a pipeline with four intermediate wasm files that is not a
+      cosmetic slip.
           cortex-m7dp  md5 5362d8318f0066266d7dc29ba0c7563c  41,140 B   (AFD-106 baseline)
           cortex-m4f   md5 90e8fa9bee4b31c54a64e9306685b955  42,562 B   (AFD-106 baseline)
       A size change in the fused artifact with an unchanged lowered object is exactly the shape that
@@ -6161,4 +6173,91 @@ artifacts:
     fields:
       detected-by: per-piece release-watch of meld v0.55.0 against the real fused cascade, 2026-09-07
       severity: major
+      triage-status: confirmed
+
+  - id: AFD-111
+    type: ai-found-defect
+    title: "SIX CI steps could not go red — piped into tee under bash -e without pipefail, including cargo llvm-cov --fail-under-lines 90, TEST-PIX-026 and TEST-PIX-029; plus the drift checker nothing ever ran"
+    status: open
+    description: |-
+      2026-09-07. Two machinery defects, both of the campaign's recurring class: the failure is in
+      the CHECKER, not the code, and in both cases the checker was well-written and simply could
+      not report.
+
+      *** (1) SIX CI GATES WERE INCAPABLE OF FAILING ***
+      .github/workflows/ci.yml declared no `shell:` and no `defaults:`, so every `run:` used
+      GitHub's default `bash -e {0}` — which does NOT set pipefail. Six steps pipe an oracle into
+      `tee -a "$GITHUB_STEP_SUMMARY"`, so the step's exit status is TEE's:
+          L127  tools/compliance/gen.sh
+          L136  tools/rivet/snapshot.sh
+          L201  cargo llvm-cov --summary-only --fail-under-lines 90   <- a coverage FLOOR
+          L632  tools/scry-gate/run.sh
+          L640  tools/repro/fuse-repro-oracle.sh                      <- TEST-PIX-026
+          L648  tools/sigil-gate/run.sh                               <- TEST-PIX-029
+      Three of those are enforcement gates. The oracle could print its own failure into the job
+      summary and the step would still be green. Demonstrated, bare:
+          bash -c 'set -e;            sh -c "exit 1" | tee /dev/null'  -> rc 0
+          bash -c 'set -e -o pipefail; sh -c "exit 1" | tee /dev/null' -> rc 1
+      THE PARTICULAR STING: this repo carries a standing rule that "a piped exit code is the
+      PIPE's, not the script's" — written after it bit twice in shell commands — and CI violated
+      it in six places for the entire campaign. The rule was being applied where it had already
+      hurt and nowhere else.
+      Found by clean-room verification, which reported four; re-checking found six. The two it
+      missed include the llvm-cov coverage floor, which is the one with a threshold in it.
+      FIX: workflow-level `defaults: run: shell: bash` (GitHub then uses `bash -eo pipefail`).
+      A GUARD step asserts the PROPERTY, not the key: it runs `sh -c 'exit 3' | cat` and requires
+      rc 3, so removing the defaults block turns the gates red instead of quietly green. Verified
+      potent in both directions (pipefail on -> guard passes; off -> guard fails).
+
+      *** (2) THE DRIFT CHECKER NOTHING RAN, AND WHOSE VERDICT COULD NEVER GO GREEN ***
+      AFD-045 built tools/varve/check-drift.sh after jess filed meld#390 against the PATH binary's
+      version. Two things were wrong with it as machinery:
+        (a) NOTHING INVOKES IT. Repo-wide, `check-drift` appears only in a ci.yml COMMENT and in
+            this findings file. It runs only when an agent remembers — and this tick I cited
+            versions on meld#401 and relay#202 without running it first, which is the demonstration.
+            The citations happened to be sound only because I used explicit binary paths.
+        (b) ONE UNDIFFERENTIATED "DRIFT" VERDICT, red continuously, conflating two classes:
+              BLOCKING  ci.yml != varve pin — CI qualifies the project against a toolchain the
+                        pin does not claim. Both are committed files; actionable.
+              ADVISORY  only PATH differs — a developer's stale shell binary, unfixable by editing
+                        the repo, hence permanently red on any machine without varve shims.
+            A verdict that can never go green carries no information, which is why it went unread.
+            The blocking rows were invisible inside the row that never goes away.
+        Split. PATH is still LOUD (it is what caused meld#390) and STRICT=1 still fails on it.
+
+      *** THE BLOCKING ROWS IT WAS HIDING, AND WHY THEY ARE NOT (YET) A DEFECT ***
+          rivet  ci v0.25.0 vs pin 0.34.0
+          spar   ci v0.24.0 vs pin 0.40.0   (16 minors; spar GENERATES the WIT, and CI has no
+                                             varve, so tools/wit/regen.sh falls through to PATH —
+                                             the WIT gate ran 0.24.0's codegen while a developer
+                                             got the pinned 0.40.0)
+      Both aligned to the pin, and the bump is evidence-backed rather than hopeful. MEASURED on the
+      same unchanged tree BEFORE bumping:
+          rivet 0.25.0 / 0.32.0 / 0.34.0 / 0.36.0 -> all `Result: PASS (266 warnings)`,
+                                                     all `coverage 63.9% meets threshold 60.0%`
+          spar  0.24.0 vs 0.40.0 -> BYTE-IDENTICAL wit/ from hardware/pixhawk6x-rt.aadl, both
+                                    reporting WIT-DERIVATION OK against the committed tree
+      So this closed a LATENT hazard; it did not catch a live one. Recording that plainly: the
+      clean-room skill's own example is `rivet validate` flipping verdict across rivet versions on
+      an unchanged tree, and here it did not. check-drift.sh now exits 0 on the blocking class for
+      the first time — which is the point, because a checker that cannot go green is not a checker.
+      (spar 0.24.0 also predates `--version`, so it read as ABSENT on PATH — the caveat already
+      documented in the script, now demonstrated on a real version pair.)
+
+      *** WHAT IS STILL NOT DONE, STATED RATHER THAN IMPLIED ***
+      check-drift.sh is STILL NOT WIRED INTO CI. It resolves the pin via `varve run`, and CI has no
+      varve, so gating it there needs either varve on the runner or a committed pin snapshot that
+      can itself rot. That is a design choice worth making deliberately, not bolted on at the end of
+      a tick. The blocking class is now green and the checker is honest; running it automatically is
+      the remaining half.
+
+      Also fixed, from the same clean-room pass: hardware/silicon/f100-gust-hal/run-on-silicon.sh
+      used ${odr:-0}, so an ABSENT reading compared EQUAL to the negative control's expected 0 —
+      "openocd printed nothing" would have read as "the write was correctly dropped". The separate
+      completion check already caught it, so the leg still failed; but a default pointing at the
+      expected value on the one leg that expects 0 is the wrong default.
+    tags: [ci, vacuous-gate, pipefail, toolchain-drift, afd-045, clean-room, test-pix-026, test-pix-029]
+    fields:
+      detected-by: clean-room verification of AFD-109/AFD-110 plus a retrospective check-drift run, 2026-09-07
+      severity: critical
       triage-status: confirmed
