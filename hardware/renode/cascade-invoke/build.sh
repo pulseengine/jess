@@ -114,8 +114,35 @@ announce_tool meld "$MELD"
 announce_tool loom "$LOOM"
 
 echo "== 1. fuse + lower (the object and its init tables come from ONE module) =="
+# --reproducible (#325) is NOT optional here. Without it meld derives the attestation id
+# from a random UUID and the timestamp from the wall clock, so TWO CONSECUTIVE FUSES OF THE
+# SAME INPUTS PRODUCE DIFFERENT ARTIFACTS — measured, not assumed: md5 57a7cefe... then
+# 8123737100... on identical inputs. Every rebuild produced a new binary, which makes the
+# attestation chain this campaign is built on unfalsifiable: you cannot say a shipped image
+# came from these inputs if rebuilding never reproduces it.
+#
+# What it costs: `component-provenance` records `component-N` placeholders instead of the
+# input FILENAMES. The input HASHES are preserved, and those are the real identity —
+# tools/deps/artifacts.pins already maps 43982be4...=rate, 076b8a81...=mixer, and so on.
+# The discarded names were local .scratch paths, not stable identities.
+# What it does NOT cost: code and data are byte-identical either way (verified by diffing
+# the module with both metadata sections stripped: 7,949 identical lines).
+SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" \
 run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
-    --memory shared --pack-rebase -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
+    --memory shared --pack-rebase --reproducible -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
+
+# THE GATE. Fuse a second time and require byte-equality. A flag that silently stopped
+# applying looks exactly like one that works, and this is the only place that would notice.
+if [ -z "${SKIP_REPRO_GATE:-}" ]; then
+  SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" \
+  run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+      --memory shared --pack-rebase --reproducible -o "$OUT/c.repro.wasm" >>"$OUT/meld.log" 2>&1 \
+    || fail "meld (reproducibility second fuse)"
+  cmp -s "$OUT/c.wasm" "$OUT/c.repro.wasm" \
+    || fail "the fusion is NOT reproducible: two fuses of identical inputs differ"
+  rm -f "$OUT/c.repro.wasm"
+  echo "   fusion is byte-reproducible (two fuses of identical inputs agree)"
+fi
 run_loom optimize "$OUT/c.wasm" -o "$OUT/c.loom.wasm" >"$OUT/loom.log" 2>&1 || fail "loom"
 "$SYNTH" compile "$OUT/c.loom.wasm" -t cortex-m7dp --cortex-m --relocatable \
     --embedder-data-init --embedder-global-init -o "$OUT/cascade.o" >"$OUT/synth.log" 2>&1 || fail "synth"
