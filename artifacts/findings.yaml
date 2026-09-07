@@ -6330,3 +6330,78 @@ artifacts:
       detected-by: assessing varve v0.32.1 and varve-core 0.32.1 against jess's four consumer asks, 2026-09-07
       severity: major
       triage-status: confirmed
+
+  - id: AFD-113
+    type: ai-found-defect
+    title: "gale-nano 0.7.0 EXECUTES on real STM32F100 silicon and admit works (gale's own exec_state==1, matching wasmtime) but poll-round does NOT dispatch — and synth's --relocatable component lowering emits 6 undefined symbols where the component declares only 2 imports"
+    status: open
+    description: |-
+      2026-09-07. H3 second half: ADVANCED, NOT COMPLETE. Stated that way on purpose.
+
+      *** WHAT EXECUTED ON SILICON (STM32VLDISCOVERY, ST-LINK/V1, fourpi bench) ***
+      gale-nano 0.7.0 (digest-pinned 546531952a5c...) lowered for cortex-m3, linked against
+      jess's real gust:hal MMIO (AFD-109), jess's generic embedder-init apply loop (AFD-107) and
+      a boot shim; 4,349 B image, 0 undefined, embedder ABI verified.
+          LEG (only the ADMIT word differs)   poll-task#  handle    state     completion
+            task admitted (baseline)          00000000    00000000  00000001  c0ffee00
+            no admit (negative control)       00000000    deadbeef  deadbeef  c0ffee00
+      GALE'S CODE RUNS ON THE PART, and exec_admit WORKS: gale's OWN view, exec_state(handle),
+      returns 1 — exactly what TEST-PIX-035 asserts ("admitted task starts in state 1").
+      handle == 0 is CORRECT, not a failure: jess already recorded that gale-nano hands out
+      handle 0 (app/gust-dispatch-probe's WIT says so, which is why its never-called sentinel is
+      0xFFFFFFFF).
+
+      *** THE DIVERGENCE ***
+      exec_poll_round reaches poll-task ZERO times on silicon. The wasmtime reference was re-run
+      GREEN the same day against the same pinned artifact (exit 0, 8/8 assertions) and reaches it
+      ONCE: `with-admit() 1`, `without-admit() 0`, `state-before-round() 1`. Both sides use the
+      SAME constants (PRIO=1, DEADLINE_LO=1000, NOW_LO=2000) taken from app/dispatch-driver.
+      This is the on-target differential doing its job — the thing jess's lane exists for.
+
+      *** THE LIKELY CAUSE, NOT PROVEN, AND NOT A GALE DEFECT ***
+      gale-nano's COMPONENT manifest (wasm-tools component wit) declares exactly two imports —
+      gust:os/taskdisp and gust:hal/mmio — and exports gust:os/{time,log,spawn,exec,timer}. That
+      matches gale#223 in words: the embedder IMPLEMENTS {mmio, taskdisp} and CALLS the rest.
+      But `synth --relocatable --all-exports` emits SIX undefined symbols —
+      deadline, poll-task, read32, set-deadline, slept-status, state — and an export set that does
+      not match the declared one: it emits `gust:sched/tasks@0.1.0#*`, an interface the component
+      does NOT export, and emits NOTHING for `gust:os/time@0.1.0`, which it DOES.
+      Nothing in the object distinguishes the 2 real obligations from the 4 component internals.
+      Satisfying them the obvious way is MEASURABLY wrong:
+        - stubbing set-deadline/slept-status/state inert replaced gale's task-state store. Aliasing
+          them onto gale's OWN exports via objcopy --redefine-sym is correct and is what build.sh
+          now does (`@` begins an ARM comment, so an .S label cannot name them — the same
+          constraint cascade-invoke already works around).
+        - `deadline` has NOTHING to alias to, because the gust:os/time export was not lowered.
+          Returning 0 was measured to break dispatch; a `now + ticks` guess did not fix it either.
+      jess is NOT going to keep guessing at a gale semantic — that is gale's lane, and inventing
+      one is how a stub becomes a false claim.
+
+      *** WHAT IS NOT CLAIMED ***
+      Not a gale defect: gale-nano's component is self-consistent and the wasmtime path is green.
+      Not a proven synth defect either, until synth confirms the export/import asymmetry is
+      unintended — filed with the measurement rather than a diagnosis.
+      NOT claimed: that H3's second half is done. gale-nano executes; it does not dispatch.
+
+      *** WHY THE CONTROL IS NOT VACUOUS ***
+      Byte-identical flashed image both legs, one host-written word differs. poll-task COUNTS its
+      invocations (a recording-nothing stub makes "drained" and "did nothing" identical — the
+      vacuity tools/dispatch/run.sh names in its own header). POLL_COUNT is a counter so it cannot
+      be poisoned, which makes the completion marker load-bearing; it is present in BOTH legs, so
+      "0 invocations" is distinguished from "the CPU never ran". And exec_state is read back so the
+      positive half rests on GALE'S own view, not only jess's counter — that is what localises the
+      failure to poll-round rather than to admit.
+
+      *** TWO HARNESS DEFECTS OF JESS'S OWN, FOUND BY THE REFERENCE ***
+      (a) The first silicon run used deadline=(0,0) and now=(0,0). The reference's own comment says
+          NOW must be PAST the deadline for a task to be READY. Reporting that first result as
+          "gale-nano does not dispatch on silicon" would have been a false report against a
+          supplier — the meld#390 shape, avoided by driving both sides identically.
+      (b) The openocd readback filter was `grep -E "^0x2000048"`, which silently dropped the
+          exec_state word at 0x20000490 and reported it as <none>. A harness that drops the one
+          reading that localises the fault.
+    tags: [gale-nano, on-target, silicon, stm32f100, h3, synth, differential, wasmtime, partial]
+    fields:
+      detected-by: running gale-nano 0.7.0's dispatch loop on F100 silicon against the wasmtime reference, 2026-09-07
+      severity: major
+      triage-status: confirmed
