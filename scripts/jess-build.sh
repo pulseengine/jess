@@ -99,17 +99,27 @@ echo "  ELF: $(file "$ELF" | cut -d, -f1-2)"
 
 # --- cross-runtime check: kiln on fused core vs wasmtime -----------------
 note "cross-runtime check (kiln on fused core)"
+# The previous version invoked `--function run-stabilization` on $FUSED and reported
+# "inconclusive (non-gating)" on any failure. It failed EVERY time and could not have done
+# otherwise: the fused core exports no such function (meld renames them to
+# pulseengine:falcon-cascade/<stage>@0.7.0#<fn>, and kiln says so and lists them), while the
+# wasmtime side above invokes that name on $W — a DIFFERENT artifact. So the two halves never
+# compared the same thing, `2>/dev/null || true` made "disagreed" and "could not run"
+# identical, and the JUnit `kiln-xruntime` case has always recorded 0. See AFD-116.
 KILN_OK=0
-kout="$("$KILND" "$FUSED" --function run-stabilization 2>/dev/null || true)"
-kbits="$(printf '%s' "$kout" | sed -nE 's/.*FloatBits32\(([0-9]+)\).*/\1/p' | head -1)"
-if [ -n "$kbits" ]; then
-  kval="$(python3 -c "import struct;print(struct.unpack('<f',struct.pack('<I',$kbits))[0])" 2>/dev/null || true)"
-  if [ -n "$kval" ]; then
-    echo "  kiln run-stabilization = $kval rad (wasmtime $STAB)"
-    KILN_OK="$(python3 -c "print(1 if abs(float('$kval')-float('$STAB'))<1e-4 else 0)" 2>/dev/null || echo 0)"
-  fi
+# Pass the artifact and binary THIS script built/uses. Letting the checker fall back to its
+# own defaults would check a different file than the one just fused — which is the exact
+# defect being fixed here, reintroduced one layer down.
+if kout="$(MOD="$FUSED" KILND="$KILND" "$ROOT/tools/xruntime/kiln-check.sh" 2>&1)"; then
+  KILN_OK=1; printf '%s\n' "$kout" | sed 's/^/  /'
+else
+  printf '%s\n' "$kout" | sed 's/^/  /'
+  # NOT "inconclusive": the reason is printed above and distinguishes "could not run" from
+  # "disagreed". Still non-gating for the overall build unless KILN_STRICT=1 — promoting it
+  # to a gate is a separate, reviewable decision.
+  [ "${KILN_STRICT:-0}" = 1 ] && fail "cross-runtime kiln check failed (KILN_STRICT=1)"
+  echo "  kiln cross-runtime check FAILED (non-gating; set KILN_STRICT=1 to gate)"
 fi
-[ "$KILN_OK" = 1 ] && echo "  kiln matches wasmtime" || echo "  kiln check inconclusive (non-gating)"
 
 # --- emit JUnit evidence -------------------------------------------------
 note "evidence"

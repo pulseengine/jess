@@ -6563,3 +6563,69 @@ artifacts:
       detected-by: clean-room verification of AFD-113 and AFD-114 with a fresh-context subagent, 2026-09-08
       severity: major
       triage-status: confirmed
+
+  - id: AFD-116
+    type: ai-found-defect
+    title: "jess's cross-runtime kiln check was STRUCTURALLY INCAPABLE of passing — it invoked a function the fused core does not export, on a different artifact from the wasmtime half, and swallowed the error as 'inconclusive'; kiln 0.5.0 makes a real one possible"
+    status: open
+    description: |-
+      2026-09-09. Per-piece release-watch of kiln v0.5.0 ("Run what we ship"), whose headline
+      SR-58 is `--invoke` on meld-fused CORE modules — exactly what jess ships. Testing it against
+      the real fused cascade found a defect in JESS, not in kiln.
+
+      *** THE CHECK COULD NEVER HAVE PASSED ***
+      scripts/jess-build.sh ran:
+          kout="$("$KILND" "$FUSED" --function run-stabilization 2>/dev/null || true)"
+      and printed "kiln check inconclusive (non-gating)" whenever it produced nothing. It
+      produced nothing EVERY time, for three compounding reasons:
+        1. The fused core exports no `run-stabilization`. meld's fusion renames the exports to
+           `pulseengine:falcon-cascade/<stage>@0.7.0#<fn>`. kiln says so plainly —
+           "[Runtime][E07DA] Function not found" — and then LISTS the five that exist. The
+           information needed to notice was in the output that `2>/dev/null` discarded.
+        2. The wasmtime half of the "comparison" (line 73) invokes `run-stabilization()` on $W,
+           the PRE-FUSION component — a different artifact. The two halves were never looking at
+           the same thing, so even a working invocation would not have been a differential.
+        3. `2>/dev/null || true` made "kiln disagreed" and "kiln could not run" the same reading.
+           That is the confusion varve#130 recorded when a publish-check reported exit 127 —
+           command not found — as "refused this push".
+      The JUnit evidence emitted a `kiln-xruntime` testcase carrying KILN_OK, which was
+      necessarily 0 on every run this repo has ever done.
+
+      *** WHAT KILN 0.5.0 ACTUALLY GIVES US, MEASURED ***
+      CLI conventions now met (they were not in the layer's build): `kilnd --version` prints
+      `kilnd 0.5.0` and an unknown flag exits 2. `--invoke` + `--arg` work on jess's real
+      meld-fused core: invoking `pulseengine:falcon-cascade/mixer@0.7.0#mix` with four f32s
+      returns `i32 9488`, and wasmtime returns 9488 for the same module, export and arguments.
+      All FIVE stage exports execute under kiln when each is driven with its own arity.
+
+      *** AND WHAT IT DOES NOT GIVE US — CHECKED BEFORE BUILDING ON IT ***
+      Every cascade export returns an i32 that is a POINTER into the return area, and that
+      pointer is CONSTANT: 9488 for three different argument sets (1.0/0/0/0.5, 0/1.0/0/0.9,
+      0.25/0.25/0.25/0.1). Two engines agreeing on a fixed address is NOT evidence about the
+      arithmetic — a check built on it would agree even if one engine computed garbage. So the
+      replacement is deliberately labelled an EXECUTION check, not a value differential. Making
+      it a value differential needs kiln to dereference the return area (read N bytes at the
+      returned pointer); filed upstream.
+      This is the vacuity rule applied BEFORE writing the checker rather than after: the reason
+      the new check is modest is that the strong version was measured to be unavailable.
+
+      *** THE REPLACEMENT ***
+      tools/xruntime/kiln-check.sh drives BOTH engines over the SAME artifact, export and
+      arguments; requires a value from each (an empty reading is "could not run", not
+      agreement); refuses a pre-0.5.0 kilnd by name rather than reporting "inconclusive"; and
+      asserts all 5/5 stage exports execute. jess-build.sh passes MOD="$FUSED" KILND="$KILND"
+      explicitly — letting the checker fall back to its own defaults would have checked a
+      different file than the one just fused, reintroducing defect (2) one layer down.
+      Still non-gating for the build unless KILN_STRICT=1; promoting it is a separate decision.
+      Negative controls, both observed firing: a pre-0.5.0 kilnd is REFUSED with its banner
+      quoted, and a module without the export FAILS instead of passing.
+      Two harness bugs of jess's own, caught by the controls: the comparison export name was
+      packed as "<name>:4" and split on the FIRST colon — but the name itself contains colons,
+      so it truncated to "pulseengine"; and driving all five exports with six zeros made four
+      fail on arity and reported "1/5", a number that measures the harness rather than the
+      artifact.
+    tags: [kiln, release-watch, vacuous-gate, cross-runtime, wasmtime, varve-130, evidence]
+    fields:
+      detected-by: per-piece release-watch of kiln v0.5.0 against the real fused cascade, 2026-09-09
+      severity: major
+      triage-status: confirmed
