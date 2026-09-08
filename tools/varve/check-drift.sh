@@ -23,7 +23,7 @@ ci_pin() { # tool -> the version ci.yml downloads, or empty
 }
 ver() { "$@" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
 
-compared=0; single=0; advisory=0
+compared=0; single=0; advisory=0; cipin=0; nocipin=""
 printf '%-8s  %-12s  %-12s  %-12s  %s\n' TOOL PATH VARVE-PIN CI-YML STATUS
 for t in rivet spar meld synth loom sigil; do
   p="$(ver "$t")"
@@ -65,18 +65,28 @@ for t in rivet spar meld synth loom sigil; do
   n_sources=${#seen[@]}
   if   [ "${uniq_n:-0}" -eq 0 ]; then st="absent (not checked)"
   elif [ "$n_sources" -eq 1 ]; then st="single-source (not compared)"; single=$((single+1))
-  elif [ "${uniq_n:-0}" -eq 1 ]; then st="ok"; compared=$((compared+1))
+  elif [ "${uniq_n:-0}" -eq 1 ]; then
+    st="ok"; compared=$((compared+1))
+    # An all-agree row is still a ci-vs-pin comparison when both are declared — count it,
+    # or the summary under-reports what it actually checked.
+    if [ -n "$v" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
   elif [ -n "$v" ] && [ -n "$c" ] && [ "$v" != "$c" ]; then
-    st="DRIFT-BLOCKING (ci.yml != pin)"; drift=1; compared=$((compared+1))
+    st="DRIFT-BLOCKING (ci.yml != pin)"; drift=1; compared=$((compared+1)); cipin=$((cipin+1))
   else
     st="drift-advisory (PATH only)"; advisory=$((advisory+1)); compared=$((compared+1))
+    # Count the ci-vs-pin comparison ONLY when BOTH sources exist. A row with just PATH and
+    # the varve pin is a two-source row, but it says NOTHING about ci.yml — and the summary
+    # used to claim "ci.yml and the varve pin agree" for exactly those rows. That went
+    # unnoticed until removing ci.yml's SYNTH_VERSION made synth and loom read `-` here while
+    # the prose still asserted agreement for them. Found by clean-room verification.
+    if [ -n "$v" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
   fi
   printf '%-8s  %-12s  %-12s  %-12s  %s\n' "$t" "${p:--}" "${v:--}" "${c:--}" "$st"
 done
 
 echo
 if [ "$advisory" -gt 0 ]; then
-  echo "ADVISORY: $advisory tool(s) differ ONLY on PATH — ci.yml and the varve pin agree."
+  echo "ADVISORY: $advisory tool(s) differ on PATH from the pin."
   echo "  Harmless for the BUILD (scripts resolve explicitly or via varve), but it is exactly"
   echo "  what produced meld#390: a defect filed against the PATH binary's version."
   echo "  Before citing ANY version upstream, quote \`varve run <tool> --version\`, not PATH."
@@ -101,6 +111,11 @@ if [ "$compared" -eq 0 ]; then
   echo "A 'no drift' verdict here would be green on a toolchain never inspected." >&2
   exit 2
 fi
-echo "no blocking drift: ci.yml and the varve pin agree for every tool compared ($compared)."
+echo "no blocking drift: ci.yml and the varve pin agree for the $cipin tool(s) where BOTH are declared."
+if [ -n "$nocipin" ]; then
+  echo "NOT COMPARED against ci.yml (no *_VERSION there):$nocipin"
+  echo "  These rows say nothing about CI. Claiming agreement for them would be a verdict"
+  echo "  about a comparison that never happened."
+fi
 [ "$single" -gt 0 ] && echo "($single row(s) 'single-source' and any 'absent' rows were compared against nothing — not evidence.)"
 exit 0

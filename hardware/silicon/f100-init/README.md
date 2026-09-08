@@ -93,8 +93,8 @@ linkability, not consumption. Hence the executed check above.
 
 ## Reproducibility and recovery
 
-The flashed image is **byte-identical whether built with the campaign pin (synth 0.60.0)
-or 0.63.0** (`md5 44cbc79c49735d1a616eec6b34a6cdd3`), so the silicon result is not an
+The flashed image is **byte-identical across every synth the campaign has pinned (0.60.0, 0.63.0 and the current
+pin 0.64.0)** (`md5 44cbc79c49735d1a616eec6b34a6cdd3`), so the silicon result is not an
 artifact of an off-pin toolchain.
 
 The board's resident firmware is restored from

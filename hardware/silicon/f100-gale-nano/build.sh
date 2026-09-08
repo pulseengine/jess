@@ -19,7 +19,12 @@ command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 
 # The artifact must be the PINNED one. A differential against an unpinned gale-nano is a
 # result about whatever happened to be in .scratch.
-want=546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f
+# READ the expected digest from artifacts.pins rather than carrying a second copy here.
+# Two hardcoded hashes that agree today, with nothing enforcing that they keep agreeing, is
+# the drifted-mirror shape AFD-104 deleted a registry for. Found by clean-room verification.
+want=$(awk '$1=="galenano7/gale-nano-0.7.0.wasm"{print $2; exit}' "$ROOT/tools/deps/artifacts.pins")
+[ ${#want} -eq 64 ] || fail "could not read the gale-nano digest from tools/deps/artifacts.pins
+   (got '${want}') — refusing to verify against a digest this script invented"
 got=$(shasum -a 256 "$GALE" 2>/dev/null | awk '{print $1}')
 [ -z "$got" ] && got=$(sha256sum "$GALE" | awk '{print $1}')
 [ "$got" = "$want" ] || fail "gale-nano is not the pinned artifact
@@ -50,11 +55,27 @@ n=$(grep -ci 'skip' "$OUT/lower.log" || true)
 
 # The gust:os seam must BE a seam. If these stopped being undefined, gale-nano would be
 # calling something other than jess's harness and the differential would measure nothing.
-for s in poll-task deadline read32; do
-  arm-none-eabi-nm "$OUT/gale.o" | grep -qE "^ +U $s\$" \
-    || fail "'$s' is not undefined in the lowered object — the embedder seam is absent"
-done
-echo "embedder seam present: poll-task, deadline, read32 (the 3 jess genuinely owes)"
+# EXACT set, not membership. The previous check asserted these three ARE undefined and
+# said "the 3 jess genuinely owes", but never that they are the ONLY ones — so a lowering
+# that grew a seventh obligation would have passed while the message kept claiming three.
+# UNRESOLVED = undefined MINUS defined, within this one object.
+#
+# `nm` lists all SIX as undefined even after the aliasing, because --redefine-sym renames the
+# definition to the imported name and the object then carries BOTH a T and a U entry for it;
+# the linker resolves them internally. So the raw U list is NOT "what the embedder owes", and
+# a check written against it either expects six (and silently tolerates the aliasing breaking)
+# or expects three (and fails on a correct build). Writing this assertion is what surfaced
+# that — the earlier membership check could not have.
+und="$(arm-none-eabi-nm "$OUT/gale.o" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
+def_="$(arm-none-eabi-nm "$OUT/gale.o" | awk '$2=="T"||$2=="t"||$2=="W"{print $3}' | sort -u)"
+got="$(comm -23 <(printf '%s\n' "$und") <(printf '%s\n' "$def_") | tr '\n' ' ')"
+[ "$got" = "deadline poll-task read32 " ] \
+  || fail "the embedder seam is not the expected set.
+   expected (unresolved): deadline poll-task read32
+   got:                   $got
+   (3 of gale-nano's 6 lowered imports are its OWN exports, aliased above and resolved inside
+    the object; a change here means synth's lowering moved or the aliasing stopped resolving.)"
+echo "embedder seam is EXACTLY: poll-task, deadline, read32 (the 3 jess genuinely owes)"
 
 "$PY" "$ROOT/tools/embedder-init/extract_init.py" "$GALE" \
     --out-c "$OUT/init_tables.c" --out-manifest "$OUT/init.json" >"$OUT/einit.log" 2>&1 \

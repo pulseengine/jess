@@ -513,6 +513,15 @@ jobs:
             echo "a NO-OP apply loop PASSED the check — it can no longer detect non-consumption"; exit 1
           fi
           echo "negative control OK: a gutted apply loop is refused"
+      # synth#1189 (AFD-114). The pin was bumped on the strength of a two-binary differential
+      # whose evidence lived only as prose in a findings file — nothing could re-run it.
+      # This asserts the property directly on the pinned synth: the if/else join must not
+      # alias a param's home register. Potency verified both ways (passes on 0.64.0, fails
+      # on 0.60.0 with `adds r3, r0, r0`).
+      - name: lowering — synth#1189 join-alias signature is absent from the pinned synth
+        run: tools/lowering/joinalias/check.sh
+        env:
+          SYNTH: .scratch/synthpin/synth
       # H3 first half (AFD-109). gust:hal read32/write32 as REAL MMIO. CI builds and gates
       # the image and asserts the SEAM exists; the silicon leg needs an ST-Link and is
       # hand-run against the bench (see hardware/silicon/f100-gust-hal/README.md).
