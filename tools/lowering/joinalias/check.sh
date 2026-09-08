@@ -25,7 +25,16 @@ command -v wasm-tools >/dev/null || fail "wasm-tools not on PATH"
 "$SYNTH" compile "$OUT/j.wasm" -t cortex-m3 --cortex-m --relocatable --all-exports \
     -o "$OUT/j.o" >"$OUT/lower.log" 2>&1 || { cat "$OUT/lower.log"; fail "control did not lower"; }
 
-dis="$("$SYNTH" disasm "$OUT/j.o" 2>/dev/null)"
+# Disassemble with arm-none-eabi-objdump, NOT `synth disasm`.
+#
+# The first version used `synth disasm` and captured stdout only. That passed locally and
+# FAILED IN CI with "no 'adds' in the disassembly" — synth writes its disassembly and its INFO
+# log across both streams, and the split is not the same on the Linux build. The vacuity guard
+# below caught it rather than letting an empty capture report a pass, which is the one thing
+# that had to work. objdump is deterministic, is already a preflight dependency of the job that
+# runs this, and does not change format between hosts.
+command -v arm-none-eabi-objdump >/dev/null || fail "arm-none-eabi-objdump not on PATH"
+dis="$(arm-none-eabi-objdump -d "$OUT/j.o" 2>/dev/null)"
 # The disassembly must be non-empty AND contain the add, or the grep below would pass
 # vacuously on an empty string — the failure this repo keeps finding in checkers.
 echo "$dis" | grep -qE '\badds\b' \
