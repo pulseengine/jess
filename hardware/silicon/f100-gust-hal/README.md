@@ -57,8 +57,9 @@ produce it.
 
 ## H3's second half: what gale-nano still needs
 
-Measured against the **pinned** artifact (`gale-nano 0.7.0`, sha256 `546531952a5c…`), with
-synth 0.60.0:
+Measured against the **pinned** artifact (`gale-nano 0.7.0`, sha256 `546531952a5c…`). First
+measured under synth 0.60.0 and re-verified byte-identical under the current pin, 0.64.0
+(AFD-114) — the numbers below hold for both:
 
 ```
 cortex-m3    exit 0, 0 skips, 4775 B

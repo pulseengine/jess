@@ -6347,13 +6347,19 @@ artifacts:
             no admit (negative control)       00000000    deadbeef  deadbeef  c0ffee00
       GALE'S CODE RUNS ON THE PART, and exec_admit WORKS: gale's OWN view, exec_state(handle),
       returns 1 — exactly what TEST-PIX-035 asserts ("admitted task starts in state 1").
-      handle == 0 is CORRECT, not a failure: jess already recorded that gale-nano hands out
-      handle 0 (app/gust-dispatch-probe's WIT says so, which is why its never-called sentinel is
-      0xFFFFFFFF).
+      handle == 0 is CORRECT, not a failure — MEASURED, not cited: the wasmtime reference's own
+      `admitted-handle()` returns 0 in the same run.
+      CORRECTION (clean-room): this first said "jess already recorded that gale-nano hands out
+      handle 0 (app/gust-dispatch-probe's WIT says so)". That WIT comment is jess's OWN authored
+      prose, so citing it as the record was circular — it is a restatement of the belief, not
+      evidence for it. The fact is independently measured; only the citation was wrong.
+      CORRECTION (clean-room): the "8/8 assertions" figure above was removed. tools/dispatch/run.sh
+      emits no assertion count at all — it prints a Result: PASS line and its measurement rows.
+      "exit 0" and "green" were true; "8/8" was a precision the cited oracle does not produce.
 
       *** THE DIVERGENCE ***
       exec_poll_round reaches poll-task ZERO times on silicon. The wasmtime reference was re-run
-      GREEN the same day against the same pinned artifact (exit 0, 8/8 assertions) and reaches it
+      GREEN the same day against the same pinned artifact (exit 0) and reaches it
       ONCE: `with-admit() 1`, `without-admit() 0`, `state-before-round() 1`. Both sides use the
       SAME constants (PRIO=1, DEADLINE_LO=1000, NOW_LO=2000) taken from app/dispatch-driver.
       This is the on-target differential doing its job — the thing jess's lane exists for.
@@ -6453,7 +6459,10 @@ artifacts:
       *** TWO PIECES OF ACCRETION REMOVED IN THE SAME CHANGE ***
       (a) The pin directory was named `fg60`, encoding 0.60.0 in a path — the version-in-a-filename
           hazard AFD-106 flagged and did not fix. Renamed to `synthpin` (version-neutral) across
-          all 16 references in 6 files, so the next bump cannot produce a lying filename.
+          6 files, so the next bump cannot produce a lying filename.
+          CORRECTION (clean-room): this said "all 16 references"; the count outside findings.yaml
+          is 20. The file count was right and the rename is complete (grep over .github/, tools/,
+          hardware/, scripts/ returns nothing); only the reference count was wrong.
       (b) CI fetched synth 0.62.0 SEPARATELY, purely because the old pin predated verify-embedder.
           The pin now carries it, so that download was a stale version left behind by an earlier
           bump — the exact drift-by-accretion this repo keeps finding. Removed; build and check now
@@ -6469,4 +6478,88 @@ artifacts:
     fields:
       detected-by: per-piece release-watch of synth v0.64.0 against every jess-lowered artifact, 2026-09-07
       severity: critical
+      triage-status: confirmed
+
+  - id: AFD-115
+    type: ai-found-defect
+    title: "the cascade build judged synth ON-PIN by PATH STRING, so the genuinely pinned binary reached by a relative path was declared a CANDIDATE differential and REQUIRE_ON_PIN failed on it — plus check-drift claimed ci-vs-pin agreement for two tools it never compared"
+    status: open
+    description: |-
+      2026-09-08. Clean-room verification of AFD-113/AFD-114. Every substantive claim in both
+      CONFIRMED — all six artifacts byte-identical across the pin bump, the #1189 defect signature,
+      the silicon result, and gale-nano's component import/export asymmetry. Neither finding was
+      found to overstate scope (nothing implies gale-nano dispatched; nothing implies the RT1176).
+      What the audit found was in the MACHINERY, again.
+
+      *** (1) THE OFF-PIN DETECTOR JUDGED A PATH STRING, AND CONTRADICTED ITS OWN COMMENT ***
+      hardware/renode/cascade-invoke/build.sh decided on-pin-ness with
+      `[ "$SYNTH" = "$SCRATCH/synthpin/synth" ]` — an ABSOLUTE path comparison. Invoking the
+      GENUINELY PINNED binary by a RELATIVE path (`SYNTH=.scratch/synthpin/synth`, exactly what a
+      local run types, and what AFD-114's own verification command used) took the off-pin branch:
+        !! OFF-PIN TOOLCHAIN — release-watch mode
+        !!   synth in use : synth 0.64.0     !!   pinned synth : v0.64.0
+      announcing a CANDIDATE differential for an on-pin build, and `REQUIRE_ON_PIN=1` FAILED on the
+      correct binary. Six lines above it, the meld/loom comment already says why this is wrong:
+      "judge by DIGEST, not by 'was an override used' — otherwise every CI run would announce
+      itself as a candidate differential and the banner would stop meaning anything." announce_tool
+      does it right, with three traps recorded from earlier clean-room passes; the synth branch
+      bypassed all of it. CI escaped only by accident — ci.yml omits SYNTH, so the default absolute
+      path happened to string-match.
+      Fixed to a digest comparison against artifacts.pins. Verified both directions: the relative
+      path is now ON-PIN and REQUIRE_ON_PIN=1 succeeds; synth 0.60.0 still trips the banner and
+      still fails under REQUIRE_ON_PIN=1.
+
+      *** (2) A VACUOUS AGREEMENT CLAIM I INTRODUCED THE DAY BEFORE ***
+      AFD-111 split check-drift.sh into BLOCKING (ci.yml != varve pin) and ADVISORY (PATH only).
+      AFD-114 then removed ci.yml's SYNTH_VERSION as accretion. `ci_pin()` greps for that literal,
+      so synth and loom now read `-` in the CI-YML column — yet the summary still printed
+      "ADVISORY: 4 tool(s) differ ONLY on PATH — ci.yml and the varve pin agree" and "agree for
+      every tool compared (5)". For synth and loom NO ci-vs-pin comparison happened. The script
+      already had vocabulary for this ("single-source (not compared)") and the two-source
+      PATH+varve rows slipped past it.
+      Now counts ci-vs-pin comparisons only where BOTH are declared, and NAMES the tools it did not
+      compare. Reads: "agree for the 3 tool(s) where BOTH are declared / NOT COMPARED against
+      ci.yml (no *_VERSION there): synth loom". Blocking class re-verified potent by reintroducing
+      the rivet disagreement.
+
+      *** (3) THE #1189 EVIDENCE COULD NOT BE RE-RUN ***
+      AFD-114's load-bearing "the differential is NOT vacuous" half — the positive control that
+      makes byte-identity meaningful — existed only as prose. No .wat, no script; the verifier
+      could reproduce the assembly signature but not the quoted byte counts.
+      tools/lowering/joinalias/ now commits the module and a check that asserts the property
+      DIRECTLY on the pinned synth: in the buggy lowering the join writes the param's home so the
+      final add takes it as BOTH operands (`adds rN, r0, r0`); in the fixed one it reads two
+      different registers. Guarded against vacuity (refuses if the disassembly contains no `adds`
+      at all). Potency verified: PASS on 0.64.0 (`adds r4, r2, r0`), FAIL on 0.60.0
+      (`adds r3, r0, r0`). Wired into CI.
+
+      *** (4) THREE FIXES IN THE GALE-NANO HARNESS ***
+      (a) The seam check asserted the three symbols ARE undefined but never that they are the ONLY
+          ones, while printing "the 3 jess genuinely owes". Writing the exact-set assertion is what
+          surfaced a real subtlety: `nm` lists all SIX as undefined even after aliasing, because
+          --redefine-sym renames the DEFINITION to the imported name and the object then carries
+          both a T and a U entry. So the raw U list is NOT the embedder's obligation. The check now
+          compares UNRESOLVED = undefined MINUS defined. Negative control: breaking one alias is
+          refused.
+      (b) The gale-nano digest was HARDCODED in build.sh, a second copy of a value that also lives
+          in artifacts.pins with nothing enforcing agreement — the drifted-mirror shape AFD-104
+          deleted a registry for. Now read from the pins file, refusing if it cannot be read.
+      (c) run-on-silicon.sh PRINTED handle and exec_state but never asserted them — so the
+          exec_state==1 that localises the fault to poll-round rather than admit was eyeballed, and
+          a regression breaking exec_admit would still have printed OK on the control leg. Both are
+          now asserted per leg. Re-run on silicon: result unchanged, new assertions pass silently,
+          only the count still fails — the honest recorded state.
+
+      *** ALSO CORRECTED IN AFD-113/114 THEMSELVES ***
+      "8/8 assertions" (tools/dispatch/run.sh emits no such count — a precision the cited oracle
+      does not produce); citing jess's OWN authored WIT comment as the record that gale-nano hands
+      out handle 0 (circular — the fact is measured, the citation was not evidence); and "16
+      references" where the count is 20. All three recorded as corrections in place.
+
+      NOT FOUND: any overstatement of scope in either finding. The verifier specifically checked
+      for claims that gale-nano dispatched or that anything ran on the RT1176, and found none.
+    tags: [clean-room, machinery, vacuous-gate, drift, afd-113, afd-114, afd-111, synth-1189]
+    fields:
+      detected-by: clean-room verification of AFD-113 and AFD-114 with a fresh-context subagent, 2026-09-08
+      severity: major
       triage-status: confirmed

@@ -52,8 +52,25 @@ command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 # release), that one pin is set aside EXPLICITLY and the version actually used is printed.
 # The input pins — the falcon stages and gale-nano — are still enforced, because a
 # toolchain differential is only meaningful if the inputs are identical.
-PINNED_SYNTH="$SCRATCH/synthpin/synth"
-if [ "$SYNTH" = "$PINNED_SYNTH" ]; then
+# Judge synth by DIGEST, not by the path string.
+#
+# This was `[ "$SYNTH" = "$SCRATCH/synthpin/synth" ]`, an ABSOLUTE-path comparison. So
+# invoking the GENUINELY PINNED binary by a RELATIVE path — `SYNTH=.scratch/synthpin/synth`,
+# exactly what a local run types — took the off-pin branch: the banner announced a CANDIDATE
+# differential for an on-pin build, and `REQUIRE_ON_PIN=1` FAILED on the correct binary.
+# The adjacent comment for meld/loom already said to judge by digest "otherwise every CI run
+# would announce itself as a candidate differential and the banner would stop meaning
+# anything"; the synth branch did not follow it. Found by clean-room verification.
+synth_on_pin() {
+  local d
+  [ -x "$SYNTH" ] || return 1
+  if   command -v shasum   >/dev/null 2>&1; then d="$(shasum -a 256 "$SYNTH" 2>/dev/null | cut -d" " -f1)"
+  elif command -v sha256sum >/dev/null 2>&1; then d="$(sha256sum  "$SYNTH" 2>/dev/null | cut -d" " -f1)"
+  else fail "cannot verify synth against its pin: neither shasum nor sha256sum is available"; fi
+  [ "${#d}" -eq 64 ] || return 1
+  grep -qE "^synthpin/synth[[:space:]]+$d([[:space:]]|\$)" "$ROOT/tools/deps/artifacts.pins"
+}
+if synth_on_pin; then
   SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" >/dev/null 2>&1 \
     || fail "external artifacts do not match tools/deps/artifacts.pins"
 else
@@ -62,7 +79,7 @@ else
   export DEPS_EXCLUDE="synthpin/synth"   # threaded to the sub-oracles' own preflights
   echo "!! OFF-PIN TOOLCHAIN — release-watch mode"
   echo "!!   synth in use : $("$SYNTH" --version 2>&1 | head -1)  ($SYNTH)"
-  echo "!!   pinned synth : $(grep '^synthpin/synth' "$ROOT/tools/deps/artifacts.pins" | awk '{print $3}' | sed 's/.*@//;s/!.*//')"
+  echo "!!   pinned synth : $(grep '^synthpin/synth' "$ROOT/tools/deps/artifacts.pins" | awk '{print $3}' | sed 's/.*@//;s/!.*//' | head -1)"
   echo "!!   inputs ARE pin-verified; results from this build are a CANDIDATE differential,"
   echo "!!   not a campaign result, until the pin is updated."
   [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and synth is off-pin"

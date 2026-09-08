@@ -4,7 +4,7 @@
 # externals is not a shippable image.
 #
 # WHAT THIS ESTABLISHES (AFD-046): the M4-portability half of GI-FPU-002 is resolved in
-# synth v0.60 via the relocatable + embedder-contract path, and jess's obligation as the
+# the campaign-pinned synth via the relocatable + embedder-contract path, and jess's obligation as the
 # embedder is exactly THREE AEABI symbols, all present in the stock ARM toolchain.
 #
 # The plain self-contained path still declines 3 functions on m4f — that is NOT a defect,

@@ -44,8 +44,15 @@ run_leg() {
 echo
 printf "%-42s %-11s %-9s %-9s %s\n" "LEG (only the ADMIT word differs)" "poll-task#" "handle" "state" "completion"
 rc=0
-for leg in "1|task admitted (baseline)|ge1" "0|no admit (negative control)|eq0"; do
-  IFS='|' read -r flag label want <<EOF
+# handle and exec_state are ASSERTED, not just printed. They were displayed only, so the
+# 00000001 that localises the fault to poll-round rather than admit was eyeballed — a
+# regression breaking exec_admit would still have printed OK on the control leg. Found by
+# clean-room verification. exec_state==1 is gale's OWN view and matches the wasmtime
+# reference's "admitted task starts in state 1"; on the no-admit leg both words must remain
+# the reset poison, because neither call is made.
+for leg in "1|task admitted (baseline)|ge1|00000000|00000001" \
+           "0|no admit (negative control)|eq0|deadbeef|deadbeef"; do
+  IFS='|' read -r flag label want wanth wantst <<EOF
 $leg
 EOF
   out=$(run_leg "$flag")
@@ -64,6 +71,8 @@ EOF
       eq0) [ "$n" -eq 0 ] || { ok="*** poll-task reached $n time(s) WITHOUT an admit ***"; rc=1; } ;;
     esac
   elif [ -z "$cnt" ]; then ok="*** no count read ***"; rc=1; fi
+  [ "$h"  = "$wanth"  ] || { ok="$ok *** handle $h, want $wanth ***"; rc=1; }
+  [ "$st" = "$wantst" ] || { ok="$ok *** exec_state ${st:-<none>}, want $wantst ***"; rc=1; }
   printf "  %-40s %-11s %-9s %-9s %-9s %s\n" "$label" "${cnt:-<none>}" "$h" "${st:-<none>}" "$d" "$ok"
 done
 echo
