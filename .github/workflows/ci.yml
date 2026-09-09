@@ -41,7 +41,14 @@ env:
   #   0.25.0 / 0.32.0 / 0.34.0 / 0.36.0 -> all PASS (266 warnings), coverage 63.9% >= 60.
   # So this closes a latent hazard, not an active defect. tools/varve/check-drift.sh now
   # reports ci.yml-vs-pin disagreement as BLOCKING, separately from PATH staleness.
-  RIVET_VERSION: v0.34.0
+  # Tracks the varve LAYER, which is the authority for rivet (artifacts.pins does not name
+  # it). The 2026.08.4 -> 2026.09.2 layer migration moved rivet 0.34.0 -> 0.35.0, and
+  # check-drift reported the gap as BLOCKING until this followed. Measured on the same
+  # unchanged store before bumping: 0.34.0 / 0.35.0 / 0.36.0 all `Result: PASS (277 warnings)`
+  # and all clear the floor — but the coverage NUMBER moved, 63.9% under 0.34.0 and 64.8%
+  # under 0.35.0+. The metric is version-dependent, so a coverage figure is only meaningful
+  # beside the binary that produced it.
+  RIVET_VERSION: v0.35.0
   # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.

@@ -38,7 +38,22 @@ campaign_pin() { # tool -> version named by artifacts.pins, or empty
     "$ROOT/tools/deps/artifacts.pins" 2>/dev/null | head -1
 }
 
-compared=0; single=0; advisory=0; cipin=0; nocipin=""; ahead=""
+# REFUSE if varve cannot resolve the layer at all.
+#
+# The 2026.09.2 migration made this concrete: the new varve-realms.toml carries `retired-roots`,
+# which a varve < 0.33.0 cannot parse, so EVERY `varve run` failed and the VARVE-LAYER column
+# read `-` for every tool — and this script reported "no blocking drift", exit 0. A green
+# verdict produced by a broken toolchain rather than by agreement, which is the vacuity class
+# this repo keeps finding in checkers. Fail loudly and name the cause instead.
+if ! varve which rivet >/dev/null 2>&1 && ! varve which meld >/dev/null 2>&1; then
+  echo "CANNOT RESOLVE THE VARVE LAYER — refusing to report a drift verdict." >&2
+  varve which rivet 2>&1 | head -3 | sed 's/^/  /' >&2
+  echo "  A 'no drift' result here would be a verdict about a toolchain this script could not" >&2
+  echo "  read. If the realms file mentions retired-roots, varve must be >= 0.33.0." >&2
+  exit 2
+fi
+
+compared=0; single=0; advisory=0; cipin=0; nocipin=""; ahead=""; behind=""
 printf '%-8s  %-11s  %-11s  %-11s  %-11s  %s\n' TOOL PATH VARVE-LAYER CAMPAIGN CI-YML STATUS
 for t in rivet spar meld synth loom sigil; do
   p="$(ver "$t")"
@@ -99,7 +114,14 @@ for t in rivet spar meld synth loom sigil; do
     # unnoticed until removing ci.yml's SYNTH_VERSION made synth and loom read `-` here while
     # the prose still asserted agreement for them. Found by clean-room verification.
     if [ -n "$auth" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
-    [ -n "$cp" ] && [ -n "$v" ] && [ "$cp" != "$v" ] && ahead="$ahead $t($v->$cp)"
+    # Report the campaign/layer gap in BOTH directions. Only reporting "ahead" made a
+    # campaign pin that had fallen BEHIND the layer invisible — and behind is the direction
+    # that silently misses a fix, which is the worse one.
+    if [ -n "$cp" ] && [ -n "$v" ] && [ "$cp" != "$v" ]; then
+      newest="$(printf '%s\n%s\n' "$cp" "$v" | sort -V | tail -1)"
+      if [ "$newest" = "$cp" ]; then ahead="$ahead $t(layer $v -> campaign $cp)"
+      else behind="$behind $t(campaign $cp < layer $v)"; fi
+    fi
   fi
   printf '%-8s  %-11s  %-11s  %-11s  %-11s  %s\n' "$t" "${p:--}" "${v:--}" "${cp:--}" "${c:--}" "$st"
 done
@@ -137,6 +159,11 @@ echo "no blocking drift: ci.yml agrees with the authoritative pin for the $cipin
 if [ -n "$ahead" ]; then
   echo "CAMPAIGN AHEAD OF THE VARVE LAYER (deliberate, see artifacts.pins):$ahead"
   echo "  Not drift: artifacts.pins is the authority for these, and the reason is recorded there."
+fi
+if [ -n "$behind" ]; then
+  echo "CAMPAIGN PIN BEHIND THE VARVE LAYER:$behind"
+  echo "  Not blocking — artifacts.pins is the authority — but this is the direction that"
+  echo "  silently misses an upstream fix. Worth a release-watch, not a shrug."
 fi
 if [ -n "$nocipin" ]; then
   echo "NOT COMPARED against ci.yml (no *_VERSION there):$nocipin"
