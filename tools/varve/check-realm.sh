@@ -54,8 +54,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Every row must be OBSERVED to give its stated verdict — including the two failures.
   # A guard whose failing cases were never executed is the vacuity this campaign keeps
   # finding in checkers rather than in code.
-  for row in "$OLD_ROOT|2026.08.4|0|pre-rotation pin, old root (jess today)" \
-             "$NEW_ROOT|2026.09.2|0|post-rotation pin, new root" \
+  for row in "$OLD_ROOT|2026.08.4|0|pre-rotation pin, old root (the frozen old realm)" \
+             "$NEW_ROOT|2026.09.2|0|post-rotation pin, new root (jess today)" \
              "$NEW_ROOT|2026.08.4|1|THE TRAP: new realms file, pin not moved" \
              "$OLD_ROOT|2026.09.2|1|pin moved past the boundary, realm not updated" \
              "deadbeef|2026.08.4|1|unrecognised root"; do
