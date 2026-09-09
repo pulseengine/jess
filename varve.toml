@@ -13,9 +13,16 @@ manifest-version = 1
 [toolchain]
 realm   = "pulseengine"
 channel = "rolling"
-layer   = "2026.08.4"
-# The layer NAME is not sufficient on its own: two entries for 2026.08.4 exist in this
+layer   = "2026.09.2"
+# The layer NAME is not sufficient on its own: two entries for 2026.08.4 existed in the old
 # realm under different digests, and varve refuses to guess between them rather than
-# silently picking one. That refusal is the feature. This digest is the one `varve
-# install` fetched and verified against the realm's trust root on 2026-08-27.
-digest  = "sha256:c1e6a418f87dedfb97caca3d983cb7a17b3365492f66de920487a8470f064fe1"
+# silently picking one. That refusal is the feature.
+#
+# MIGRATED 2026-09-09 (jess#261). The rolling trust root rotated AND the registry moved, so
+# THREE things had to change together, not the two the issue listed: varve-realms.toml
+# (registry + trust-root), this `layer`, and this `digest`. Moving the first two and leaving
+# the digest gave `error: source has no layer matching sha256:c1e6a418...` — the old layer's
+# digest, which does not exist in the new registry.
+# This digest is the one `varve install` fetched and verified against the NEW trust root on
+# 2026-09-09; it was resolved by name and then recorded, never guessed.
+digest  = "sha256:67d585476be898dcd6c7f0e31fb8abe9c6548f708b3cb44804ad61cc5d999025"

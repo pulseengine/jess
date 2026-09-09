@@ -6689,3 +6689,78 @@ artifacts:
       detected-by: per-piece release-watch of meld v0.55.1 against the real fused cascade, 2026-09-09
       severity: major
       triage-status: confirmed
+
+  - id: AFD-118
+    type: ai-found-defect
+    title: "varve realm migration (jess#261) executed: root rotated AND registry moved, layer 2026.08.4 -> 2026.09.2 — but it needed THREE coordinated changes, not the two the issue listed, plus a varve binary upgrade, and it would have made check-drift silently green on a toolchain it could not read"
+    status: open
+    description: |-
+      2026-09-09. varve filed jess#261: the pulseengine rolling trust root rotated and the layer
+      registry moved, so varve-realms.toml and varve.toml had to change together. Executed, with
+      three things the issue did not mention — each found by doing it rather than by reading it.
+
+      *** THE GUARD BUILT FOR THIS MOMENT WORKED ***
+      AFD-112 added tools/varve/check-realm.sh two days ago, encoding "a realm/pin pairing whose
+      root cannot verify the pinned layer is refused, in either direction". Exercised against the
+      REAL migration values before touching anything, all four states correct:
+          old root + 2026.08.4  exit 0   (before)
+          NEW root + 2026.08.4  exit 1   THE TRAP the issue warns about
+          old root + 2026.09.2  exit 1   the other half-state
+          NEW root + 2026.09.2  exit 0   (after)
+      A first run of that check reported exit 0 for all four because the harness piped through
+      `tail` and captured the PIPE's status — this repo's own standing rule, in the verification
+      of the guard that enforces it. Re-run bare, the guard is correct.
+
+      *** THREE COORDINATED CHANGES, NOT TWO ***
+      The issue showed varve-realms.toml (registry + trust-root) and varve.toml `layer`. jess's
+      pin also carries a `digest`, because jess had hit two 2026.08.4 entries under different
+      digests and varve refuses to guess. Moving only the two produced:
+          error: source has no layer matching sha256:c1e6a418...
+      i.e. the OLD layer's digest, which does not exist in the new registry. Resolved by removing
+      the digest, installing BY NAME, and recording what varve actually verified —
+      sha256:67d585476be898dcd6c7f0e31fb8abe9c6548f708b3cb44804ad61cc5d999025 — never guessed.
+
+      *** AND A VARVE BINARY UPGRADE THE ISSUE DID NOT STATE ***
+      The new varve-realms.toml carries `retired-roots`. varve 0.29.0 (what was on PATH) cannot
+      parse it: "unknown field `retired-roots`". That is not a niche failure — FIVE jess scripts
+      shell out to varve (tools/wit/regen.sh, tools/fusion-matrix/run.sh,
+      tools/appcompose/build-and-verify.sh, tools/varve/check-drift.sh,
+      hardware/renode/cascade-invoke/build.sh), and every one of them breaks until the binary is
+      >= 0.33.0. The error names the FIELD, not the cause.
+      The feature itself is good and visible: `varve list` now annotates every pre-rotation layer
+      "retired root, 2026-09-07 — layers here do not verify against the realm's current root"
+      instead of a bare "No valid signatures". That is the improvement the realms file promises.
+
+      *** THE MIGRATION WOULD HAVE MADE A CHECKER SILENTLY GREEN ***
+      With varve 0.29.0 and the new realms file, every `varve run` fails, so check-drift.sh read
+      `-` for the entire VARVE-LAYER column and reported "no blocking drift", EXIT 0. A green
+      verdict produced by a toolchain the script could not read — the exact vacuity class this
+      campaign keeps finding in checkers rather than in code, and the migration would have
+      introduced it silently. check-drift now REFUSES (exit 2) when it cannot resolve the layer at
+      all, quoting varve's own error and naming the >= 0.33.0 requirement.
+
+      *** WHAT THE LAYER JUMP MOVED, AND THE ONE REAL DISAGREEMENT IT SURFACED ***
+      `varve verify`: layer 2026.09.2 verified, signature OK, 12 tools match their signed digests
+      (was 11), in a disjoint realm namespace (a8ca9eb8... vs fdf90b77...) — the old realm is
+      frozen, not broken, exactly as the issue said. `varve inspect`: 44 payloads, 39 dispatched,
+      5 held. rivet 0.34.0 -> 0.35.0, synth 0.58.0 -> 0.61.0, meld 0.52.0 -> 0.53.0,
+      loom 1.4.0 -> 1.4.1, spar unchanged.
+      That made rivet DRIFT-BLOCKING: ci.yml pinned 0.34.0 against a layer carrying 0.35.0, and
+      the varve layer is rivet's authority because artifacts.pins does not name it. Aligned
+      ci.yml to 0.35.0, measured first on the same unchanged store:
+          rivet 0.34.0 / 0.35.0 / 0.36.0 -> all `Result: PASS (277 warnings)`, all clear the floor
+          BUT the coverage NUMBER moved: 63.9% under 0.34.0, 64.8% under 0.35.0 and 0.36.0
+      A compliance figure is only meaningful beside the binary that produced it; AFD-100's 63.9%
+      is a 0.34.0 number.
+      Also surfaced: jess's loom campaign pin (1.4.0) is BEHIND the layer (1.4.1). check-drift
+      only reported the campaign-AHEAD direction, so a pin that had fallen behind was invisible —
+      and behind is the direction that silently misses an upstream fix. Now reported both ways.
+
+      NOT URGENT AND NOT TREATED AS SUCH: the issue states the old realm still serves every layer
+      it served yesterday. Nothing was deleted; this was done because the migration is cheap now
+      and expensive to discover later, not because anything was failing.
+    tags: [varve, supply-chain, trust-root, migration, vacuous-gate, drift, afd-112, afd-117, jess-261]
+    fields:
+      detected-by: executing the varve realm migration requested in jess#261, 2026-09-09
+      severity: major
+      triage-status: confirmed
