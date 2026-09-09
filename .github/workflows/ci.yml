@@ -85,7 +85,9 @@ env:
   # all five boundaries resolve, and the composed image EXECUTES to the reference) and is
   # ready for whenever the varve layer moves. Not adopted here: the point of this change is
   # to make CI match the pin, not to jump ahead of it and recreate the divergence.
-  MELD_VERSION: v0.52.0
+  # Kept in lockstep with tools/deps/artifacts.pins — check-drift.sh reports a ci-vs-pin
+  # disagreement as BLOCKING, so these two moving apart is a red board, not a silent drift.
+  MELD_VERSION: v0.55.1
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links

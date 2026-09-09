@@ -6629,3 +6629,63 @@ artifacts:
       detected-by: per-piece release-watch of kiln v0.5.0 against the real fused cascade, 2026-09-09
       severity: major
       triage-status: confirmed
+
+  - id: AFD-117
+    type: ai-found-defect
+    title: "meld#401 fixed and VERIFIED on jess's real build (attested count 10 -> 5); pin bumped 0.52.0 -> 0.55.1, which also retires two wrong-output defects jess itself reported — and the bump exposed that check-drift was comparing ci.yml against the WRONG pin authority"
+    status: open
+    description: |-
+      2026-09-09. Per-piece release-watch of meld v0.55.1.
+
+      *** THE FIX, VERIFIED AGAINST THE REAL BUILD RATHER THAN THE CLAIM ***
+      meld#401 (jess-filed): v0.55.0 corrected the console "Fusing N components" line but not the
+      attestation, so one run printed 5 and shipped 10. Fixed in 0.55.1 (SR-74). Measured on jess's
+      real five stage inputs:
+          meld 0.52.0 (pin)  console=10  attestation components_fused=10  modules_merged=5
+          meld 0.55.1        console=5   attestation components_fused=5   modules_merged=5
+      Both numbers now agree and both are right. meld also documented the second half of that
+      report — that --reproducible additionally substitutes attested input NAMES, which its help
+      text did not say.
+
+      *** THE PIN IS BUMPED 0.52.0 -> 0.55.1 ***
+      jess's pin predated THREE fixes on the exact path jess uses (--memory shared --pack-rebase),
+      and jess REPORTED two of them:
+          0.53.0  the path could emit INVALID wasm at exit 0            (jess: meld#390)
+          0.54.0  it could emit a module that VALIDATES and returns the WRONG NUMBER (same thread)
+          0.55.0  --memory shared now validates its own output BY DEFAULT — the change jess argued for
+          0.55.1  the attestation count                                  (jess: meld#401)
+      Reporting a defect and then staying on the release that contains it is a gap worth naming
+      plainly; this closes it.
+      BEHAVIOUR-NEUTRAL, MEASURED END TO END, the same standard AFD-114 set: fused CODE+DATA
+      byte-identical 0.52.0 -> 0.55.1 (7,949 identical lines with both metadata sections
+      stripped); the full chain builds fully ON-PIN (89,816 B linked, 0 undefined, 5/5 key
+      symbols, fusion still byte-reproducible); and the lowered ARM objects still match the
+      AFD-106 baseline exactly (m7dp 5362d831..., m4f 90e8fa9b...). So none of those defect
+      classes ever fired on jess's inputs — and the pin no longer carries them.
+
+      *** WHAT THE BUMP EXPOSED: check-drift COMPARED AGAINST THE WRONG AUTHORITY ***
+      Bumping artifacts.pins + ci.yml to 0.55.1 made check-drift.sh report meld as
+      DRIFT-BLOCKING, because it compared ci.yml against the VARVE LAYER (still 0.52.0) rather
+      than against tools/deps/artifacts.pins — which is jess's actual authority and says so in its
+      own words for synth ("NOT varve-pinned: the varve layer carries synth 0.58.0 while the
+      campaign runs 0.64.0"). So a deliberate, verified decision was reported as drift.
+      synth had been escaping that verdict only because AFD-114 removed its ci.yml *_VERSION key,
+      so it read "not compared" — convenient rather than principled, and it would have broken the
+      moment synth got a CI pin back.
+      The table now carries FOUR sources — PATH, VARVE-LAYER, CAMPAIGN, CI-YML — and BLOCKING
+      means "ci.yml disagrees with the AUTHORITATIVE pin", which is the campaign pin where
+      artifacts.pins names the tool and the varve layer otherwise; the STATUS column names which
+      authority was used. A campaign pin deliberately ahead of the layer is reported as its own
+      line ("CAMPAIGN AHEAD OF THE VARVE LAYER (deliberate, see artifacts.pins): meld(0.52.0->
+      0.55.1) synth(0.58.0->0.64.0)") rather than as drift.
+      The campaign-pin lookup keys off the RELEASE REF, not the store path, because the path
+      prefix need not equal the tool name — synth lives under `synthpin/` precisely so the
+      directory carries no version (AFD-114). A first version keyed on `<tool>/<tool>` and silently
+      read `-` for synth.
+      Blocking class re-verified potent: pointing ci.yml back at 0.52.0 reproduces
+      "DRIFT-BLOCKING (ci.yml != campaign)" and exit 1.
+    tags: [meld, release-watch, pin-bump, attestation, drift, authority, afd-114, afd-111, meld-401, meld-390]
+    fields:
+      detected-by: per-piece release-watch of meld v0.55.1 against the real fused cascade, 2026-09-09
+      severity: major
+      triage-status: confirmed

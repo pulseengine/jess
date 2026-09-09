@@ -23,12 +23,31 @@ ci_pin() { # tool -> the version ci.yml downloads, or empty
 }
 ver() { "$@" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
 
-compared=0; single=0; advisory=0; cipin=0; nocipin=""
-printf '%-8s  %-12s  %-12s  %-12s  %s\n' TOOL PATH VARVE-PIN CI-YML STATUS
+# The CAMPAIGN pin: the version tools/deps/artifacts.pins names for this tool.
+#
+# This column exists because the varve LAYER is not always jess's authority. artifacts.pins
+# says so in its own words for synth ("NOT varve-pinned: the varve layer carries synth 0.58.0
+# while the campaign runs 0.64.0"), and meld joined it when jess bumped past three defects the
+# layer's build still contains. Comparing ci.yml against the LAYER for such a tool asks the
+# wrong question and reports a deliberate, verified decision as BLOCKING drift.
+# Found when exactly that happened to the meld 0.55.1 bump.
+campaign_pin() { # tool -> version named by artifacts.pins, or empty
+  # Key off the RELEASE REF, not the store path: the path prefix need not equal the tool
+  # name (synth is stored under `synthpin/` precisely so the directory carries no version).
+  sed -n "s|.*release:pulseengine/$1@v\{0,1\}\([0-9][^!]*\)!.*|\1|p" \
+    "$ROOT/tools/deps/artifacts.pins" 2>/dev/null | head -1
+}
+
+compared=0; single=0; advisory=0; cipin=0; nocipin=""; ahead=""
+printf '%-8s  %-11s  %-11s  %-11s  %-11s  %s\n' TOOL PATH VARVE-LAYER CAMPAIGN CI-YML STATUS
 for t in rivet spar meld synth loom sigil; do
   p="$(ver "$t")"
   v="$(varve run "$t" --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
   c="$(ci_pin "$t")"
+  cp="$(campaign_pin "$t")"
+  # The AUTHORITY for a ci.yml comparison is the campaign pin when artifacts.pins names the
+  # tool, and the varve layer otherwise.
+  auth="${cp:-$v}"; authname="campaign"; [ -n "$cp" ] || authname="varve-layer"
   # Compare only the sources that actually exist; not every tool is pinned in ci.yml,
   # and treating absence as disagreement would make this cry wolf.
   #
@@ -69,9 +88,9 @@ for t in rivet spar meld synth loom sigil; do
     st="ok"; compared=$((compared+1))
     # An all-agree row is still a ci-vs-pin comparison when both are declared — count it,
     # or the summary under-reports what it actually checked.
-    if [ -n "$v" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
-  elif [ -n "$v" ] && [ -n "$c" ] && [ "$v" != "$c" ]; then
-    st="DRIFT-BLOCKING (ci.yml != pin)"; drift=1; compared=$((compared+1)); cipin=$((cipin+1))
+    if [ -n "$auth" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
+  elif [ -n "$auth" ] && [ -n "$c" ] && [ "$auth" != "$c" ]; then
+    st="DRIFT-BLOCKING (ci.yml != $authname)"; drift=1; compared=$((compared+1)); cipin=$((cipin+1))
   else
     st="drift-advisory (PATH only)"; advisory=$((advisory+1)); compared=$((compared+1))
     # Count the ci-vs-pin comparison ONLY when BOTH sources exist. A row with just PATH and
@@ -79,9 +98,10 @@ for t in rivet spar meld synth loom sigil; do
     # used to claim "ci.yml and the varve pin agree" for exactly those rows. That went
     # unnoticed until removing ci.yml's SYNTH_VERSION made synth and loom read `-` here while
     # the prose still asserted agreement for them. Found by clean-room verification.
-    if [ -n "$v" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
+    if [ -n "$auth" ] && [ -n "$c" ]; then cipin=$((cipin+1)); else nocipin="$nocipin $t"; fi
+    [ -n "$cp" ] && [ -n "$v" ] && [ "$cp" != "$v" ] && ahead="$ahead $t($v->$cp)"
   fi
-  printf '%-8s  %-12s  %-12s  %-12s  %s\n' "$t" "${p:--}" "${v:--}" "${c:--}" "$st"
+  printf '%-8s  %-11s  %-11s  %-11s  %-11s  %s\n' "$t" "${p:--}" "${v:--}" "${cp:--}" "${c:--}" "$st"
 done
 
 echo
@@ -94,9 +114,11 @@ fi
 if [ "$drift" -ne 0 ]; then
   cat <<'MSG'
 
-DRIFT-BLOCKING: ci.yml and the varve pin name DIFFERENT versions. CI is qualifying this
-project against a toolchain the pin does not claim, so a green board is a verdict about
-a toolchain nobody declared. Both are committed files — fix one of them (AFD-045).
+DRIFT-BLOCKING: ci.yml disagrees with the AUTHORITATIVE pin for a tool (the STATUS column
+names which authority was used: the campaign pin in tools/deps/artifacts.pins where it names
+the tool, otherwise the varve layer). CI is qualifying this project against a toolchain no
+committed file claims, so a green board is a verdict about a toolchain nobody declared.
+Both sources are committed — fix one of them (AFD-045).
   varve run <tool> ...   runs the PINNED binary regardless of PATH
   varve verify           re-checks the pinned layer and reports PATH shadowing
 MSG
@@ -111,7 +133,11 @@ if [ "$compared" -eq 0 ]; then
   echo "A 'no drift' verdict here would be green on a toolchain never inspected." >&2
   exit 2
 fi
-echo "no blocking drift: ci.yml and the varve pin agree for the $cipin tool(s) where BOTH are declared."
+echo "no blocking drift: ci.yml agrees with the authoritative pin for the $cipin tool(s) compared."
+if [ -n "$ahead" ]; then
+  echo "CAMPAIGN AHEAD OF THE VARVE LAYER (deliberate, see artifacts.pins):$ahead"
+  echo "  Not drift: artifacts.pins is the authority for these, and the reason is recorded there."
+fi
 if [ -n "$nocipin" ]; then
   echo "NOT COMPARED against ci.yml (no *_VERSION there):$nocipin"
   echo "  These rows say nothing about CI. Claiming agreement for them would be a verdict"
