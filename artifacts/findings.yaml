@@ -6764,3 +6764,68 @@ artifacts:
       detected-by: executing the varve realm migration requested in jess#261, 2026-09-09
       severity: major
       triage-status: confirmed
+
+  - id: AFD-119
+    type: ai-found-defect
+    title: "relay's v0.8 sensor-frame would push ekf#estimate PAST the Canonical ABI flattening limit (6 + 11 = 17 > 16), silently flipping it from flattened to pointer-based — measured with a counting method validated against the shipped cascade's own core signatures"
+    status: open
+    description: |-
+      2026-09-10. relay filed jess#264 (the develop-in-wasm ladder) and asked three questions.
+      The first — whether `option<>` is acceptable on jess's lowering path — has a measured answer
+      that is not the one the question anticipates.
+
+      *** THE METHOD, VALIDATED AGAINST GROUND TRUTH BEFORE BEING USED TO PREDICT ***
+      Record field counts predict the emitted core signature exactly on the shipped v0.7.0 fused
+      cascade:
+          ekf#estimate    imu-sample = 6                       -> (param f32 x6) -> i32  FLATTENED
+          mixer#mix       torque-setpoint = 4                  -> (param f32 x4) -> i32  FLATTENED
+          rate#tick       vehicle-state 14 + rate-setpoint 4=18-> (param i32)    -> i32  POINTER
+      So the flattening limit is bracketed by measurement at (6 flattened, 18 indirect]; the spec
+      value is 16. The method is not a guess — it reproduces all three shapes jess actually
+      observes.
+
+      *** THE PREDICTION ***
+      Each `option<T>` costs 1 discriminant + width(T). For relay#382's v0.8 sensor-frame:
+          imu-sample                      6
+          dt-s                           +1
+          option<position-ned> (3 f32)   +4
+          option<mag-body>     (3 f32)   +4
+          option<heading-rad>  (1 f32)   +2
+                                        ---
+                                         17   > 16
+      ekf#estimate has 10 slots of headroom today and the change consumes 11, so it flips from
+      FLATTENED to POINTER-BASED — and nothing errors when it does. Field widths for position-ned
+      and mag-body are assumed to be 3 f32 each; relay was asked to check them rather than take
+      jess's arithmetic on trust.
+
+      *** WHY THIS IS A REPORTABLE RISK RATHER THAN A PREFERENCE ***
+      jess has already paid for exactly this: assuming pointer-in for both rate and mixer, where
+      the Canonical ABI PASSES GARBAGE RATHER THAN ERRORING, and it took a reference mismatch to
+      find. The shipped cascade already carries THREE distinct calling shapes across five exports
+      of one component. `option<>` itself lowers fine under synth — discriminant plus payload, both
+      ordinary code. The hazard is the boundary, not the construct.
+      jess's stated preference to relay: a single validity bitmask + flat scalars costs 8 slots
+      against `option<>`'s 10 and keeps the export flattened with headroom. NaN-as-absent is
+      cheaper still (7) and was explicitly NOT recommended — NaN is a value a broken sensor can
+      legitimately produce, and conflating "absent" with "garbage" is the failure class this
+      campaign keeps filing. If relay prefers `option<>` for interface honesty, jess will consume
+      it; the ask is that crossing the limit be a stated decision rather than a discovery.
+
+      *** THE OTHER TWO ANSWERS, BOTH SCOPED HONESTLY ***
+      Rung 2's driver-layer seam: jess does not have one. gust:hal is, in its entirety, read32 and
+      write32 — two volatile accesses, now doing real MMIO on silicon (AFD-109). There is nothing
+      above them that turns a device into an imu-sample. The current WIT lacks nothing for rung 2;
+      there is simply nothing on jess's side to attach yet.
+      RT1176 tick rate: there is none, because no falcon code has executed on an RT1176 (H1 closed
+      by HAB). relay's sharper question was whether the hardcoded 1 kHz has already corrupted what
+      jess lowered. MEASURED ANSWER: it has not, because nothing jess lowered has ever run against
+      elapsed time. The lowered cascade has ZERO undefined symbols — it imports nothing at all, so
+      it cannot ask a host for the time — and jess's oracles are fixed-N invocations over a
+      CONSTANT input vector with no wall clock. The concern is true of the code and has not yet
+      produced a wrong number in any jess measurement. It goes live at rung 3, where periodicity
+      (DD-025, asked of gale on gale#224) is still unanswered.
+    tags: [relay, canonical-abi, flattening-limit, seam, lowering, jess-264, relay-382, dd-025]
+    fields:
+      detected-by: answering relay's jess#264 questions by measuring the shipped cascade's core signatures, 2026-09-10
+      severity: major
+      triage-status: confirmed
