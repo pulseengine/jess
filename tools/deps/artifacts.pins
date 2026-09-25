@@ -89,11 +89,20 @@ synthpin/synth               5f7042ac07d30b40d58161ec0e7ed5fec23020bfc1589051a1a
 # 90e8fa9b.... So the defect classes never fired on jess's inputs — and the pin no longer
 # carries them.
 #
-# What the bump DOES change is the attested count: 5 input files were attested as 10
+# BUMPED AGAIN 0.55.1 -> 0.58.3 for --emit-manifest (meld#400). This bump is NOT
+# byte-neutral, and the difference is fully attributed rather than waved at:
+#   fused module: differs by EXACTLY ONE line, `(export "cabi_realloc" (func 2))`
+#   lowered m7dp: md5 5362d831... -> d03e5912..., 41,140 -> 41,548 B (+408)
+#   the +408 B is the newly-exported cabi_realloc (0x164 = 356 B) plus its callee func_1.
+#   `nm` diff adds exactly {cabi_realloc, func_1} and removes nothing.
+# So the AFD-106 baseline MOVES, for a stated additive reason: meld now exports the
+# allocator a host needs to build guest-side arguments. Recorded, not silently adopted.
+#
+# What the earlier 0.52.0 -> 0.55.1 bump changed: 5 input files were attested as 10
 # components under 0.52.0 and are attested as 5 under 0.55.1, with the console line agreeing.
 # The attestation is the half that travels with the artifact and that an auditor reads.
-meld/meld                    8ac67e9324db09d1028fef84f086a16b3a988898e8dc7a82f4e0aad8a2dc3563  release:pulseengine/meld@v0.55.1!meld-v0.55.1-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
-meld/meld                    d8be7ee18fc0b06dc85f65133eb7938b41480f65dfbb3ed6c05efbaa2d4b3d94  release:pulseengine/meld@v0.55.1!meld-v0.55.1-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
+meld/meld                    e11e1b8cf50c77acd21ab6ec7bf09dc8d95d53112aec14ee4e04205b2e8c0232  release:pulseengine/meld@v0.58.3!meld-v0.58.3-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
+meld/meld                    41400de67737f4f52bc6d757dc48a7d77311e94810d449eb2acb161817647e5c  release:pulseengine/meld@v0.58.3!meld-v0.58.3-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
 loom/loom                    9583f530baa0d6f0a0c140b5247ac618d9d56bcbf8d42e0c8a1ba5a2a20af6f6  release:pulseengine/loom@v1.4.0!loom-v1.4.0-aarch64-apple-darwin.tar.gz!loom      platform=aarch64-apple-darwin
 loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc6fb5df15c5380  release:pulseengine/loom@v1.4.0!loom-v1.4.0-x86_64-unknown-linux-gnu.tar.gz!loom  platform=x86_64-unknown-linux-gnu
 
