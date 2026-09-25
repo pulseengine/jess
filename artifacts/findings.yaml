@@ -6829,3 +6829,76 @@ artifacts:
       detected-by: answering relay's jess#264 questions by measuring the shipped cascade's core signatures, 2026-09-10
       severity: major
       triage-status: confirmed
+
+  - id: AFD-120
+    type: ai-found-defect
+    title: "meld 0.58.3 ships the signature manifest jess argued for on meld#400 — jess's hand-derived ABI now cross-checks against meld's own record on all five exports, and the gate is wired before the falcon 0.10.0 migration breaks every number"
+    status: open
+    description: |-
+      2026-09-25. Phase A of the post-falcon-switch plan: toolchain first, behaviour attributed.
+
+      *** THE MANIFEST LANDED, WITH THE FIELD JESS ASKED FOR ***
+      meld#400 asked kiln to choose between synthesizing a `component-type` section (A) and a
+      bespoke signature manifest (B). jess commented as a second consumer and added a requirement
+      neither option stated: the RETURN-AREA SIZE, because every falcon export returns a pointer
+      and a signature alone leaves a consumer unable to say how many bytes it covers. The thread
+      resolved to B and shipped in 0.57.0. The emitted section carries exactly that:
+          mixer#mix    flat_param_count=4   return_area 16 B, layout m1/m2/m3/m4 at 0/4/8/12
+          ekf#estimate flat_param_count=6   return_area 56 B, 14 named fields with offsets
+          attitude#tick flat_param_count=19 return_area 16 B
+      meld's own --help now quotes the argument back: "the Canonical ABI passes garbage rather
+      than erroring".
+
+      *** THE CROSS-CHECK CONFIRMS JESS'S METHOD ON ALL FIVE EXPORTS ***
+      AFD-119 derived the flattened param count by counting WIT record fields, validated against
+      three measured core signatures. Against meld's authoritative numbers, all FIVE agree:
+          ekf#estimate      6 = imu-sample(6)
+          position#tick    18 = vehicle-state(14) + waypoint(4)
+          attitude#tick    19 = vehicle-state(14) + attitude-setpoint(5)
+          rate#tick        18 = vehicle-state(14) + rate-setpoint(4)
+          mixer#mix         4 = torque-setpoint(4)
+      attitude#tick at 19 briefly looked like a discrepancy against an 18 recalled mid-session;
+      the WIT says its second param is attitude-setpoint(5), not waypoint(4). AFD-119 never
+      tabulated that export, so nothing there was wrong — but the number was checked rather than
+      assumed, which is the point of having the manifest.
+
+      *** THE GATE, AND WHY IT IS TIMED FOR THE MIGRATION ***
+      tools/abi/check-manifest.py reads BOTH sides — the manifest AND harness.c — and compares.
+      There is deliberately no third copy of the numbers to drift. It asserts: rate#tick's
+      flat_param_count equals the harness's ARGV_WORDS[18]; rate#tick is indirect (>16); its
+      return area is 16 B / 4 fields, which is what the harness reads back as q[0..3]; and
+      mixer#mix is flattened to exactly 4, which is how the harness calls it.
+      falcon 0.7.0 -> 0.10.0 collapses five stage interfaces into one `controller.step` whose
+      sensor-frame flattens to ~26 scalars. Every number above changes. Without this gate that
+      migration is a silent garbage-pass, because the Canonical ABI does not error.
+      Three negative controls, all observed firing: a module with NO manifest is REFUSED rather
+      than passed; a harness claiming ARGV_WORDS[26] (the actual 0.10.0 step count, chosen so the
+      control demonstrates the real migration failure) FAILS; and a harness whose ARGV_WORDS
+      cannot be parsed is REFUSED rather than passed.
+
+      *** THE PIN BUMP IS NOT BYTE-NEUTRAL, AND THE DIFFERENCE IS FULLY ATTRIBUTED ***
+      0.55.1 -> 0.58.3. Phase A's criterion is byte-identity; this bump does not meet it, so the
+      difference was measured rather than waved at:
+          fused module: differs by EXACTLY ONE line, `(export "cabi_realloc" (func 2))`
+          lowered m7dp: md5 5362d831... -> d03e5912..., 41,140 -> 41,548 B (+408)
+          nm diff adds exactly {cabi_realloc (0x164 = 356 B), func_1} and removes NOTHING
+      So the AFD-106 baseline MOVES for a stated additive reason: meld now exports the allocator
+      a host needs to build guest-side arguments (the manifest's `realloc` field). Recorded as a
+      baseline change with its cause, not silently adopted.
+      Full chain verified ON-PIN end to end: fusion byte-reproducible, ABI-MANIFEST PASS, linked
+      91,408 B, 0 undefined, 5/5 key symbols, soak image built.
+
+      *** A DEFECT IN THE GATE ITSELF, CAUGHT ON ITS FIRST RUN ***
+      The gate was first wired to "$PY", the wasmtime venv interpreter. The venv had been cleared
+      between sessions, so the build printed "the harness's ABI assumptions disagree with meld's
+      signature manifest" when the real cause was "No such file or directory" for the interpreter
+      — "could not run" rendered as "answered no", which is the exact confusion varve#130 recorded
+      for exit 127, reproduced inside a gate written by the same agent that filed it. The check
+      needs no wasmtime, so it now uses plain python3, refuses up front if python3 is absent, and
+      branches on the exit code so 1 (disagreed) and anything else (could not run) are different
+      messages.
+    tags: [meld, release-watch, pin-bump, canonical-abi, manifest, gate-potency, afd-119, afd-106, meld-400, falcon-migration]
+    fields:
+      detected-by: Phase A toolchain bump plus building the ABI cross-check against meld's signature manifest, 2026-09-25
+      severity: major
+      triage-status: confirmed

@@ -146,20 +146,42 @@ echo "== 1. fuse + lower (the object and its init tables come from ONE module) =
 # the module with both metadata sections stripped: 7,949 identical lines).
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" \
 run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
-    --memory shared --pack-rebase --reproducible -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
+    --memory shared --pack-rebase --reproducible --emit-manifest -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
 
 # THE GATE. Fuse a second time and require byte-equality. A flag that silently stopped
 # applying looks exactly like one that works, and this is the only place that would notice.
 if [ -z "${SKIP_REPRO_GATE:-}" ]; then
   SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" \
   run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
-      --memory shared --pack-rebase --reproducible -o "$OUT/c.repro.wasm" >>"$OUT/meld.log" 2>&1 \
+      --memory shared --pack-rebase --reproducible --emit-manifest -o "$OUT/c.repro.wasm" >>"$OUT/meld.log" 2>&1 \
     || fail "meld (reproducibility second fuse)"
   cmp -s "$OUT/c.wasm" "$OUT/c.repro.wasm" \
     || fail "the fusion is NOT reproducible: two fuses of identical inputs differ"
   rm -f "$OUT/c.repro.wasm"
   echo "   fusion is byte-reproducible (two fuses of identical inputs agree)"
 fi
+
+# Cross-check the ABI the harness ASSUMES against the ABI meld says it EMITTED (meld#400).
+# harness.c hardcodes ARGV_WORDS[18] for rate#tick and passes mixer#mix four flattened floats;
+# the Canonical ABI passes garbage rather than erroring when either is wrong. This reads BOTH
+# sides — the manifest and harness.c — so there is no third copy of the numbers to drift.
+# It is the gate that turns the falcon 0.7.0 -> 0.10.0 migration (five stage interfaces
+# collapsing to one `controller.step` at ~26 flat params) from a silent garbage-pass into red.
+# Plain python3, NOT $PY: this check needs no wasmtime module, and binding it to the venv made
+# a missing interpreter look like a failed check. The first run of this gate printed "the
+# harness's ABI assumptions disagree with meld's signature manifest" when the real cause was
+# "No such file or directory" for the interpreter — "could not run" rendered as "answered no",
+# the exact confusion varve#130 recorded for exit 127. The two are separated below.
+command -v python3 >/dev/null 2>&1 \
+  || fail "python3 not on PATH — the ABI cross-check COULD NOT RUN (this is not a check failure)"
+abi_rc=0
+python3 "$ROOT/tools/abi/check-manifest.py" "$OUT/c.wasm" \
+        "$ROOT/hardware/renode/cascade-invoke/harness.c" || abi_rc=$?
+case "$abi_rc" in
+  0) : ;;
+  1) fail "the harness's ABI assumptions DISAGREE with meld's signature manifest (see above)" ;;
+  *) fail "the ABI cross-check could not run (exit $abi_rc) — not a verdict about the ABI" ;;
+esac
 run_loom optimize "$OUT/c.wasm" -o "$OUT/c.loom.wasm" >"$OUT/loom.log" 2>&1 || fail "loom"
 "$SYNTH" compile "$OUT/c.loom.wasm" -t cortex-m7dp --cortex-m --relocatable \
     --embedder-data-init --embedder-global-init -o "$OUT/cascade.o" >"$OUT/synth.log" 2>&1 || fail "synth"
