@@ -7077,3 +7077,132 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-29T19:53:06Z
+
+  - id: AFD-123
+    type: ai-found-defect
+    title: "The bench lock key is the device NAME, so a probe-model name is one lock for two boards — jess#266 answered: per-board names, plus alias->canonical resolution so the rename itself cannot open a vacuous window"
+    status: open
+    description: |-
+      2026-09-30. Answering jess#266 (gale/fathom), open since 2026-09-16 with zero replies. gale had
+      already done the silicon measurement and was blocked on ONE thing jess owns: agreeing the device
+      NAMES. This records the decision, jess's own independent measurements, and a defect in jess's own
+      gate found while closing it.
+
+      *** THE HAZARD, RESTATED MECHANICALLY ***
+      with-device's lock is flock(2) on "$BENCH_LOCKDIR/{name}.lock". The NAME IS THE LOCK KEY. So two
+      agents that name one board differently take two different files and NEITHER excludes the other,
+      while both believe they hold it. That is AFD-082, which happened when gale chose `stlink-v1-f100`
+      where jess's registry said `stlink-v1`.
+
+      *** THE DECISION: EVERY DEVICE NAME IS A BOARD, NEVER A PROBE MODEL ***
+      wohl.local carries FOUR boards behind four ST-LINKs. Two of them are ST-LINK/V2-1, and jess
+      MEASURED that both report the identical USB identity 0483:374b — so a probe-model name like
+      `stlink-v2-1` would be ONE bench lock for TWO boards. That is AFD-082 by construction rather than
+      by typo, and it has already bitten: unpinned openocd attached to the G031K8 while a claim on a
+      different board was held, twice (gale#397); only an IDCODE check stopped a flash.
+      Names agreed (gale's proposal, adopted): nucleo-wl55jc1, nucleo-wb55rg, nucleo-g031k8.
+      AND the rename gale flagged: `stlink-v3` was a DEVICE name meaning the NUCLEO-G474RE on this Mac
+      and the NUCLEO-WL55JC1 on wohl.local. One name, two parts. It is now a PART name only; the board
+      is `nucleo-g474re`. Locks are per-host so nothing collided TODAY — but the two boards need only
+      meet on one host for it to.
+
+      *** THE RENAME WOULD HAVE OPENED THE WINDOW IT EXISTS TO CLOSE ***
+      Renaming a device is not cosmetic when the name is the lock key: while one agent uses the old name
+      and another the new one, they are AFD-082 again — reached by doing the right thing. So the rename
+      is not shipped alone. Registries now carry `aliases:`, and with-device CANONICALISES BEFORE forming
+      the lock path, so both names contend for ONE file. It also PRINTS the resolution: a command that
+      silently locks something other than what was typed leaves the operator's model wrong.
+      An ambiguous registry (an alias that is also a device; one alias claimed by two devices) is
+      REFUSED, not resolved — at run time by with-device and in CI by check-catalog.sh. Picking a winner
+      silently would give one name two meanings and the lock would exclude the wrong agent.
+
+      *** VERIFIED, AND THE TESTS WERE MADE TO FAIL ON PURPOSE ***
+      The unit tests show the NAME resolves; that is not the property anyone cares about. Six
+      behavioural tests spawn the real binary and show the LOCK is shared: an alias is refused (exit 3)
+      while the canonical name is held, and in the reverse direction; only `dev-a.lock` exists after a
+      claim under the alias, never `dev-a-old.lock`; naming a board under both names at once does not
+      self-block; the resolution is reported on stderr; an ambiguous registry exits 2.
+      Both directions were MUTATION-TESTED, because two tests that pass together can both be vacuous:
+        - drop the canonicalisation (alias reaches flock unresolved)
+              -> an_alias_contends_for_the_same_lock_as_its_canonical_name FAILED (only it)
+        - collapse every name to one constant key
+              -> an_unrelated_device_is_still_free_while_an_alias_is_held FAILED (only it)
+      Each mutation is caught by the test aimed at it and NOT by the other, so neither property is
+      standing in for the other. 28 lib + 27 behavioural tests pass unmutated.
+
+      *** A DEFECT IN JESS'S OWN GATE, FOUND WHILE CLOSING THIS ***
+      check-catalog.sh asserted every registry DEVICE name resolves in the catalogue. It knew nothing
+      about aliases — and an alias is a name that can take a lock. So assertion 1's hole was reopened
+      under a different key the moment aliases existed. Now checked, with two negative controls (NC3 an
+      alias the catalogue does not contain; NC4 an alias that is also a device name), both injected into
+      a COPY OF THE REAL REGISTRY so they exercise the same reader the real check uses.
+      STILL OPEN, and worth stating because it is the deeper version of gale's point: the checker asserts
+      a name RESOLVES, not that it resolves to the RIGHT board. On wohl.local, `stlink-v3` resolved
+      cleanly — to a catalogue entry describing a NUCLEO-G474RE, while the hardware is a WL55JC1. The
+      check passed and the meaning was wrong. Per-board names remove today's instance; the general gap
+      (no cross-check between a host registry's unit facts and the catalogue's part facts) is not closed,
+      and jess cannot close it from here because host registries are host-local by design.
+
+      *** WHAT JESS MEASURED ITSELF (read-only, sysfs over ssh, no probe attached) ***
+      Independent of gale, and it CORRECTED one of jess's own hypotheses:
+        - Hub-port map confirmed, matching gale's table exactly: 1-1.1 STLINK-V3 (0483:374e),
+          1-1.2 ST-LINK/V1 (0483:3744), 1-1.3 and 1-1.4 both ST-LINK/V2-1 (0483:374b).
+        - The two V2-1s are separable ONLY by probe serial (24 hex chars each). VID:PID selects
+          nondeterministically between two different parts. This is the fact the naming rule rests on.
+        - ST-LINK/V1 exposes exactly ONE USB interface, :1.0 class 08 mass-storage, bound by
+          `usb-storage`. gale reported the binding; the measurement SHARPENS it — there is no second
+          interface to fall back to, so the quirk 0483:3744:i is the ONLY route, not a convenience.
+          Contrast the V2-1: four interfaces, :1.0 vendor-class 0xFF (the DAP), :1.1 mass-storage,
+          :1.2+:1.3 CDC-ACM. usb-storage binds only :1.1, so no quirk is needed there.
+        - RETRACTED MID-INVESTIGATION: jess hypothesised the V1's serial was "not valid UTF-8" and that
+          this was why it has no /dev/serial/by-id node. BOTH WRONG, and measured rather than assumed:
+          the bytes 48c3bf720650546556413710c281 DO decode as UTF-8 ('H\xffr\x06PTeVA7\x10\x81'). The
+          real facts are (a) it is 12 raw bytes with embedded control characters rather than the 24-hex
+          string every other ST-LINK reports, so it is not shell-, filename- or log-safe as a selector,
+          and (b) its by-id absence is because it has NO virtual COM port — the single mass-storage
+          interface above — NOT because of the serial. Two facts that looked like one.
+
+      *** PROVENANCE: MOST OF THE PART FACTS ARE GALE'S, NOT JESS'S ***
+      The three STM32 parts' CPUID / IDCODE / MPU_TYPE / MVFR0 / flash / SRAM-bound / RCC_CSR values were
+      measured by gale on jess#266 (openocd 0.12.0, 2026-09-16) over each board's own probe. The boards
+      are on wohl.local and jess has NOT attached a debugger to any of them. They are ADOPTED into the
+      catalogue and this artifact is the record of that adoption — `measured-by: [AFD-123]` on those
+      entries means "adopted here with this provenance", not "jess measured it".
+      Two of gale's facts are carried with their limits intact rather than flattened:
+        - The WB55's 192 KB SRAM is DATASHEET, not a measured bound: unlike the WL55 and G031, no read
+          faults at the end of SRAM1 because SRAM2a is contiguous, so the fault-probe technique that
+          established the other two CANNOT establish this one.
+        - The WL55 returns ALL ZEROS for MPU_TYPE, MVFR0 and the flash-size register while SRST is still
+          asserted. All-zero MPU_TYPE is exactly what a part with no MPU reports — so that reads as a
+          hardware fact and is an artefact of measurement order. Recorded next to the F100's
+          mpu-present:false, which IS real, so the two cannot be confused.
+
+      *** AND THE NEW CHECK WAS FLAKY — THE TRAP THIS REPO ALREADY DOCUMENTS, REINTRODUCED ***
+      The alias case added to the shipped `--self-test` flaked at roughly 1 in 2 under an
+      llvm-cov-instrumented build (CI runs the coverage gate on ubuntu, so this would have landed as an
+      intermittently red main). It reported:
+          alias shares the lock        rc=0 (expect 3) FAIL
+      which reads as "aliasing is broken" and was nothing of the kind.
+      CAUSE: the readiness signal was the LOCK FILE's existence, and that is wrong twice over. `try_claim`
+      opens it with create(true) BEFORE flock(2) decides anything, and it is deliberately never truncated
+      or removed — so it exists both before this holder has acquired AND after any previous self-test
+      run. The probe therefore raced the holder and sometimes WON the lock; the holder was then the one
+      refused, and the check reported on the clock while claiming to report on the lock.
+      tests/cli.rs's `hold()` helper documents this exact trap in a comment written after it cost a
+      previous debugging session ("polling with a real claim ... is a race ... the holder touches a marker
+      AFTER acquiring"). jess reintroduced it in a different file.
+      FIRST FIX WAS WRONG: the duration was raised 3s -> 20s on the hypothesis that the probes outlasted
+      the holder. It flaked again on the next run. Only then was the cause measured rather than guessed.
+      The fix is the marker the suite already uses — touched by the WRAPPED command, which runs only
+      after the claim succeeds, so observing it cannot race. Verified: 5 consecutive coverage-gate runs
+      clean where the flake had been ~1-in-2, plus an explicit FAIL line if the holder never acquires, so
+      a future break reports "cannot run" rather than a verdict about aliasing.
+    tags: [bench-interlock, afd-082, jess-266, gale, naming, negative-control, mutation-tested, retraction, afd-086]
+    fields:
+      detected-by: answering jess#266 and measuring wohl.local's USB topology read-only, 2026-09-30
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-29T23:04:14Z

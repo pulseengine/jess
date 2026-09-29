@@ -54,6 +54,29 @@ that must not diverge between agents: a device-name disagreement is what makes a
 The registries below are **what is present here** — which unit, which tty, which host. They differ
 per host by design.
 
+## Device names are BOARDS, and renaming one needs an alias
+
+Agreed with gale on jess#266. **Every device name is a board, never a probe model.** Two boards on
+one host can carry the same probe model — wohl.local has two ST-LINK/V2-1s reporting the identical
+`0483:374b` — so a name like `stlink-v2-1` is ONE lock for TWO boards. That is AFD-082's vacuous
+lock by construction rather than by typo, and unpinned openocd has already reached the wrong one
+while a claim was held (gale#397).
+
+The lock is `flock(2)` on `$BENCH_LOCKDIR/<name>.lock`, so **the name is the lock key** — which
+makes renaming a device a safety change, not a cosmetic one. While one agent uses the old name and
+another the new one, they take different files and neither excludes the other. Hence `aliases:`:
+
+```yaml
+devices:
+  nucleo-g474re:
+    what: NUCLEO-G474RE with its onboard STLINK-V3E
+    aliases: [stlink-v3]        # the old name takes the SAME flock
+```
+
+`with-device` resolves an alias to the canonical name **before** forming the lock path, and prints
+which name it actually claimed. An ambiguous registry — an alias that is also a device, or one alias
+claimed by two devices — is **refused** (exit 2) rather than resolved, at run time and in CI.
+
 `check-catalog.sh` asserts every registry name resolves in the catalogue and every provenance
 citation exists, and carries negative controls for both. It runs in CI. Intended future: the
 catalogue becomes a digest-pinned varve layer payload so both agents consume identical bytes by
@@ -66,7 +89,7 @@ own registry:
 
 | host | registry | devices |
 |---|---|---|
-| this repo (Mac) | `tools/bench/devices.yaml` | `stlink-v3` (NUCLEO-G474RE), `pixhawk-6xrt`, `selftest-device` |
+| this repo (Mac) | `tools/bench/devices.yaml` | `nucleo-g474re` (alias: `stlink-v3`), `pixhawk-6xrt`, `selftest-device` |
 | `fourpi` (Pi 4) | `~/.config/pulseengine/bench-devices.yaml` — **host-local, deliberately not committed** | `pixhawk-6xrt`, `stlink-v1` (STM32VLDISCOVERY), `selftest-device` |
 
 **Use the registered name exactly.** An unregistered name is refused (exit 2) rather than

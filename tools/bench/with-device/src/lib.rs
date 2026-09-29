@@ -44,7 +44,7 @@
 //! because the self-test can only exercise paths it happens to walk; a regression in argument
 //! parsing or registry parsing can leave it perfectly green.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
@@ -278,16 +278,44 @@ pub fn parse_args(argv: &[String]) -> Result<Mode, String> {
 // Registry — the set of device names a claim may name at all.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
-/// Device names out of a registry document. Deliberately a 20-line reader for the one shape
-/// this file has, not a YAML implementation — a dependency here would have to be audited
-/// inside a signed layer for no gain.
+/// Device names out of a registry document, mapping EVERY acceptable name to the CANONICAL one.
+/// Deliberately a small reader for the one shape this file has, not a YAML implementation — a
+/// dependency here would have to be audited inside a signed layer for no gain.
 ///
 /// A device is a key indented exactly two spaces under `devices:`. Anything deeper is one of
 /// that device's attributes and MUST NOT be mistaken for a device: `with-device what` would
 /// otherwise take a lock that excludes nobody, which is the exact failure AFD-082 recorded.
-pub fn parse_registry(text: &str) -> BTreeSet<String> {
-    let mut names = BTreeSet::new();
+///
+/// WHY ALIASES EXIST (jess#266). The lock key is the device NAME — `{name}.lock` under
+/// `BENCH_LOCKDIR`. So renaming a device is not a cosmetic change: while one agent uses the old
+/// name and another the new one, they take DIFFERENT flocks and neither excludes the other. That
+/// is the vacuous lock, reached by doing the right thing. An alias resolves to the canonical name
+/// BEFORE the lock path is formed, so both names contend for one file and the rename is safe.
+///
+/// Accepted forms, both measured in the tests:
+///     aliases: [old-name, older-name]
+///     aliases:
+///       - old-name
+///
+/// COLLISIONS ARE REFUSED, NOT RESOLVED. An alias that equals another device's canonical name, or
+/// two devices claiming one alias, would make a lock ambiguous — the failure this is here to
+/// prevent. Returning an error is the only safe answer; picking a winner silently is not.
+pub fn parse_registry_map(text: &str) -> Result<BTreeMap<String, String>, String> {
+    let mut canon: BTreeSet<String> = BTreeSet::new();
+    // alias -> (canonical, is_canonical_itself)
+    let mut map: BTreeMap<String, String> = BTreeMap::new();
+    let mut pending: Vec<(String, String)> = Vec::new(); // (alias, canonical)
     let mut in_devices = false;
+    let mut current: Option<String> = None;
+    let mut in_alias_block = false;
+
+    let add_alias = |a: &str, dev: &str, pending: &mut Vec<(String, String)>| {
+        let a = a.trim().trim_matches('"').trim_matches('\'').trim();
+        if !a.is_empty() {
+            pending.push((a.to_string(), dev.to_string()));
+        }
+    };
+
     for raw in text.lines() {
         let line = raw.strip_suffix('\r').unwrap_or(raw);
         let bare = line.split('#').next().unwrap_or("");
@@ -308,11 +336,72 @@ pub fn parse_registry(text: &str) -> BTreeSet<String> {
         if t.starts_with("  ") && !t.starts_with("   ") && t.ends_with(':') {
             let name = t.trim().trim_end_matches(':').trim();
             if !name.is_empty() {
-                names.insert(name.to_string());
+                canon.insert(name.to_string());
+                current = Some(name.to_string());
+            }
+            in_alias_block = false;
+            continue;
+        }
+        // Inside a device's attributes.
+        let Some(dev) = current.clone() else { continue };
+        let a = t.trim();
+        if in_alias_block {
+            if let Some(item) = a.strip_prefix("- ") {
+                add_alias(item, &dev, &mut pending);
+                continue;
+            }
+            in_alias_block = false;
+        }
+        if let Some(rest) = a.strip_prefix("aliases:") {
+            let rest = rest.trim();
+            if rest.is_empty() {
+                in_alias_block = true;
+            } else if let Some(inner) = rest.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+                for item in inner.split(',') {
+                    add_alias(item, &dev, &mut pending);
+                }
+            } else {
+                // A scalar `aliases: foo` — accept the single name rather than ignore it. An
+                // alias silently dropped is an alias that takes its own lock.
+                add_alias(rest, &dev, &mut pending);
             }
         }
     }
-    names
+
+    for c in &canon {
+        map.insert(c.clone(), c.clone());
+    }
+    for (alias, dev) in pending {
+        if canon.contains(&alias) && alias != dev {
+            return Err(format!(
+                "registry is ambiguous: '{alias}' is an alias of '{dev}' AND a device in its own \
+right. One name would then mean two devices, so the lock it takes is ambiguous. Refusing."
+            ));
+        }
+        if let Some(prev) = map.get(&alias) {
+            if prev != &dev {
+                return Err(format!(
+                    "registry is ambiguous: alias '{alias}' is claimed by both '{prev}' and \
+'{dev}'. Refusing rather than picking one — the lock would exclude the wrong agent."
+                ));
+            }
+        }
+        map.insert(alias, dev);
+    }
+    Ok(map)
+}
+
+/// Canonical device names only. Aliases are deliberately absent: this is the set a human is shown
+/// and the set a registry declares, not the set a caller may type.
+pub fn parse_registry(text: &str) -> BTreeSet<String> {
+    match parse_registry_map(text) {
+        Ok(m) => m
+            .iter()
+            .filter(|(k, v)| k == v)
+            .map(|(k, _)| k.clone())
+            .collect(),
+        Err(_) => BTreeSet::new(),
+    }
 }
 
 /// Paths searched for a registry, in order, when `--registry` is absent.
@@ -336,7 +425,7 @@ pub fn registry_search_path(explicit: Option<&str>) -> Vec<PathBuf> {
 /// FAIL-CLOSED: with no registry we refuse rather than accept any name. An unregistered name
 /// creates its OWN lock file and excludes nobody — a lock a typo can bypass is worse than no
 /// lock, because both agents then believe they hold the device.
-pub fn registry(explicit: Option<&str>) -> Result<BTreeSet<String>, String> {
+pub fn registry(explicit: Option<&str>) -> Result<BTreeMap<String, String>, String> {
     let candidates = registry_search_path(explicit);
     for c in &candidates {
         if let Ok(mut f) = File::open(c) {
@@ -344,7 +433,9 @@ pub fn registry(explicit: Option<&str>) -> Result<BTreeSet<String>, String> {
             if f.read_to_string(&mut s).is_err() {
                 continue;
             }
-            let names = parse_registry(&s);
+            // A parse ERROR is not "keep looking". An ambiguous registry is a refusal: falling
+            // through to the next candidate would silently run against a different file.
+            let names = parse_registry_map(&s)?;
             if !names.is_empty() {
                 return Ok(names);
             }
@@ -577,6 +668,110 @@ notes:
     fn no_devices_block_yields_nothing() {
         assert!(parse_registry("version: 1\nother:\n  a:\n").is_empty());
         assert!(parse_registry("").is_empty());
+    }
+
+    // ── aliases (jess#266) ──────────────────────────────────────────────────────────────
+
+    const ALIASED: &str = "\
+devices:
+  nucleo-g474re:
+    what: board
+    aliases: [stlink-v3, old-name]
+  nucleo-wb55rg:
+    what: board
+    aliases:
+      - wb55
+  pixhawk-6xrt:
+    what: the vehicle
+";
+
+    /// THE PROPERTY THAT MAKES A RENAME SAFE: the old name and the new one must resolve to ONE
+    /// canonical name, because the lock path is derived from it. If they did not, the two agents
+    /// mid-rename would take different flocks and neither would exclude the other.
+    #[test]
+    fn aliases_resolve_to_the_canonical_name() {
+        let m = parse_registry_map(ALIASED).unwrap();
+        assert_eq!(m["stlink-v3"], "nucleo-g474re");
+        assert_eq!(m["old-name"], "nucleo-g474re");
+        assert_eq!(m["nucleo-g474re"], "nucleo-g474re");
+        assert_eq!(m["wb55"], "nucleo-wb55rg"); // block-list form
+        assert_eq!(m["pixhawk-6xrt"], "pixhawk-6xrt");
+    }
+
+    /// THE OTHER DIRECTION, and the one a careless canonicaliser gets wrong: distinct boards must
+    /// still be distinct. A resolver that collapsed everything to one name would pass the test
+    /// above and make every lock exclude every other — vacuous the opposite way.
+    #[test]
+    fn distinct_devices_stay_distinct() {
+        let m = parse_registry_map(ALIASED).unwrap();
+        assert_ne!(m["stlink-v3"], m["wb55"]);
+        assert_ne!(m["nucleo-g474re"], m["pixhawk-6xrt"]);
+        let canon: BTreeSet<&String> = m.values().collect();
+        assert_eq!(canon.len(), 3, "three boards, three lock keys");
+    }
+
+    /// Aliases are not devices. `parse_registry` is what a human is shown and what the registry
+    /// declares; if an alias leaked into it, the error message would advertise a name as a device.
+    #[test]
+    fn aliases_are_not_canonical_names() {
+        let n = parse_registry(ALIASED);
+        assert!(n.contains("nucleo-g474re"));
+        assert!(!n.contains("stlink-v3"));
+        assert_eq!(n.len(), 3);
+    }
+
+    /// An alias that is ALSO a device is refused, not resolved. Picking a winner silently would
+    /// give one name two meanings, and the lock would exclude the wrong agent.
+    #[test]
+    fn an_alias_that_is_a_device_is_refused() {
+        let r =
+            parse_registry_map("devices:\n  a:\n    aliases: [b]\n  b:\n    what: another board\n");
+        let e = r.expect_err("an alias colliding with a device name must be refused");
+        assert!(
+            e.contains("ambiguous"),
+            "message must name the problem: {e}"
+        );
+    }
+
+    /// Two devices claiming one alias is the same failure from the other side.
+    #[test]
+    fn an_alias_claimed_twice_is_refused() {
+        let r = parse_registry_map(
+            "devices:\n  a:\n    aliases: [shared]\n  b:\n    aliases: [shared]\n",
+        );
+        assert!(r.expect_err("must refuse").contains("ambiguous"));
+    }
+
+    /// A device may repeat its OWN name as an alias — harmless, and refusing it would be a
+    /// gratuitous refusal rather than a caught hazard.
+    #[test]
+    fn self_alias_is_harmless() {
+        let m = parse_registry_map("devices:\n  a:\n    aliases: [a]\n").unwrap();
+        assert_eq!(m["a"], "a");
+    }
+
+    /// The alias reader must not mistake an attribute for an alias, nor run past its device. This
+    /// is `attributes_are_not_devices` for the alias key: the block form is terminated by the next
+    /// attribute, not only by the next device.
+    #[test]
+    fn alias_block_stops_at_the_next_attribute() {
+        let m = parse_registry_map(
+            "devices:\n  a:\n    aliases:\n      - x\n    what: board\n    serial: 003B\n  b:\n",
+        )
+        .unwrap();
+        assert_eq!(m["x"], "a");
+        assert!(!m.contains_key("what"));
+        assert!(!m.contains_key("serial"));
+        assert!(!m.contains_key("003B"));
+        assert_eq!(m.len(), 3); // a, b, x
+    }
+
+    /// A registry with no aliases must behave exactly as before — the change is additive.
+    #[test]
+    fn a_registry_without_aliases_is_unchanged() {
+        let m = parse_registry_map(REG).unwrap();
+        assert_eq!(m.len(), 2);
+        assert!(m.iter().all(|(k, v)| k == v));
     }
 
     // ── argument parsing ────────────────────────────────────────────────────────────────

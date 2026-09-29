@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The catalogue is only worth having if it cannot silently disagree with the registry.
 #
-# TWO ASSERTIONS, both mechanical:
+# THREE ASSERTIONS, all mechanical:
 #   1. every device name a registry uses resolves to a catalogue entry. A name disagreement is
 #      what makes a bench lock VACUOUS — gale independently chose `stlink-v1-f100` where the
 #      registry said `stlink-v1`, and under the old prototype those were two different lock files
@@ -9,8 +9,13 @@
 #      registry naming something it does not contain is that failure returning.
 #   2. every `measured-by` artifact ID exists. A provenance claim pointing at nothing is worse
 #      than no claim: it reads as evidence and is not.
+#   3. every registry ALIAS resolves too, and no alias is ambiguous. Aliases exist so a device can
+#      be RENAMED without the old and new names taking different flocks (jess#266) — which means
+#      an alias is a name that can take a lock, and an unchecked one is assertion 1's hole
+#      reopened under a different key. An alias colliding with another device's name, or claimed
+#      by two devices, is refused rather than resolved: the lock would exclude the wrong agent.
 #
-# Negative-controlled in --self-test: both assertions must be shown to FAIL on injected input.
+# Negative-controlled in --self-test: every assertion must be shown to FAIL on injected input.
 # A check nobody has watched fail is a check nobody has checked.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
@@ -56,6 +61,37 @@ if missing:
 else:
     print(f"  names: {len(used)}/{len(used)} registry devices resolve in the catalogue")
 
+# ASSERTION 3 — aliases. An alias is a name that takes a lock, so it needs every guarantee a
+# device name needs. `with-device` refuses an ambiguous registry at run time; this refuses it in
+# CI, before anyone is holding anything.
+def alias_list(e):
+    a = (e or {}).get('aliases') or []
+    return [a] if isinstance(a, str) else list(a)
+
+owner = {}
+alias_fail = 0
+for dev, e in (reg.get('devices') or {}).items():
+    for a in alias_list(e):
+        if a in used and a != dev:
+            print(f"  AMBIGUOUS ALIAS: '{a}' is an alias of '{dev}' AND a device in its own right")
+            alias_fail = 1
+        elif a in owner and owner[a] != dev:
+            print(f"  AMBIGUOUS ALIAS: '{a}' is claimed by both '{owner[a]}' and '{dev}'")
+            alias_fail = 1
+        owner[a] = dev
+unknown_alias = sorted(set(owner) - names)
+if unknown_alias:
+    print(f"  ALIAS UNKNOWN TO THE CATALOGUE: {unknown_alias}")
+    print( "    An alias is a name that can take a lock. One the catalogue does not contain is")
+    print( "    the same vacuous-lock failure as assertion 1, under a different key.")
+    alias_fail = 1
+if alias_fail:
+    fail = 1
+elif owner:
+    print(f"  aliases: {len(owner)} alias(es) resolve and are unambiguous")
+else:
+    print( "  aliases: none declared")
+
 cited = set()
 for sect in ('parts', 'boards'):
     for e in (cat.get(sect) or {}).values():
@@ -93,7 +129,7 @@ PY
 preflight || { echo "CATALOG FAIL"; exit 1; }
 
 if [ "${1:-}" = "--self-test" ]; then
-  echo "== negative controls: both assertions must be observed to FAIL =="
+  echo "== negative controls: every assertion must be observed to FAIL =="
   t=$(mktemp -d)
   sed 's/^  pixhawk-6xrt:/  pixhawk-6xrt-typo:/' "$REG" > "$t/reg.yaml"
   if run_check "$CAT" "$t/reg.yaml" >/dev/null 2>&1; then
@@ -105,12 +141,36 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "  NC2 FAILED: a dangling provenance citation did not trip the check"; rm -rf "$t"; exit 1
   fi
   echo "  NC2 ok: a citation to a non-existent artifact is refused"
+
+  # NC3/NC4 cover assertion 3. Injected into a COPY of the real registry, so they exercise the
+  # same reader the real check uses rather than a hand-built fixture that could drift from it.
+  python3 - "$REG" "$t/alias-unknown.yaml" "$t/alias-collide.yaml" <<'PYNC'
+import sys, yaml
+reg = yaml.safe_load(open(sys.argv[1]))
+d = reg['devices']; first = sorted(d)[0]
+a = yaml.safe_load(yaml.dump(reg)); a['devices'][first]['aliases'] = ['no-such-board']
+yaml.safe_dump(a, open(sys.argv[2], 'w'))
+b = yaml.safe_load(yaml.dump(reg))
+other = [k for k in sorted(d) if k != first][0]
+b['devices'][first]['aliases'] = [other]      # an alias that IS another device
+yaml.safe_dump(b, open(sys.argv[3], 'w'))
+PYNC
+  if run_check "$CAT" "$t/alias-unknown.yaml" >/dev/null 2>&1; then
+    echo "  NC3 FAILED: an alias the catalogue does not contain did not trip the check"
+    rm -rf "$t"; exit 1
+  fi
+  echo "  NC3 ok: an alias unknown to the catalogue is refused"
+  if run_check "$CAT" "$t/alias-collide.yaml" >/dev/null 2>&1; then
+    echo "  NC4 FAILED: an alias colliding with a device name did not trip the check"
+    rm -rf "$t"; exit 1
+  fi
+  echo "  NC4 ok: an alias that is also a device name is refused"
   rm -rf "$t"
   echo "== the real thing =="
 fi
 
 run_check "$CAT" "$REG"
 rc=$?
-[ "$rc" -eq 0 ] && echo "CATALOG OK — registry names resolve, provenance exists." \
+[ "$rc" -eq 0 ] && echo "CATALOG OK — names and aliases resolve unambiguously, provenance exists." \
                 || echo "CATALOG FAIL"
 exit $rc

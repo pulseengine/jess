@@ -50,6 +50,18 @@ impl Bench {
         Bench { dir, reg }
     }
 
+    /// Rewrite this bench's registry so `dev-a` also answers to `dev-a-old`. Used by the alias
+    /// tests; kept as a mutation of the SAME fixture the other tests use so an alias cannot be
+    /// tested against a registry shape the tool never otherwise sees.
+    fn with_alias(&self) -> &Bench {
+        fs::write(
+            &self.reg,
+            "devices:\n  dev-a:\n    what: synthetic\n    aliases: [dev-a-old]\n  dev-b:\n    what: synthetic\n  dev-c:\n    what: synthetic\n",
+        )
+        .unwrap();
+        self
+    }
+
     fn cmd(&self) -> Command {
         let mut c = Command::new(BIN);
         c.env("BENCH_LOCKDIR", self.dir.join("locks"))
@@ -517,4 +529,131 @@ fn a_nested_claim_unions_rather_than_replaces() {
     );
     assert_eq!(rc(&o), 0);
     assert_eq!(String::from_utf8_lossy(&o.stdout), "dev-a,dev-b");
+}
+
+// ── aliases take the SAME lock (jess#266) ───────────────────────────────────────────────────
+//
+// The unit tests show the NAME resolves. These show the LOCK is shared, which is the property the
+// rename depends on and the only one an operator cares about: "it maps" is not "it excludes".
+
+/// THE POINT OF ALIASES. A holder claiming the canonical name must refuse a claimant arriving
+/// under the old one. If this failed, the two agents mid-rename would each hold their own file
+/// and both believe they had the board — AFD-082, reached by renaming correctly.
+#[test]
+fn an_alias_contends_for_the_same_lock_as_its_canonical_name() {
+    let b = Bench::new("alias-busy");
+    b.with_alias();
+    let mut holder = b.hold(&["dev-a"], "canonical holds it", 30);
+    let o = b.run(&["dev-a-old"], &[], &["true"]);
+    assert_eq!(
+        rc(&o),
+        3,
+        "the alias must be REFUSED while the canonical name is held"
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+}
+
+/// And the reverse direction, so the sharing is not an artefact of which name got there first.
+#[test]
+fn the_canonical_name_is_refused_while_the_alias_holds_it() {
+    let b = Bench::new("alias-busy-rev");
+    b.with_alias();
+    let mut holder = b.hold(&["dev-a-old"], "alias holds it", 30);
+    let o = b.run(&["dev-a"], &[], &["true"]);
+    assert_eq!(
+        rc(&o),
+        3,
+        "the canonical name must be REFUSED while the alias is held"
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+}
+
+/// THE NEGATIVE CONTROL, and the one that makes the two tests above mean something. A
+/// canonicaliser that collapsed every name to one key would pass both of them and make every
+/// lock exclude every other device. A DIFFERENT board must still be free.
+#[test]
+fn an_unrelated_device_is_still_free_while_an_alias_is_held() {
+    let b = Bench::new("alias-nc");
+    b.with_alias();
+    let mut holder = b.hold(&["dev-a-old"], "alias holds dev-a", 30);
+    let o = b.run(&["dev-b"], &[], &["true"]);
+    assert_eq!(
+        rc(&o),
+        0,
+        "a different board must remain claimable; collapsing all names to one key is vacuous \
+in the opposite direction. stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+}
+
+/// One lock FILE, not two. The exclusion tests above would also pass if the tool locked both
+/// files, so name the mechanism directly: after a claim under the alias, only the canonical
+/// lock exists.
+#[test]
+fn the_alias_creates_no_lock_file_of_its_own() {
+    let b = Bench::new("alias-onefile");
+    b.with_alias();
+    let mut holder = b.hold(&["dev-a-old"], "alias holds it", 30);
+    let locks = b.dir.join("locks");
+    assert!(
+        locks.join("dev-a.lock").exists(),
+        "the canonical lock must exist"
+    );
+    assert!(
+        !locks.join("dev-a-old.lock").exists(),
+        "an alias must NOT get its own lock file — that is the vacuous lock"
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+}
+
+/// Resolution must be VISIBLE. A command that silently locks something other than what was typed
+/// is worse than one that refuses, because the operator's mental model stays wrong.
+#[test]
+fn the_alias_resolution_is_reported() {
+    let b = Bench::new("alias-says");
+    b.with_alias();
+    let o = b.run(&["dev-a-old"], &[], &["true"]);
+    assert_eq!(rc(&o), 0);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(
+        err.contains("dev-a-old") && err.contains("alias") && err.contains("dev-a"),
+        "must say which name it actually claimed, got: {err}"
+    );
+}
+
+/// Two names for ONE board on one command line must not be a self-block. `claim_all` takes locks
+/// in sorted order, so the duplicate is deduplicated where it is visible rather than relying on
+/// flock's same-fd behaviour.
+#[test]
+fn an_alias_and_its_canonical_name_together_do_not_self_block() {
+    let b = Bench::new("alias-dup");
+    b.with_alias();
+    let o = b.run(&["dev-a", "dev-a-old"], &[], &["true"]);
+    assert_eq!(
+        rc(&o),
+        0,
+        "naming a board twice must not deadlock or refuse. stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+}
+
+/// An AMBIGUOUS registry is refused at run time too, not only in CI. `with-device` is what a
+/// script actually invokes, and a registry edited on a host CI never sees must still fail closed.
+#[test]
+fn an_ambiguous_registry_is_refused() {
+    let b = Bench::new("alias-ambig");
+    fs::write(
+        &b.reg,
+        "devices:\n  dev-a:\n    aliases: [dev-b]\n  dev-b:\n    what: synthetic\n",
+    )
+    .unwrap();
+    let o = b.run(&["dev-a"], &[], &["true"]);
+    assert_eq!(rc(&o), 2, "an ambiguous registry is a usage refusal");
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(err.contains("ambiguous"), "must name the problem: {err}");
 }
