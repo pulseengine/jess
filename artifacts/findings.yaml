@@ -6999,3 +6999,81 @@ artifacts:
       detected-by: executing the Phase C falcon v1.139 migration and measuring every component rather than one, 2026-09-29
       severity: major
       triage-status: confirmed
+
+  - id: AFD-122
+    type: ai-found-defect
+    title: "The CRASHED-vs-REFUSED fix was itself broken on the only path it exists for ($OUT unbound), and the oracles printed rate@0.7.0 while passing green on a 0.10.0 image — plus: TEST-PIX-032's frozen baseline survives the controller switch bit-exact"
+    status: open
+    description: |-
+      2026-09-29. Phase C, closing CI. Three things, two of them jess's own defects in the fix
+      AFD-121 describes — the repair of an error path that was itself never exercised.
+
+      *** 1. THE "CRASHED vs REFUSED" FIX WAS ITSELF BROKEN, AND ONLY THE ERROR PATH WAS BROKEN ***
+      AFD-121's structural fix taught run-soak-oracle.sh to distinguish a CRASHED reference generator
+      from a considered refusal. That new branch redirected stderr to "$OUT/soak_ref.err" — but $OUT
+      is a variable of build.sh, NOT of run-soak-oracle.sh, where the directory is $SCRATCH/invoke.
+      Under CI's `set -u` this died with:
+          run-soak-oracle.sh: line 124: OUT: unbound variable
+      The defect is invisible on the happy path: line 124's redirection is evaluated on EVERY run, but
+      the two reads at 127/128 only on failure, and the whole point of the change was that the script
+      had never been exercised with a failing generator. A fix for "an error path reported the wrong
+      thing" that is only ever run when the error path is quiet is not a fix that was tested.
+      CORRECTED, and then the correction was itself given the negative control the original lacked —
+      BOTH branches driven with a stub generator, run bare so the exit code is the script's:
+          stub exits 1, stderr "KeyError: 'rate@0.7.0#tick'"  -> exit 1, "the reference generator
+              CRASHED (exit 1) — this is 'could not run', NOT a verdict about the cascade",
+              with the stub's stderr echoed above it
+          stub exits 3, stderr "...the soak would be vacuous" -> exit 1, "the reference generator
+              REFUSED to emit a vacuous soak (tick1 == tickN)"
+      The exact KeyError shape that produced the near-false claim about relay's estimator is now
+      reported as "could not run".
+
+      *** 2. THE ORACLES PRINTED A VERSION NOTHING DERIVED — GREEN AND WRONG THROUGH THE MIGRATION ***
+      AFD-121 fixed build.sh to DERIVE the interface version from the lowered object. The oracles that
+      consume that image kept printing a hardcoded one:
+          == stage 1 — rate@0.7.0#tick on emulated RT1176 Cortex-M7 ==
+      That line was emitted by a PASSING TEST-PIX-032, in CI, over a v1.139 image whose every export is
+      @0.10.0. A green board named the wrong interface. This is the drifted-mirror hazard (AFD-104) at
+      the smallest possible scale: a second copy of a fact, in the evidence line rather than in a WIT
+      file, with nothing to keep it honest.
+      FIXED by making build.sh PERSIST what it already derived ($OUT/iface.ver) and having the oracles
+      read it. If the file is absent they now print NO version rather than a stale one — an unlabelled
+      line is true, a wrongly-labelled one is not. Measured after the fix: "stage 1 — rate@0.10.0#tick".
+
+      *** 3. A MEASURED RESULT: THE FROZEN BASELINE SURVIVED THE CONTROLLER SWITCH ***
+      AFD-121 recorded that the flight-behaviour claims were NOT re-derived and might be describing a
+      superseded control law. Running the oracles on v1.139 narrows that, and the bound matters:
+      TEST-PIX-032 carries a FROZEN baseline — EXP=(0x3F800000 0x3EF1EC81 0xBE168816 0x3F000000),
+      derived from relay's SIL reference under v1.134.1 and hardcoded into the script. It is the one
+      claim in the suite that is NOT recomputed from the module under test, so it cannot go
+      self-consistently green. On v1.139 it still passes BIT-EXACT, and so does the mixer stage
+      (EXPP m3=0x3EB2AF18, m4=0x3F800000).
+      This is not a no-op: both component digests changed across the bump —
+          rate.wasm   43982be498c0e4a2… (v1.134.1)  ->  f0cb7154c543452c… (v1.139.0)
+          mixer.wasm  076b8a816493e199… (v1.134.1)  ->  7df930b0e10d5203… (v1.139.0)
+      so different bytes produce identical results at that operating point.
+      WHAT THIS DOES NOT SHOW, stated because the temptation is to over-read it: it is ONE input vector
+      through TWO of the five stages. The harness calls rate#tick and mixer#mix only; ekf, attitude and
+      position are in the fused image but are never invoked, and relay's estimator fix — the change that
+      invalidated 18 of their closed-loop tests — lives upstream of both stages jess exercises. The
+      honest claim is that the rate->mixer path is unchanged AT THIS POINT, which is consistent with the
+      fix having been upstream of it, and is not evidence about the stages jess does not call. The 64-tick
+      soak is NOT additional evidence here: its reference is recomputed from the same module, so it is a
+      target-vs-wasmtime differential, not a behaviour baseline.
+      AFD-121's "still not re-derived" item therefore narrows but does NOT close.
+
+      *** VERIFIED ***
+      Full chain re-run locally ON-PIN with the pinned meld 0.58.3 / loom 1.4.0: fusion byte-reproducible,
+      ABI-MANIFEST PASS at interface 0.10.0 (rate#tick 18 flat + indirect, return area 16 B / 4 fields,
+      mixer#mix flattened to 4), linked 91,412 B / 0 undefined / 5/5 symbols. TEST-PIX-032 PASS with both
+      negative controls; TEST-PIX-033 PASS at tick 1, tick 64 and the 256-word fold, with its four
+      controls; and the two generator-failure branches driven deliberately as above.
+    tags: [falcon, phase-c, afd-121, afd-104, negative-control, gate-potency, evidence-labelling]
+    fields:
+      detected-by: CI failing TEST-PIX-033 on the exact head, then re-running both Renode oracles locally on-pin, 2026-09-29
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-29T19:53:06Z

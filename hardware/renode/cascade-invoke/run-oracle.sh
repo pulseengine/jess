@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TEST-PIX-032 — falcon rate@0.7.0#tick EXECUTES on emulated RT1176 Cortex-M7 and
+# TEST-PIX-032 — falcon rate#tick EXECUTES on emulated RT1176 Cortex-M7 and
 # reproduces relay's SIL reference torque bit-exact.
 #
 # AFD-056 showed the self-contained image never enters a stage: it inits and spins. This
@@ -70,13 +70,19 @@ print(" ".join(out))'
 # 0-4 torque block (RESULT), 5-9 pwm block (CHAIN), 10 sentinel (CHAIN+20).
 # The sentinel moved when the harness became a two-stage chain; it is read from where
 # boot.S actually writes it rather than from where it used to be.
+# The interface version is DERIVED by build.sh from the lowered object and persisted; the
+# label below used to be a hardcoded "0.7.0" that stayed green and stayed wrong right through
+# the 0.10.0 migration. If the file is absent, print no version rather than a stale one.
+IFACE_VER="$(cat "$SCRATCH/invoke/iface.ver" 2>/dev/null || true)"
+V="${IFACE_VER:+@$IFACE_VER}"
+
 W=($(read_words "$E"))
 [ "${#W[@]}" -ge 11 ] || fail "could not read the result blocks (got ${#W[@]} words)"
 SENT="${W[10]}"
 [ "$(printf '%d' "$SENT")" = "$(printf '%d' 0x1E55D09E)" ] \
   || fail "completion sentinel absent (got $SENT) — the harness did not reach the end"
 
-echo "== stage 1 — rate@0.7.0#tick on emulated RT1176 Cortex-M7 =="
+echo "== stage 1 — rate$V#tick on emulated RT1176 Cortex-M7 =="
 printf '   ret offset %s\n   tx %s\n   ty %s\n   tz %s\n   thrust %s\n' "${W[0]}" "${W[1]}" "${W[2]}" "${W[3]}" "${W[4]}"
 EXP=(0x3F800000 0x3EF1EC81 0xBE168816 0x3F000000)
 for i in 0 1 2 3; do
@@ -85,7 +91,7 @@ for i in 0 1 2 3; do
 done
 echo "   MATCHES relay's SIL reference bit-exact (tx=1 ty=0.472507507 tz=-0.147003502 thrust=0.5)"
 
-echo "== stage 2 — mixer@0.7.0#mix, fed by that torque ON TARGET =="
+echo "== stage 2 — mixer$V#mix, fed by that torque ON TARGET =="
 printf '   pwm offset %s\n   m1 %s\n   m2 %s\n   m3 %s\n   m4 %s\n' "${W[5]}" "${W[6]}" "${W[7]}" "${W[8]}" "${W[9]}"
 EXPP=(0x00000000 0x00000000 0x3EB2AF18 0x3F800000)
 for i in 0 1 2 3; do

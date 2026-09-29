@@ -201,6 +201,11 @@ IFACE_VER="$(arm-none-eabi-nm "$OUT/cascade.o" \
    $OUT/cascade.o — refusing to guess the interface version. Symbols present:
 $(arm-none-eabi-nm "$OUT/cascade.o" | grep -o 'pulseengine:[^ ]*' | head -5)"
 echo "   falcon interface version $IFACE_VER (derived from the lowered object)"
+# Persist it. The oracles print the interface version in their evidence lines, and until now
+# they printed a HARDCODED "0.7.0" -- which stayed green and stayed wrong right through the
+# 0.10.0 migration. A log line that names a version nothing derived is the drifted-mirror
+# hazard in miniature: read it from here, or print nothing.
+printf '%s\n' "$IFACE_VER" > "$OUT/iface.ver"
 arm-none-eabi-objcopy \
   --redefine-sym "pulseengine:falcon-cascade/rate@$IFACE_VER#tick=jess_rate_tick" \
   --redefine-sym "pulseengine:falcon-cascade/mixer@$IFACE_VER#mix=jess_mixer_mix" \

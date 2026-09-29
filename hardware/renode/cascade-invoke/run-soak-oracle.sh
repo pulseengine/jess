@@ -121,11 +121,11 @@ echo "== 2. independent wasmtime reference over the SAME module and N =="
 # generator died with a KeyError on a hardcoded export name — reported as a reasoned refusal
 # about the cascade's dynamics. It nearly became a claim that relay's new estimator saturates.
 ref_rc=0
-REF="$("$PY" "$ROOT/tools/cascade-differential/soak_ref.py" "$MOD" "$N" --format json 2>"$OUT/soak_ref.err")" \
+REF="$("$PY" "$ROOT/tools/cascade-differential/soak_ref.py" "$MOD" "$N" --format json 2>"$SCRATCH/invoke/soak_ref.err")" \
   || ref_rc=$?
 if [ "$ref_rc" -ne 0 ]; then
-  sed 's/^/   /' "$OUT/soak_ref.err" >&2
-  if grep -qi 'vacuous' "$OUT/soak_ref.err"; then
+  sed 's/^/   /' "$SCRATCH/invoke/soak_ref.err" >&2
+  if grep -qi 'vacuous' "$SCRATCH/invoke/soak_ref.err"; then
     fail "the reference generator REFUSED to emit a vacuous soak (tick1 == tickN): the cascade
    does not evolve over $N ticks, so this oracle would observe nothing"
   fi
