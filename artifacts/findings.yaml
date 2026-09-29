@@ -6964,6 +6964,28 @@ artifacts:
       at interface 0.10.0, interface version derived as 0.10.0 from the object, linked 91,412 B,
       0 undefined, 5/5 key symbols, soak image built.
 
+      *** AND A THIRD "COULD NOT RUN" REPORTED AS "ANSWERED NO", FOUND BY CI ***
+      CI failed TEST-PIX-033 with: "FAIL: reference generator failed (it REFUSES to emit a
+      vacuous soak)". That message describes a considered refusal about the cascade's dynamics —
+      the soak's go/no-go guard, which fires when tick1 == tickN because a frozen integrator
+      would reproduce such a result exactly.
+      It was not that. soak_ref.py had the interface version baked into its export names, so it
+      died with `KeyError: 'pulseengine:falcon-cascade/rate@0.7.0#tick'`, and the calling oracle
+      reported ANY nonzero exit as the vacuity refusal.
+      jess came within one step of reporting that relay's new estimator SATURATES over 64 ticks —
+      a false and consequential claim about their controller, derived from a crashed script.
+      Measured after fixing the lookup: tick1 [0, 0, 1051897624, 1065353216] vs tickN
+      [1054380883, 1052353927, 1058498869, 1059027551] — NOT equal, so the cascade still evolves
+      and the soak is still non-vacuous.
+      This is the THIRD instance of this class in recent ticks (varve#130's exit 127; AFD-120's
+      missing interpreter; now this), so the fixes are structural rather than local: export
+      resolution moved into ONE shared helper, tools/cascade-differential/ifacever.py, which
+      raises listing the exports that ARE present; and run-soak-oracle.sh now greps the
+      generator's stderr and says "CRASHED (exit N) — this is 'could not run', NOT a verdict
+      about the cascade" when it did not refuse.
+      Four files had the version baked in: soak_ref.py, cascade_ref.py, sil_reference.py and
+      kiln-check.sh. All now resolve it from the module.
+
       *** WHAT IS STILL NOT RE-DERIVED ***
       The FLIGHT-BEHAVIOUR claims. relay fixed an estimator bug that had invalidated 18 of their
       closed-loop tests, so TEST-PIX-032 (cascade stage vs relay's SIL reference) and the 64-tick

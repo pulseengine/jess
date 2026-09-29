@@ -9,8 +9,8 @@ raw pointers, no wac composition, no gust:os). If the two agree, the composition
 did not quietly change the arithmetic.
 
 Canonical ABI (from the WIT + the lowered signatures):
-    rate@0.7.0#tick : (param i32) -> (result i32)   arg -> 14xf32 state ++ 4xf32 sp
-    mixer@0.7.0#mix : (param f32 f32 f32 f32) -> (result i32)   ret -> 4xf32 pwm
+    rate@<ver>#tick : (param i32) -> (result i32)   arg -> 14xf32 state ++ 4xf32 sp
+    mixer@<ver>#mix : (param f32 f32 f32 f32) -> (result i32)   ret -> 4xf32 pwm
 """
 import struct, sys
 from wasmtime import Store, Module, Instance
@@ -40,13 +40,13 @@ def main():
     argp = (ex["__heap_base"].value(store) + 0xF) & ~0xF
 
     mem.write(store, struct.pack("<14f", *VEHICLE_STATE) + struct.pack("<4f", *RATE_SETPOINT), argp)
-    tp = ex["pulseengine:falcon-cascade/rate@0.7.0#tick"](store, argp)
+    tp = ex[find_export(list(ex._extern_map), "rate#tick")](store, argp)
     torque = struct.unpack("<4f", mem.read(store, tp, tp + 16))
 
     # NOTE the asymmetry: `mix` takes its 4 f32s FLATTENED, while `tick` takes a
     # pointer — 18 scalars exceeds the canonical ABI's flattening limit, 4 does not.
     # Assuming a uniform pointer-in convention here silently passes garbage.
-    pp = ex["pulseengine:falcon-cascade/mixer@0.7.0#mix"](store, *torque)
+    pp = ex[find_export(list(ex._extern_map), "mixer#mix")](store, *torque)
     pwm = struct.unpack("<4f", mem.read(store, pp, pp + 16))
 
     # The SAME fold the component performs, in f32 to match wasm arithmetic exactly.
@@ -85,9 +85,9 @@ def main():
     pert = list(VEHICLE_STATE)
     pert[11] += 0.05                                   # wy, an axis the fold responds to
     mem2.write(store2, struct.pack("<14f", *pert) + struct.pack("<4f", *RATE_SETPOINT), argp2)
-    tp2 = ex2["pulseengine:falcon-cascade/rate@0.7.0#tick"](store2, argp2)
+    tp2 = ex2[find_export(list(ex2._extern_map), "rate#tick")](store2, argp2)
     t2 = struct.unpack("<4f", mem2.read(store2, tp2, tp2 + 16))
-    p2 = ex2["pulseengine:falcon-cascade/mixer@0.7.0#mix"](store2, *t2)
+    p2 = ex2[find_export(list(ex2._extern_map), "mixer#mix")](store2, *t2)
     pwm2 = struct.unpack("<4f", mem2.read(store2, p2, p2 + 16))
     a2 = struct.unpack("<f", struct.pack("<f", sum(pwm2)))[0]
     f2 = struct.unpack("<I", struct.pack("<f", a2))[0] & 0x7FFFFFFF

@@ -116,8 +116,22 @@ ran="$(norm "${W[0]}")"
 echo "   sentinel 0x1E55B0A5 present; loop reports $N iterations actually run"
 
 echo "== 2. independent wasmtime reference over the SAME module and N =="
-REF="$("$PY" "$ROOT/tools/cascade-differential/soak_ref.py" "$MOD" "$N" --format json)" \
-  || fail "reference generator failed (it REFUSES to emit a vacuous soak)"
+# Distinguish a CRASHED generator from a considered refusal. This read "it REFUSES to emit a
+# vacuous soak" for ANY nonzero exit, and when falcon v1.139 moved the interface to 0.10.0 the
+# generator died with a KeyError on a hardcoded export name — reported as a reasoned refusal
+# about the cascade's dynamics. It nearly became a claim that relay's new estimator saturates.
+ref_rc=0
+REF="$("$PY" "$ROOT/tools/cascade-differential/soak_ref.py" "$MOD" "$N" --format json 2>"$OUT/soak_ref.err")" \
+  || ref_rc=$?
+if [ "$ref_rc" -ne 0 ]; then
+  sed 's/^/   /' "$OUT/soak_ref.err" >&2
+  if grep -qi 'vacuous' "$OUT/soak_ref.err"; then
+    fail "the reference generator REFUSED to emit a vacuous soak (tick1 == tickN): the cascade
+   does not evolve over $N ticks, so this oracle would observe nothing"
+  fi
+  fail "the reference generator CRASHED (exit $ref_rc) — this is 'could not run', NOT a verdict
+   about the cascade. See the error above."
+fi
 r_t1="$("$PY" -c "import json,sys;print(' '.join('0x%08X'%w for w in json.loads(sys.argv[1])['tick1']))" "$REF")"
 r_tN="$("$PY" -c "import json,sys;print(' '.join('0x%08X'%w for w in json.loads(sys.argv[1])['tickN']))" "$REF")"
 r_f="$("$PY"  -c "import json,sys;print('0x%08X'%json.loads(sys.argv[1])['fold'])" "$REF")"

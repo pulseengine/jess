@@ -15,8 +15,9 @@ Usage:  soak_ref.py <module.wasm> <N> [--format json]
 """
 import struct, sys, json
 
-RATE  = "pulseengine:falcon-cascade/rate@0.7.0#tick"
-MIXER = "pulseengine:falcon-cascade/mixer@0.7.0#mix"
+# Resolved from the module at run time — see ifacever.py for why.
+from ifacever import find_export
+RATE_SUFFIX, MIXER_SUFFIX = "rate#tick", "mixer#mix"
 
 # Byte-identical to harness.c's ARGV_WORDS and cascade_ref.py's vector. Deliberately
 # non-symmetric: a symmetric or all-zero input is a vacuous differential, reproducible
@@ -35,6 +36,8 @@ def soak(module_path, n):
     store = Store()
     inst = Instance(store, Module.from_file(store.engine, module_path), [])
     ex = inst.exports(store)
+    names = list(ex._extern_map) if hasattr(ex, "_extern_map") else []
+    RATE, MIXER = find_export(names, RATE_SUFFIX), find_export(names, MIXER_SUFFIX)
     mem, tick, mix = ex["memory"], ex[RATE], ex[MIXER]
 
     argp = (ex["__heap_base"].value(store) + 0xF) & ~0xF
