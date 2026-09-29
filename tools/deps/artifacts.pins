@@ -38,12 +38,25 @@
 # verifying that tarball against the release's own signed SHA256SUMS.txt — so the chain is
 # release signature -> tarball -> extracted binary, not a digest someone typed in.
 
-[falcon-v1.134.1]
-v1341/rate.wasm              43982be498c0e4a2b03ce6a56a06496cb46dcdc98fdf8bf8cbd610a1d891ae63  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-rate-v1.134.wasm
-v1341/mixer.wasm             076b8a816493e1997191f459c624c0a5b7b80fdcc0c97a4e039d7d24aaa789b3  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-mixer-v1.134.wasm
-v1341/attitude.wasm          d85c325f7564145b99454a60b207d9409f6b600668cdcbde0157f329d68910d1  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-attitude-v1.134.wasm
-v1341/position.wasm          32a45a53aa9fa3a4193aedf4f82cbfaa16810130df9320d0e048958d258eba5b  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-position-v1.134.wasm
-v1341/iekf.wasm              600f9047dba73f278d80b8a0a904bb2066eea33073902fee84aea3d35bb09f0b  release:pulseengine/relay@falcon-v1.134.1!falcon-components-v1.134.tar.gz!falcon-iekf-v1.134.wasm
+[falcon-v1.139.0]
+# BUMPED v1.134.1 -> v1.139.0. relay fixed an estimator bug that had invalidated 18 of their
+# closed-loop tests (the core fused the accelerometer as gravity every tick), so this is a
+# behaviour-CHANGING bump by design — it is Phase C and was done ALONE, after the toolchain.
+#
+# The interface went 0.7.0 -> 0.10.0, but MEASURED, that is a version string for jess's path:
+# all five stage interfaces survive (rate/mixer/attitude/position/ekf), every stage signature
+# is byte-identical, and the record shapes are unchanged. tools/abi/check-manifest.py passes on
+# BOTH interfaces with the same numbers (rate#tick flat 18, mixer#mix flat 4, return areas
+# unchanged). `falcon-cascade` at 0.10.0 is an ADDITIONAL composed component exporting a single
+# `controller`, not a replacement for the five.
+#
+# Directory renamed v1341/ -> falcon/: a version in a path is the hazard AFD-114 fixed for synth
+# (fg60 -> synthpin) and it had reappeared here.
+falcon/rate.wasm              f0cb7154c543452c761443c9e50334e691a694cbd5de32f646a79bad8aa0bdd1  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-rate-v1.139.wasm
+falcon/mixer.wasm             7df930b0e10d52033378b6fe85d24cccc924df651d925abb80390210e73105e7  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-mixer-v1.139.wasm
+falcon/attitude.wasm          d9320de9cda532906362cbc71ea291efa5a6a46889d98a76d3bdf9e57ffbad01  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-attitude-v1.139.wasm
+falcon/position.wasm          379894ec05081022a32240100d88bd2bde3a0c7dc6f35f2c14165bd30e5dde13  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-position-v1.139.wasm
+falcon/iekf.wasm              cf9c57385d1a4ad3e32956088b8317e2a07e372bd58a5d432772d54789cbdd65  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-iekf-v1.139.wasm
 
 [gale-nano]
 galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f  oci:ghcr.io/pulseengine/gale-nano:0.7.0!fused-gustos.component.wasm

@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/appcompose}"
 PY="${PY:-python3}"
-# DERIVED, not supplied. This defaulted to .scratch/v1341/casc_new.loom.wasm — a file with
+# DERIVED, not supplied. This defaulted to .scratch/falcon/casc_new.loom.wasm — a file with
 # no pin, no locator and no derivation: it existed only on the machine where it was once
 # produced, so this oracle had NEVER been reproducible from a clean checkout, and CI found
 # that the moment the job ran (AFD-075). It is also not the module build.sh derives: 35
@@ -38,17 +38,17 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # Preflight. The upstream components are NOT vendored in jess (they are supplier
 # artifacts, fetched via the DD-026 OCI path). Say so explicitly rather than dying
 # on a bare `cp: no such file`, which reads like a jess bug when it is a missing input.
-RATE="$SCRATCH/v1341/rate.wasm"
-MIXER="$SCRATCH/v1341/mixer.wasm"
+RATE="$SCRATCH/falcon/rate.wasm"
+MIXER="$SCRATCH/falcon/mixer.wasm"
 NANO="$SCRATCH/galenano7/gale-nano-0.7.0.wasm"
 # Derive the fused core if the caller did not supply one. Done BEFORE the preflight so the
 # preflight checks a file that can actually exist rather than reporting a derived artifact as
 # a missing "supplier artifact" — which is what the old message said, and it was wrong.
 if [ ! -f "$FUSED" ]; then
   for st in rate mixer attitude position iekf; do
-    [ -f "$SCRATCH/v1341/$st.wasm" ] || { printf 'MISSING PINNED COMPONENT: %s\n' "$SCRATCH/v1341/$st.wasm" >&2; printf 'Run tools/deps/fetch.sh first.\n' >&2; exit 2; }
+    [ -f "$SCRATCH/falcon/$st.wasm" ] || { printf 'MISSING PINNED COMPONENT: %s\n' "$SCRATCH/falcon/$st.wasm" >&2; printf 'Run tools/deps/fetch.sh first.\n' >&2; exit 2; }
   done
-  run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+  run_meld fuse "$SCRATCH"/falcon/{rate,mixer,attitude,position,iekf}.wasm \
       --memory shared --pack-rebase -o "$OUT/fused.wasm" >"$OUT/meld.log" 2>&1 \
       || { echo "FAIL: meld fuse (see $OUT/meld.log)" >&2; exit 1; }
   run_loom optimize "$OUT/fused.wasm" -o "$FUSED" >"$OUT/loom.log" 2>&1 \

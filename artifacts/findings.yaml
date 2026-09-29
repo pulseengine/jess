@@ -6902,3 +6902,78 @@ artifacts:
       detected-by: Phase A toolchain bump plus building the ABI cross-check against meld's signature manifest, 2026-09-25
       severity: major
       triage-status: confirmed
+
+  - id: AFD-121
+    type: ai-found-defect
+    title: "Phase C: falcon v1.134.1 -> v1.139.0 lowers clean on interface 0.10.0 — and the 'five stage interfaces collapsed into one controller' claim jess reported was WRONG; they all survive with byte-identical signatures"
+    status: open
+    description: |-
+      2026-09-29. Phase C of the post-falcon-switch plan, done alone after the toolchain phase.
+
+      *** A RETRACTION FIRST: THE COLLAPSE CLAIM WAS WRONG ***
+      jess reported — to the operator, and encoded it into the loop's own recurring prompt — that
+      falcon 0.10.0 "collapses five stage interfaces into one `controller` with step + configure",
+      and that "the five-stage cascade is gone from the public seam", concluding that jess's entire
+      per-stage differential methodology had lost its five comparison points.
+      That is FALSE. Measured on the published v1.139 components:
+          falcon-rate      -> export pulseengine:falcon-cascade/rate@0.10.0
+          falcon-mixer     -> export pulseengine:falcon-cascade/mixer@0.10.0
+          falcon-attitude  -> export pulseengine:falcon-cascade/attitude@0.10.0
+          falcon-position  -> export pulseengine:falcon-cascade/position@0.10.0
+          falcon-iekf/ekf  -> export pulseengine:falcon-cascade/ekf@0.10.0
+          falcon-cascade   -> export pulseengine:falcon-cascade/controller@0.10.0
+      All five survive. `falcon-cascade` is an ADDITIONAL composed component, not a replacement.
+      HOW THE ERROR HAPPENED: jess inspected ONE artifact — falcon-cascade-v1.139.wasm, the
+      composed one — saw a single `controller` export, and generalised to the whole release
+      without looking at the other six files in the same tarball. One `wasm-tools component wit`
+      per component would have prevented it. This is the same shape as AFD-107: concluding from
+      where jess happened to look rather than from where the answer lives.
+
+      *** WHAT THE MIGRATION ACTUALLY IS: A VERSION STRING ***
+      Every stage signature is byte-identical across 0.7.0 -> 0.10.0:
+          rate     tick(state: vehicle-state, sp: rate-setpoint)      -> torque-setpoint
+          mixer    mix(torque: torque-setpoint)                       -> motor-pwm
+          attitude tick(state: vehicle-state, sp: attitude-setpoint)  -> rate-setpoint
+          position tick(state: vehicle-state, target: waypoint)       -> attitude-setpoint
+          ekf      estimate(imu: imu-sample)                          -> vehicle-state
+      and the record shapes are unchanged (vehicle-state 14, rate-setpoint 4, torque-setpoint 4).
+      tools/abi/check-manifest.py PASSES on BOTH interfaces with identical numbers — rate#tick
+      flat_param_count 18 and indirect, return area 16 B / 4 fields; mixer#mix flattened to 4.
+      So the ABI is unchanged and the LOWERING migration is mechanical.
+
+      *** THE GATE BUILT ONE TICK EARLIER CAUGHT THE MIGRATION, AS INTENDED ***
+      AFD-120 wired tools/abi/check-manifest.py specifically for this. Run against the v1.139
+      fusion it REFUSED rather than passing, and printed the exports actually present:
+          FAIL: no export ending '/rate@0.7.0#tick' in the manifest. Exports present:
+                pulseengine:falcon-cascade/rate@0.10.0#tick   (and four more)
+      Fixed by making the lookup VERSION-AGNOSTIC — pinning the version there would have made an
+      ABI check into a version tripwire — while ASSERTING all exports share one version, so a
+      half-migrated fusion mixing versions is still refused. The version in use is printed.
+
+      *** THE ONLY THING THAT ACTUALLY BROKE, AND WHERE IT SURFACED ***
+      hardware/renode/cascade-invoke/build.sh hardcoded `@0.7.0` in its objcopy --redefine-sym
+      lines. With the ABI identical, that string was the sole breakage — and it surfaced three
+      steps from its cause as "objcopy --redefine-sym did not produce jess_rate_tick". The
+      version is now DERIVED from the lowered object's own symbols, with a refusal (naming the
+      symbols present) rather than a guess if it cannot be found.
+      Also renamed the pin directory v1341/ -> falcon/ across 7 files: a version encoded in a
+      path is exactly the hazard AFD-114 fixed for synth (fg60 -> synthpin), reappeared here.
+
+      *** VERIFIED END TO END ***
+      Pins fetch and check clean. Full chain ON-PIN: fusion byte-reproducible, ABI-MANIFEST PASS
+      at interface 0.10.0, interface version derived as 0.10.0 from the object, linked 91,412 B,
+      0 undefined, 5/5 key symbols, soak image built.
+
+      *** WHAT IS STILL NOT RE-DERIVED ***
+      The FLIGHT-BEHAVIOUR claims. relay fixed an estimator bug that had invalidated 18 of their
+      closed-loop tests, so TEST-PIX-032 (cascade stage vs relay's SIL reference) and the 64-tick
+      soak are now statements about a superseded control law. They are re-computed from the module
+      itself by tools/cascade-differential/, so they may be self-consistently green while
+      describing different numbers than before — a green board here is NOT evidence that the old
+      behaviour was preserved, and it was never meant to be. The lowering half is what this
+      finding claims.
+    tags: [falcon, phase-c, migration, retraction, canonical-abi, gate-potency, afd-120, afd-114, afd-107]
+    fields:
+      detected-by: executing the Phase C falcon v1.139 migration and measuring every component rather than one, 2026-09-29
+      severity: major
+      triage-status: confirmed

@@ -13,8 +13,8 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/floop}"; mkdir -p "$OUT"
 NANO="${NANO:-$ROOT/.scratch/galenano7/gale-nano-0.7.0.wasm}"
-RATE="${RATE:-$ROOT/.scratch/v1341/rate.wasm}"
-MIXER="${MIXER:-$ROOT/.scratch/v1341/mixer.wasm}"
+RATE="${RATE:-$ROOT/.scratch/falcon/rate.wasm}"
+MIXER="${MIXER:-$ROOT/.scratch/falcon/mixer.wasm}"
 ITERS="${ITERS:-8}"; TICKS="${TICKS:-3}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 for f in "$NANO" "$RATE" "$MIXER"; do

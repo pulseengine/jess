@@ -145,14 +145,14 @@ echo "== 1. fuse + lower (the object and its init tables come from ONE module) =
 # What it does NOT cost: code and data are byte-identical either way (verified by diffing
 # the module with both metadata sections stripped: 7,949 identical lines).
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" \
-run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+run_meld fuse "$SCRATCH"/falcon/{rate,mixer,attitude,position,iekf}.wasm \
     --memory shared --pack-rebase --reproducible --emit-manifest -o "$OUT/c.wasm" >"$OUT/meld.log" 2>&1 || fail "meld"
 
 # THE GATE. Fuse a second time and require byte-equality. A flag that silently stopped
 # applying looks exactly like one that works, and this is the only place that would notice.
 if [ -z "${SKIP_REPRO_GATE:-}" ]; then
   SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" \
-  run_meld fuse "$SCRATCH"/v1341/{rate,mixer,attitude,position,iekf}.wasm \
+  run_meld fuse "$SCRATCH"/falcon/{rate,mixer,attitude,position,iekf}.wasm \
       --memory shared --pack-rebase --reproducible --emit-manifest -o "$OUT/c.repro.wasm" >>"$OUT/meld.log" 2>&1 \
     || fail "meld (reproducibility second fuse)"
   cmp -s "$OUT/c.wasm" "$OUT/c.repro.wasm" \
@@ -191,9 +191,19 @@ MOD="$OUT/c.loom.wasm" PY="$PY" OUT="$OUT/einit" "$ROOT/tools/embedder-init/run.
   || { tail -3 "$OUT/einit.log" >&2; fail "embedder-init"; }
 
 echo "== 3. rename the export ('@' begins an ARM comment, so an asm label truncates it) =="
+# DERIVE the interface version from the object rather than hardcoding it. These lines read
+# `@0.7.0` until falcon v1.139 moved the interface to 0.10.0 — the stage signatures and the
+# whole ABI were byte-identical, so the ONLY thing that broke was this string, and it broke as
+# "objcopy --redefine-sym did not produce jess_rate_tick" three steps from the cause.
+IFACE_VER="$(arm-none-eabi-nm "$OUT/cascade.o" \
+  | sed -n 's|.*pulseengine:falcon-cascade/rate@\([0-9][0-9.]*\)#tick.*|\1|p' | head -1)"
+[ -n "$IFACE_VER" ] || fail "could not find a 'falcon-cascade/rate@<version>#tick' symbol in
+   $OUT/cascade.o — refusing to guess the interface version. Symbols present:
+$(arm-none-eabi-nm "$OUT/cascade.o" | grep -o 'pulseengine:[^ ]*' | head -5)"
+echo "   falcon interface version $IFACE_VER (derived from the lowered object)"
 arm-none-eabi-objcopy \
-  --redefine-sym 'pulseengine:falcon-cascade/rate@0.7.0#tick=jess_rate_tick' \
-  --redefine-sym 'pulseengine:falcon-cascade/mixer@0.7.0#mix=jess_mixer_mix' \
+  --redefine-sym "pulseengine:falcon-cascade/rate@$IFACE_VER#tick=jess_rate_tick" \
+  --redefine-sym "pulseengine:falcon-cascade/mixer@$IFACE_VER#mix=jess_mixer_mix" \
   "$OUT/cascade.o" "$OUT/cascade_named.o" || fail "objcopy"
 # ASSERT the rename landed — a silent no-op would leave an unresolved reference and the
 # only symptom would be a link error three steps later.

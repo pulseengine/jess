@@ -54,15 +54,30 @@ def main():
         sys.exit("FAIL: manifest carries zero exports — nothing to check (vacuous).")
     print(f"  manifest version {man.get('version')}, {len(exports)} export(s)")
 
+    # Match on <stage>#<fn>, VERSION-AGNOSTIC, because the interface version moves on its own
+    # schedule (0.7.0 -> 0.10.0 arrived with the falcon v1.139 controller rewrite while every
+    # stage signature stayed byte-identical). Pinning the version here would have made this gate
+    # a version tripwire rather than an ABI check.
+    #
+    # But a fusion whose exports carry DIFFERENT versions is a half-migrated input, so the
+    # versions are asserted to agree and the one in use is printed. Silent is the failure mode.
+    vers = sorted({m.group(1) for k in exports
+                   if (m := re.search(r'@(\d+\.\d+\.\d+)#', k))})
+    if len(vers) != 1:
+        sys.exit(f"FAIL: exports do not share one interface version: {vers}\n"
+                 "   a half-migrated fusion mixes versions; refusing to check an ABI that is\n"
+                 "   not one interface.")
+    print(f"  interface version {vers[0]} (all {len(exports)} exports agree)")
+
     def find(suffix):
         for k, v in exports.items():
-            if k.endswith(suffix): return k, v
-        sys.exit(f"FAIL: no export ending '{suffix}' in the manifest. Exports present:\n" +
+            if re.sub(r'@\d+\.\d+\.\d+#', '#', k).endswith(suffix): return k, v
+        sys.exit(f"FAIL: no export matching '{suffix}' in the manifest. Exports present:\n" +
                  "\n".join("     " + k for k in exports))
 
     ok = True
     # 1. rate#tick's flattened param count must equal the harness's ARGV_WORDS length.
-    rk, rate = find('/rate@0.7.0#tick')
+    rk, rate = find('/rate#tick')
     want = argv_words_len(harness)
     got  = rate['flat_param_count']
     tag  = "ok " if want == got else "FAIL"
@@ -80,7 +95,7 @@ def main():
     print(f"  [{tag}] rate#tick return area: {ra.get('size')} B / {n} field(s); harness reads q[0..3]")
 
     # 4. mixer#mix must be FLATTENED to exactly 4 — the harness calls it with 4 floats.
-    mk, mix = find('/mixer@0.7.0#mix')
+    mk, mix = find('/mixer#mix')
     mf = mix['flat_param_count']
     tag = "ok " if mf == 4 and mf <= 16 else "FAIL"; ok &= (mf == 4 and mf <= 16)
     print(f"  [{tag}] mixer#mix flattened to {mf} (harness passes 4 floats, not a pointer)")

@@ -15,7 +15,7 @@ Canonical ABI (from the WIT + the lowered signatures):
 import struct, sys
 from wasmtime import Store, Module, Instance
 
-# NO DEFAULT MODULE. This used to default to .scratch/v1341/casc_new.loom.wasm — a file with
+# NO DEFAULT MODULE. This used to default to .scratch/falcon/casc_new.loom.wasm — a file with
 # no pin, no locator and no derivation, present only on the machine that once produced it
 # (AFD-075). Defaulting to it meant this script could silently reference an artifact nobody
 # else can reproduce, and report numbers from it as if they were the campaign's. Require the
