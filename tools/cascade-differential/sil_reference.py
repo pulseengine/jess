@@ -7,14 +7,14 @@ difference — which is exactly what jess owes under DD-026 P2 (relay proves the
 closes in source; jess proves it still closes after lowering).
 
 Canonical ABI of the export, from the WIT + the lowered signature:
-    rate@0.7.0#tick : (param i32) -> (result i32)
+    rate@<ver>#tick : (param i32) -> (result i32)
     arg  ptr -> vehicle-state (14 x f32, 56 B) followed by rate-setpoint (4 x f32, 16 B)
     ret  ptr -> torque-setpoint (4 x f32, 16 B)
 """
 import struct, sys
 from wasmtime import Store, Module, Instance
 
-# NO DEFAULT MODULE. This used to default to .scratch/v1341/casc_new.loom.wasm — a file with
+# NO DEFAULT MODULE. This used to default to .scratch/falcon/casc_new.loom.wasm — a file with
 # no pin, no locator and no derivation, present only on the machine that once produced it
 # (AFD-075). Defaulting to it meant this script could silently reference an artifact nobody
 # else can reproduce, and report numbers from it as if they were the campaign's. Require the
@@ -27,7 +27,9 @@ if len(sys.argv) < 2:
         % sys.argv[0])
     sys.exit(2)
 MODULE = sys.argv[1]
-EXPORT = "pulseengine:falcon-cascade/rate@0.7.0#tick"
+# Resolved at run time — the interface version moves (AFD-121); see ifacever.py.
+from ifacever import find_export
+EXPORT_SUFFIX = "rate#tick"
 
 # One deliberately non-symmetric test vector. Symmetric or all-zero inputs are a
 # vacuous differential: they can be reproduced by a miscompile that drops terms.

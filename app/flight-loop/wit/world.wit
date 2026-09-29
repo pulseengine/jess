@@ -13,9 +13,9 @@ world loop {
     import gust:os/spawn@0.1.0;
     import gust:os/timer@0.1.0;
 
-    import pulseengine:falcon-cascade/types@0.7.0;
-    import pulseengine:falcon-cascade/rate@0.7.0;
-    import pulseengine:falcon-cascade/mixer@0.7.0;
+    import pulseengine:falcon-cascade/types@0.10.0;
+    import pulseengine:falcon-cascade/rate@0.10.0;
+    import pulseengine:falcon-cascade/mixer@0.10.0;
 
     /// Run the cascade for `iterations` timer-paced ticks. Returns a packed result;
     /// see src/lib.rs for the field layout.

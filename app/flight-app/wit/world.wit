@@ -23,9 +23,9 @@ world app {
     import gust:os/spawn@0.1.0;
 
     // relay's flight cascade — the data seams (DD-026 layer ii)
-    import pulseengine:falcon-cascade/types@0.7.0;
-    import pulseengine:falcon-cascade/rate@0.7.0;
-    import pulseengine:falcon-cascade/mixer@0.7.0;
+    import pulseengine:falcon-cascade/types@0.10.0;
+    import pulseengine:falcon-cascade/rate@0.10.0;
+    import pulseengine:falcon-cascade/mixer@0.10.0;
 
     // gale's canonical entry point
     export run: func() -> u32;

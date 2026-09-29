@@ -7,7 +7,7 @@
 # and could not have done otherwise:
 #   * the fused core exports no `run-stabilization`. kiln says so plainly —
 #     "[Runtime][E07DA] Function not found" — and then LISTS the five exports it does have.
-#     meld's fusion renames them to `pulseengine:falcon-cascade/<stage>@0.7.0#<fn>`.
+#     meld's fusion renames them to `pulseengine:falcon-cascade/<stage>@<ver>#<fn>`.
 #   * wasmtime's side of the "comparison" invoked that name on a DIFFERENT artifact (the
 #     pre-fusion component), so the two halves were never looking at the same thing.
 #   * `2>/dev/null || true` then made "kiln disagreed" and "kiln could not run" the same
@@ -38,7 +38,14 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # A first version wrote "…#mix:4" and split on the FIRST colon, yielding the export name
 # "pulseengine" — which then failed as "could not run", correctly, rather than silently
 # comparing nothing.
-CMP_EXPORT="pulseengine:falcon-cascade/mixer@0.7.0#mix"
+# Resolved from the module, not hardcoded: the interface version moves (0.7.0 -> 0.10.0 in
+# falcon v1.139) while the signatures stay identical, so a baked version breaks a check that
+# has nothing to do with versions.
+IFACE_VER="$("${KILND}" "$MOD" --invoke __list 2>&1 | sed -n 's|.*falcon-cascade/mixer@\([0-9][0-9.]*\)#mix.*|\1|p' | head -1)"
+[ -n "$IFACE_VER" ] || IFACE_VER="$(wasm-tools print "$MOD" 2>/dev/null | sed -n 's|.*falcon-cascade/mixer@\([0-9][0-9.]*\)#mix.*|\1|p' | head -1)"
+[ -n "$IFACE_VER" ] || fail "could not determine the falcon interface version from $MOD —
+   refusing to guess it (that is 'could not run', not a failed check)"
+CMP_EXPORT="pulseengine:falcon-cascade/mixer@$IFACE_VER#mix"
 ARGS4="0.25 0.5 0.75 0.125"
 
 invoke_kiln() {  # $1 export, rest args -> prints the i32 or nothing
@@ -84,11 +91,11 @@ echo "  $e -> kiln=$k wasmtime=$w  AGREE"
 # read 1/5 — a number that says nothing about the artifact. Passing the wrong arity everywhere
 # and then reporting the survivors is the shape of a metric that measures the harness.
 n=0; total=0; failed=""
-for spec in "ekf@0.7.0#estimate:0 0 0 0 0 0" \
-            "position@0.7.0#tick:0" \
-            "attitude@0.7.0#tick:0" \
-            "mixer@0.7.0#mix:0.25 0.5 0.75 0.125" \
-            "rate@0.7.0#tick:0"; do
+for spec in "ekf@$IFACE_VER#estimate:0 0 0 0 0 0" \
+            "position@$IFACE_VER#tick:0" \
+            "attitude@$IFACE_VER#tick:0" \
+            "mixer@$IFACE_VER#mix:0.25 0.5 0.75 0.125" \
+            "rate@$IFACE_VER#tick:0"; do
   stage="${spec%%:*}"; a="${spec#*:}"
   full="pulseengine:falcon-cascade/$stage"
   total=$((total+1))
