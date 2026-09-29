@@ -79,6 +79,90 @@ parts:
         debug shut alongside HAB. One measurement, once a cable exists.
     measured-by: [AFD-092, AFD-086, AFD-080]
 
+  stm32wl55:
+    what: STM32WL55 sub-GHz wireless MCU — Cortex-M4 application core (+ a Cortex-M0+ radio core)
+    role: >
+      gale bench silicon for the verified MPU region programmer and the dissolved `wdg-thin`
+      driver. Not on the flight path; carried here because the catalogue is the shared vocabulary
+      and a board jess cannot name is a board jess cannot lock.
+    identity:
+      dbgmcu-idcode: 0x10036497
+      cpuid: 0x410fc241                # Cortex-M4 r0p1
+    memory:
+      flash-bytes: 262144              # 256 KB, from the flash-size register at 0x1FFF75E0
+      sram-bytes: 65536                # 64 KB — MEASURED as a bound: a read at 0x20010000 faults
+      sram-base: 0x20000000
+    capabilities:
+      mpu-present: true
+      mpu-dregion: 8                   # MPU_TYPE = 0x00000800
+      fpu: none                        # MVFR0 = 0 — the WL55's M4 has NO FPU
+    caveats:
+      - >
+        CPUID DOES NOT DISTINGUISH IT FROM THE WB55. Both report 0x410fc241. What separates them
+        is MVFR0 (0 here, SP FPU on the WB55) and the DBGMCU IDCODE. Identifying this part by
+        CPUID alone selects either board.
+      - >
+        ATTACHES ONLY UNDER RESET (`connect_assert_srst`): the resident firmware drops the debug
+        link, and a watchdog reset that boots back into it drops the link again.
+      - >
+        READS TAKEN WHILE SRST IS STILL ASSERTED RETURN ALL ZEROS — MPU_TYPE, MVFR0 and the flash
+        size register alike. All-zero MPU_TYPE is exactly what a part with NO MPU reports, so this
+        reads as a hardware fact and is an artefact of measurement order. Measure after
+        `reset halt`. (The F100's mpu-present:false above IS real; this is how to tell.)
+    measured-by: [AFD-123]
+
+  stm32wb55:
+    what: STM32WB55 BLE MCU — Cortex-M4 application core (+ a Cortex-M0+ radio core)
+    role: gale bench silicon; see stm32wl55.
+    identity:
+      dbgmcu-idcode: 0x20036495
+      cpuid: 0x410fc241                # Cortex-M4 r0p1 — SAME as the WL55
+    memory:
+      flash-bytes: 1048576             # 1024 KB, from the flash-size register at 0x1FFF75E0
+      sram-bytes: 196608               # 192 KB SRAM1 — DATASHEET, not a measured bound; see caveat
+      sram-base: 0x20000000
+    capabilities:
+      mpu-present: true
+      mpu-dregion: 8                   # MPU_TYPE = 0x00000800
+      fpu: fpv4-sp                     # MVFR0 = 0x10110021
+    caveats:
+      - >
+        THE SRAM BOUND IS NOT MEASURED. Unlike the WL55 and the G031, no read faults at the end of
+        SRAM1: 0x20030000 STILL READS, because SRAM2a is contiguous with it. So the 192 KB figure
+        is the datasheet's, and the fault-probe technique that established the other two bounds
+        CANNOT establish this one. Recorded as datasheet deliberately rather than promoted to a
+        measurement.
+      - See stm32wl55 — CPUID 0x410fc241 is shared; MVFR0 and the IDCODE are what separate them.
+    measured-by: [AFD-123]
+
+  stm32g031:
+    what: STM32G031 value-line MCU, Cortex-M0+ (ARMv6-M)
+    role: gale bench silicon; the only ARMv6-M part in the catalogue.
+    identity:
+      dbgmcu-idcode: 0x10036466
+      cpuid: 0x410cc601                # Cortex-M0+ r0p1
+    memory:
+      flash-bytes: 65536               # 64 KB, from the flash-size register at 0x1FFF75E0
+      sram-bytes: 8192                 # 8 KB — MEASURED as a bound: a read at 0x20002000 faults
+      sram-base: 0x20000000
+    capabilities:
+      mpu-present: true
+      mpu-dregion: 8                   # MPU_TYPE = 0x00000800
+      fpu: none                        # MVFR0 = 0
+    caveats:
+      - >
+        ARMv6-M: EVERY FAULT IS A HARDFAULT. There is no MemManage and no BusFault, so a test that
+        distinguishes an MPU violation from a bad access by fault type CANNOT work here. The same
+        probe yields BusFault on the WL55/WB55 and HardFault here — a difference in the
+        instrument, not in the behaviour under test.
+      - >
+        THE MINIMUM MPU REGION IS 256 B, not the ARMv7-M 32 B. A region table written against the
+        ARMv7-M floor silently does not apply.
+      - >
+        synth HAS NO ARMv6-M PROFILE (synth#1301). Nothing in this campaign can be lowered for
+        this part today; it is an MPU/driver instrument, not a synth target.
+    measured-by: [AFD-123]
+
   stlink-v1:
     what: ST-LINK/V1 debug probe (onboard on STM32VLDISCOVERY)
     capabilities:
@@ -95,10 +179,53 @@ parts:
         it reads exactly like a dead probe. HALT FIRST. This cost both jess and gale a cycle.
       - >
         ST-LINK is ST-only in practice for HLA; it will not drive an NXP i.MX RT target.
-    measured-by: [AFD-091, AFD-096]
+      - >
+        ON LINUX THE KERNEL CLAIMS THE WHOLE PROBE. This part exposes exactly ONE USB interface
+        (:1.0, bInterfaceClass 08 mass-storage) and `usb-storage` binds it — MEASURED on
+        wohl.local. There is no second interface for openocd to fall back to, so the
+        `usb-storage` quirk `0483:3744:i` is not a convenience, it is the ONLY route. Contrast
+        stlink-v2-1, whose DAP lives on a separate vendor-class interface. Symptom without the
+        quirk: HLA stops after "clock speed 1000 kHz" and exits 1.
+      - >
+        ITS SERIAL IS NOT A USABLE SELECTOR. Every other ST-LINK reports a 24-hex-character
+        string; this one reports 12 RAW BYTES — measured `48c3bf720650546556413710c281`, which
+        renders as `H\xffr\x06PTeVA7\x10\x81` and contains control characters. It is not
+        shell-, filename- or log-safe, so tools that select a probe by serial string cannot select
+        this one. It also has no /dev/serial/by-id node, but that is because it has NO virtual COM
+        port (single mass-storage interface, above) — NOT because of the serial. Two facts that
+        look like one.
+    measured-by: [AFD-091, AFD-096, AFD-123]
+
+  stlink-v2-1:
+    what: ST-LINK/V2-1 debug probe (onboard on NUCLEO-64/NUCLEO-32 boards)
+    usb: { vid: 0x0483, pid: 0x374b }
+    capabilities:
+      transport: dapdirect_swd         # also speaks HLA; the DAP path is the one in use
+      nsrst-wired: true                # NUCLEO boards wire NRST
+    caveats:
+      - >
+        VID:PID CANNOT SELECT A BOARD. This probe model is onboard on many NUCLEOs, so a host can
+        carry several reporting the identical 0483:374b — MEASURED on wohl.local, which has TWO
+        (the WB55RG's and the G031K8's). Any tool that selects "the ST-LINK/V2-1" picks
+        NONDETERMINISTICALLY between two different parts. Selection MUST be by probe serial (a
+        24-hex string here, unlike stlink-v1). This is not hypothetical: unpinned openocd attached
+        to the G031K8 while a claim on a DIFFERENT board was held, twice (gale#397); only an
+        IDCODE check stopped a flash.
+      - >
+        It is also why the device names in this catalogue are per-BOARD and never per-PROBE-MODEL.
+        A name like `stlink-v2-1` would be ONE bench lock for TWO boards — the vacuous-lock
+        failure of AFD-082 by construction rather than by typo.
+      - >
+        UNLIKE stlink-v1, THE KERNEL DOES NOT CLAIM ITS DAP. Four interfaces, measured: :1.0
+        vendor-class 0xFF (the DAP), :1.1 mass-storage, :1.2 + :1.3 CDC-ACM (the VCP).
+        `usb-storage` binds only :1.1, so no quirk is needed.
+    measured-by: [AFD-123]
 
   stlink-v3:
-    what: STLINK-V3 debug probe (onboard on NUCLEO-G474RE)
+    what: >
+      STLINK-V3 family debug probe, including the STLINK-V3E variant onboard on NUCLEO boards.
+      Both report 0483:374e, so — as with stlink-v2-1 — VID:PID does not select a board.
+    usb: { vid: 0x0483, pid: 0x374e }
     capabilities:
       transport: dapdirect_swd         # generic ARM-DAP, unlike V1's HLA
       nsrst-wired: unknown
@@ -110,8 +237,22 @@ parts:
       - >
         NOT ESTABLISHED: whether it can drive an i.MX RT1176. Plausible on the dapdirect path;
         untested, and recorded as a plan rather than a result.
-    measured-by: [AFD-092]
+      - >
+        THE NAME `stlink-v3` USED TO BE A DEVICE NAME in the registry, meaning the NUCLEO-G474RE
+        on one host and the NUCLEO-WL55JC1 on another. It is now a PART name only; the boards are
+        `nucleo-g474re` and `nucleo-wl55jc1`. See the naming rule at the head of `boards:`.
+    measured-by: [AFD-092, AFD-123]
 
+# THE NAMING RULE, agreed with gale on jess#266: EVERY DEVICE NAME IS A BOARD, NEVER A PROBE
+# MODEL. Two boards on wohl.local carry the same ST-LINK/V2-1 (0483:374b), so a probe-model name
+# is one bench lock for two devices — AFD-082's vacuous lock by construction instead of by typo.
+# This cost a real attach already: unpinned openocd reached the G031K8 while a claim on another
+# board was held (gale#397), and only an IDCODE check stopped a flash.
+#
+# The rename this rule forced: `stlink-v3` was a DEVICE name meaning the NUCLEO-G474RE here and
+# the NUCLEO-WL55JC1 on wohl.local. It is now a PART name only. Registries carry `aliases:` so the
+# old name takes the SAME flock as the new one during the transition — otherwise the rename itself
+# would open the window it exists to close.
 boards:
   pixhawk-6xrt:
     what: Holybro Pixhawk 6X-RT flight controller
@@ -138,6 +279,47 @@ boards:
       The only instrument that can establish an F100 part fact, since the vehicle's F100 has no
       debug port. Zero flight risk; nothing about it is on the flight path.
     measured-by: [AFD-091]
+
+  nucleo-g474re:
+    what: ST NUCLEO-G474RE — STM32G474 (Cortex-M4) target with an onboard STLINK-V3E
+    parts: [stlink-v3]
+    role: >
+      The host-side probe board. Its STLINK-V3E is the only dapdirect_swd probe jess has, so it is
+      the candidate for reaching an RT1176 over SWD — untested, see stlink-v3.
+    aka: >
+      Was the device named `stlink-v3` until jess#266. Registries keep that as an alias.
+    measured-by: [AFD-092]
+
+  nucleo-wl55jc1:
+    what: ST NUCLEO-WL55JC1 — STM32WL55 target with an onboard STLINK-V3E
+    parts: [stm32wl55, stlink-v3]
+    role: gale bench silicon — MPU region programmer and `wdg-thin` two-boot proof.
+    caveats:
+      - >
+        Attaches only under reset, and reads while SRST is asserted return all zeros — the
+        failure that looks like "no MPU". See stm32wl55.
+    measured-by: [AFD-123]
+
+  nucleo-wb55rg:
+    what: ST NUCLEO-WB55RG — STM32WB55 target with an onboard ST-LINK/V2-1
+    parts: [stm32wb55, stlink-v2-1]
+    role: gale bench silicon — see nucleo-wl55jc1.
+    caveats:
+      - >
+        Shares VID:PID 0483:374b with nucleo-g031k8 on the same host. Select by probe serial;
+        a VID:PID selector picks between the two nondeterministically.
+    measured-by: [AFD-123]
+
+  nucleo-g031k8:
+    what: ST NUCLEO-G031K8 — STM32G031 target with an onboard ST-LINK/V2-1
+    parts: [stm32g031, stlink-v2-1]
+    role: >
+      gale bench silicon, and the only ARMv6-M part available. Not a synth target (synth#1301).
+    caveats:
+      - >
+        Shares VID:PID 0483:374b with nucleo-wb55rg on the same host, and is the board unpinned
+        openocd actually reached while another claim was held (gale#397).
+    measured-by: [AFD-123]
 
 # Synthetic entries. Declared HERE rather than special-cased in the checker, for the same reason
 # `selftest-device` is in the registry rather than pattern-matched in with-device: a bypass in a

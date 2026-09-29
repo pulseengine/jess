@@ -1,7 +1,8 @@
 //! Thin CLI over the `with_device` library. All logic worth testing lives in lib.rs so that
 //! `cargo test` can reach it; this file is argv in, exit code out.
 
-use std::process::{Command, Stdio};
+use std::process::{self, Command, Stdio};
+use std::time::{Duration, Instant};
 use with_device::*;
 
 /// The FIELD acceptance check — it ships in the binary and runs where there is no source tree
@@ -12,7 +13,7 @@ fn self_test() -> i32 {
     let reg = std::env::temp_dir().join("with-device-selftest.yaml");
     std::fs::write(
         &reg,
-        "devices:\n  selftest-a:\n    what: synthetic\n  selftest-b:\n    what: synthetic\n",
+        "devices:\n  selftest-a:\n    what: synthetic\n    aliases: [selftest-a-old]\n  selftest-b:\n    what: synthetic\n",
     )
     .unwrap();
     let r = reg.display().to_string();
@@ -172,6 +173,81 @@ fn self_test() -> i32 {
         ]),
         EXIT_USAGE,
     );
+
+    let marker = std::env::temp_dir().join(format!("with-device-selftest-held-{}", process::id()));
+    let _ = std::fs::remove_file(&marker);
+    // 20s is a CEILING, not a wait: the holder is killed explicitly once the probes are done.
+    let holder_cmd = format!("touch {}; sleep 20", marker.display());
+
+    // ALIASES (jess#266). Here rather than only in `cargo test` because this is the check gale
+    // can run on wohl.local, where the naming agreement actually has to hold and where there is
+    // no source tree. BOTH directions, because either alone is vacuous: an alias must be refused
+    // while its canonical name is held, and a DIFFERENT device must stay free — a resolver that
+    // collapsed every name to one key would pass the first and fail the second.
+    let mut holder = Command::new(&me)
+        .args([
+            "selftest-a",
+            "--registry",
+            &r,
+            "--purpose",
+            "alias-holder",
+            "--",
+            "sh",
+            "-c",
+            &holder_cmd,
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    // Wait until the holder DEMONSTRABLY holds it. The marker is touched by the wrapped command,
+    // which only runs after the claim succeeds, so observing it cannot race the holder.
+    //
+    // THE TRAP THIS AVOIDS, WHICH COST TWO FLAKY RUNS BEFORE BEING NAMED: the obvious readiness
+    // signal is the lock FILE, and it is wrong twice over. `try_claim` opens it with create(true)
+    // BEFORE flock(2) decides anything, and it is deliberately never truncated or removed — so it
+    // exists both before this holder has acquired and after any previous self-test. Polling it
+    // let the PROBE win the lock; the holder was then the one refused, and
+    // "alias shares the lock" reported rc=0 while the aliasing it was testing worked perfectly.
+    // A guessed `sleep` has the same defect with extra steps. tests/cli.rs `hold()` documents
+    // exactly this and I reintroduced it here.
+    let t1 = Instant::now();
+    while !marker.exists() && t1.elapsed() < Duration::from_secs(20) {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    if !marker.exists() {
+        println!("  alias holder never acquired  FAIL (cannot run the alias checks)");
+        ok = false;
+    }
+    ok &= check(
+        "alias shares the lock",
+        run(vec![
+            "selftest-a-old",
+            "--registry",
+            &r,
+            "--purpose",
+            "alias",
+            "--",
+            "true",
+        ]),
+        EXIT_BUSY,
+    );
+    ok &= check(
+        "other device stays free",
+        run(vec![
+            "selftest-b",
+            "--registry",
+            &r,
+            "--purpose",
+            "nc",
+            "--",
+            "true",
+        ]),
+        0,
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+    let _ = std::fs::remove_file(&marker);
     println!("  self-test: {}", if ok { "PASS" } else { "FAIL" });
     if ok {
         0
@@ -234,19 +310,44 @@ Re-run as: with-device {} --purpose '<why>' -- <your command>",
             std::process::exit(EXIT_USAGE);
         }
     };
+    // CANONICALISE BEFORE LOCKING. The lock path is derived from the name, so an alias that
+    // reached flock() unresolved would take its OWN file and exclude nobody — the rename hazard
+    // aliases exist to close (jess#266). Resolve here, once, and SAY SO: a command that silently
+    // locks something other than what the operator typed is worse than one that refuses.
+    let mut devices: Vec<String> = Vec::with_capacity(args.devices.len());
     for d in &args.devices {
-        if !known.contains(d) {
-            eprintln!(
-                "{PROG}: UNKNOWN DEVICE '{}'. Known: {}\nRefusing: an unregistered name would \
+        match known.get(d) {
+            None => {
+                let mut canon: Vec<&str> = known
+                    .iter()
+                    .filter(|(k, v)| k == v)
+                    .map(|(k, _)| k.as_str())
+                    .collect();
+                canon.sort_unstable();
+                eprintln!(
+                    "{PROG}: UNKNOWN DEVICE '{}'. Known: {}\nRefusing: an unregistered name would \
 create its own lock and exclude nobody.",
-                d,
-                known.iter().cloned().collect::<Vec<_>>().join(", ")
-            );
-            std::process::exit(EXIT_USAGE);
+                    d,
+                    canon.join(", ")
+                );
+                std::process::exit(EXIT_USAGE);
+            }
+            Some(c) => {
+                if c != d {
+                    eprintln!("{PROG}: '{d}' is an alias for '{c}' — claiming '{c}'.");
+                }
+                devices.push(c.clone());
+            }
         }
     }
+    // Deduplicate: two aliases of one device must not be claimed twice. claim_all takes locks in
+    // sorted order and a second flock on a file this process already holds SUCCEEDS on both
+    // macOS and Linux, so the duplicate would be silently fine here and a latent surprise
+    // anywhere the ordering argument is relied on. Collapse it where it is visible.
+    devices.sort();
+    devices.dedup();
     let who = std::env::var("BENCH_WHO").unwrap_or_else(|_| "unknown".into());
-    let claims = match claim_all(&args.devices, &args.purpose, &who, args.wait_s) {
+    let claims = match claim_all(&devices, &args.purpose, &who, args.wait_s) {
         Ok(c) => c,
         Err(msg) => {
             eprintln!("{msg}");

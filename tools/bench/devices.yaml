@@ -22,11 +22,15 @@
 # Genuinely claim-free is narrower than "reads": inspecting files, lsusb/ioreg, `pyocd list`,
 # reading a log someone already captured to disk. Not live streams.
 devices:
-  stlink-v3:
-    what: STLINK-V3 debug probe
-    serial: 003B001A3235511337333439
-    attached-to: NUCLEO-G474RE (STM32G474, Cortex-M4)
+  nucleo-g474re:
+    what: NUCLEO-G474RE (STM32G474, Cortex-M4) with its onboard STLINK-V3E
+    serial: 003B001A3235511337333439      # the PROBE's serial — this is how to select the board
     identify: pyocd list
+    # RENAMED from `stlink-v3` on jess#266: every device name is a BOARD, never a probe model,
+    # because two boards can carry the same probe model and a probe-model name is then ONE lock
+    # for TWO devices. The old name is kept as an alias so it takes the SAME flock during the
+    # transition — without that, the rename itself opens the vacuous window it exists to close.
+    aliases: [stlink-v3]
   pixhawk-6xrt:
     what: Holybro Pixhawk 6X-RT flight controller (i.MX RT1176)
     usb: PX4 FMU v6XRT.x, idVendor 13891
