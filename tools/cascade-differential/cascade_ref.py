@@ -13,6 +13,7 @@ Canonical ABI (from the WIT + the lowered signatures):
     mixer@<ver>#mix : (param f32 f32 f32 f32) -> (result i32)   ret -> 4xf32 pwm
 """
 import struct, sys
+from ifacever import find_export  # version-agnostic export lookup (AFD-121)
 from wasmtime import Store, Module, Instance
 
 # NO DEFAULT MODULE. This used to default to .scratch/falcon/casc_new.loom.wasm — a file with
