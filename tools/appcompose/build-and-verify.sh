@@ -40,7 +40,7 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # on a bare `cp: no such file`, which reads like a jess bug when it is a missing input.
 RATE="$SCRATCH/falcon/rate.wasm"
 MIXER="$SCRATCH/falcon/mixer.wasm"
-NANO="$SCRATCH/galenano7/gale-nano-0.7.0.wasm"
+NANO="$SCRATCH/galenano/gale-nano.wasm"
 # Derive the fused core if the caller did not supply one. Done BEFORE the preflight so the
 # preflight checks a file that can actually exist rather than reporting a derived artifact as
 # a missing "supplier artifact" — which is what the old message said, and it was wrong.

@@ -59,7 +59,7 @@ falcon/position.wasm          379894ec05081022a32240100d88bd2bde3a0c7dc6f35f2c14
 falcon/iekf.wasm              cf9c57385d1a4ad3e32956088b8317e2a07e372bd58a5d432772d54789cbdd65  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-iekf-v1.139.wasm
 
 [gale-nano]
-galenano7/gale-nano-0.7.0.wasm 546531952a5cf0edb05ea804bb77dea9ec2786530cef8310bd718559eeede86f  oci:ghcr.io/pulseengine/gale-nano:0.7.0!fused-gustos.component.wasm
+galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc955ec6fce271fdc  oci:ghcr.io/pulseengine/gale-nano:0.9.0!fused-gustos.component.wasm
 
 [synth]
 # NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.64.0.

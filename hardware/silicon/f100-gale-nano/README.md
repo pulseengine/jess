@@ -1,4 +1,12 @@
-# gale-nano 0.7.0 on real STM32F100 silicon — H3's second half, ADVANCED not COMPLETE
+# gale-nano on real STM32F100 silicon — H3's second half, ADVANCED not COMPLETE
+
+> **Pin now 0.9.0 (AFD-124), and the result below still stands unchanged.** The reading was taken
+> on 0.7.0. gale-nano 0.7.0 and 0.9.0 lower to a **byte-identical** cortex-m3 object — 4775 B,
+> .text 2340 B, 41 symbols, `cmp` clean — because the only difference in the wasm is Rust symbol
+> hashes and a rustc patch bump, which synth's lowering discards. So re-flashing under the new pin
+> would reproduce this by construction; the dispatch gap is **not** a stale-version problem.
+> (Negative control: 0.6.0 through the same pipeline lowers to 5547 B / .text 3046 B / 44 symbols,
+> so byte-identity here discriminates.) Version strings below are historical.
 
 ## What executed
 

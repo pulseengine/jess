@@ -176,6 +176,13 @@ jobs:
       - name: hardware catalogue agrees with the registry (+ its own negative controls)
         working-directory: jess
         run: tools/bench/check-catalog.sh --self-test
+      # AFD-124: a pin-path rename left three consumers on the OLD path, and two of them passed
+      # locally against the stale artifact still sitting in .scratch — the bump was reported green
+      # against the very artifact it replaced. This asserts every .scratch directory a script
+      # names is either pin-owned or a declared build output, so an orphaned one cannot survive.
+      - name: pin consumers — no script points at an orphaned .scratch directory (AFD-124)
+        working-directory: jess
+        run: tools/deps/check-consumers.sh --self-test
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so
@@ -560,7 +567,7 @@ jobs:
       - name: gust:hal — gale-nano lowers 0 skips on all 3 cores, residual by symbol
         run: |
           set -euo pipefail
-          G=.scratch/galenano7/gale-nano-0.7.0.wasm
+          G=.scratch/galenano/gale-nano.wasm
           test -f "$G"
           for core in cortex-m3 cortex-m4f cortex-m7dp; do
             .scratch/synthpin/synth compile "$G" -t $core --cortex-m --relocatable --all-exports \
