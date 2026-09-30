@@ -7453,7 +7453,35 @@ artifacts:
          18". It went RED rather than mis-comparing, which is the right failure — but a gate whose
          reading of the source a comment can change is not reading the source. Now anchored on the
          DECLARATION (`NAME[n] = `) and refuses unless there is exactly one.
-    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker]
+
+      *** AND A THIRD DEFECT OF MY OWN, IN THE ci.yml EDIT THAT LANDED THIS ***
+      CI refused the first push. run-soak-oracle.sh reported
+          SKIP: renode not at /Users/r/renode-1.16.1/Contents/MacOS/renode   (exit 2)
+      on a linux runner. Cause: the new "ekf reference vacuity guards self-test" step was inserted
+      after the TEST-PIX-033 step's `name:`/`run:` lines — but that step is FOUR lines, ending in an
+      `env:` block carrying RENODE. The insertion went BETWEEN `run:` and `env:`, so the new step
+      inherited RENODE and the soak oracle lost it. The anchor was two lines; the step was four.
+      Note what this looked like: the job "on-target cascade oracles (TEST-PIX-032 / TEST-PIX-033)"
+      went red, so it read as the on-target differential failing. It was not — the oracle never ran.
+      Same shape as AFD-124's exit 127: a gate that could not start, wearing the name of one that did.
+
+      GATED, because this is now the SECOND ci.yml edit of mine to silently detach a step's context
+      (AFD-124 dropped `working-directory: jess`; this dropped `env:`), and both are statically
+      decidable: tools/ci/check-workflow.sh asserts (1) every repo-relative script a run-step invokes
+      exists at the path that step resolves it from, and (2) every Renode-oracle step has RENODE in
+      its effective env (step, then job, then workflow).
+      It models `actions/checkout` with `path: jess` — a step whose working-directory is `jess` is AT
+      the repo root, not at repo_root/jess. Getting that wrong first made the gate flag six
+      long-passing steps; modelling it is also exactly what makes AFD-124's bug detectable, because
+      that step had NO working-directory and therefore ran at the workspace root, OUTSIDE the checkout.
+      VERIFIED AGAINST BOTH REAL DEFECTS, not only fixtures. Reinstating each in turn:
+          drop `working-directory: jess` -> "runs OUTSIDE the checkout (repo is at 'jess')", exit 1
+          steal the soak's `env:` block  -> "MISSING RENODE ... on-target-oracles: TEST-PIX-033", exit 1
+      both confirmed BARE rather than through a pipe. Four negative controls in --self-test: an
+      unreachable script, a Renode step with no RENODE, a workflow where nothing is checkable (a
+      refusal, not a pass), and — the false-alarm direction — RENODE inherited from the workflow env
+      must be ACCEPTED.
+    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker, afd-124]
     fields:
       detected-by: building the estimator rung (TEST-PIX-035) and running it against an independent wasmtime reference over the same fused module, 2026-09-30
       severity: major

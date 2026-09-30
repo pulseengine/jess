@@ -183,6 +183,13 @@ jobs:
       - name: pin consumers — no script points at an orphaned .scratch directory (AFD-124)
         working-directory: jess
         run: tools/deps/check-consumers.sh --self-test
+      # The workflow's own two static defects, each of which cost a CI round-trip before being
+      # gated: a step that cannot reach its script (exit 127, surfacing as a gate that FAILED
+      # rather than one that never ran — AFD-124), and a Renode oracle step whose `env:` block
+      # was detached by an insertion, so it SKIPped with exit 2 (AFD-125).
+      - name: ci.yml is self-consistent — scripts reachable, Renode steps have RENODE
+        working-directory: jess
+        run: tools/ci/check-workflow.sh --self-test
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so
@@ -587,6 +594,8 @@ jobs:
           RENODE: /tmp/renode/renode
       - name: TEST-PIX-033 — 64-tick soak tracks the wasmtime reference
         run: hardware/renode/cascade-invoke/run-soak-oracle.sh
+        env:
+          RENODE: /tmp/renode/renode
       # TEST-PIX-035 (the ESTIMATOR rung) is NOT gated here, deliberately. run-ekf-oracle.sh
       # currently FAILS: the estimator executes on emulated RT1176 with 10 of 14 state words
       # bit-exact, but the accelerometer-rotation path diverges from wasmtime and no single
@@ -598,8 +607,6 @@ jobs:
       # Wire the oracle in when it passes.
       - name: ekf reference vacuity guards self-test (AFD-125)
         run: python3 tools/cascade-differential/ekf_ref.py --self-test
-        env:
-          RENODE: /tmp/renode/renode
 
   # The COMPONENT-LEVEL oracles, promoted from local evidence to a gate.
   #
