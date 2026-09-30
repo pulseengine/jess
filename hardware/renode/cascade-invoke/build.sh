@@ -209,10 +209,11 @@ printf '%s\n' "$IFACE_VER" > "$OUT/iface.ver"
 arm-none-eabi-objcopy \
   --redefine-sym "pulseengine:falcon-cascade/rate@$IFACE_VER#tick=jess_rate_tick" \
   --redefine-sym "pulseengine:falcon-cascade/mixer@$IFACE_VER#mix=jess_mixer_mix" \
+  --redefine-sym "pulseengine:falcon-cascade/ekf@$IFACE_VER#estimate=jess_ekf_estimate" \
   "$OUT/cascade.o" "$OUT/cascade_named.o" || fail "objcopy"
 # ASSERT the rename landed — a silent no-op would leave an unresolved reference and the
 # only symptom would be a link error three steps later.
-for sym in jess_rate_tick jess_mixer_mix; do
+for sym in jess_rate_tick jess_mixer_mix jess_ekf_estimate; do
   arm-none-eabi-nm "$OUT/cascade_named.o" | grep -qE " T $sym\$" \
     || fail "objcopy --redefine-sym did not produce $sym"
 done
@@ -293,10 +294,26 @@ echo "   soak image: $(stat -f%z "$OUT/soak.elf" 2>/dev/null || stat -c%s "$OUT/
 # exists, so the ordering in step 5 matters; the assert below catches a reorder.
 
 echo "== 5. build the two negative-control images =="
+# A negative control differs in EXACTLY ONE variable, and for a sed-built control that is a
+# property of the sed — so check it rather than trust it. Found the hard way (AFD-125): the
+# unanchored `s/0xBE19999Au,/.../` below matched TWO lines once the estimator rung added an
+# IMU vector whose gy is bit-identical to ARGV_WORDS' wy. sed without /g still substitutes
+# once PER LINE, so NC1 silently became a two-variable perturbation. It would still have
+# "passed" — the torque moves — for two reasons instead of one.
+one_line_edit() {   # <original> <edited> <label>
+  local n
+  n="$(diff "$1" "$2" | grep -c '^<')"
+  [ "$n" -eq 1 ] || fail "$3 changed $n line(s), not exactly 1 — a negative control must differ
+   in EXACTLY ONE variable. diff:
+$(diff "$1" "$2" | sed 's/^/     /')"
+}
+
 # NC1 — perturb wy in the argument vector. The torque MUST move; a stage returning a
-# constant would match the reference forever.
-sed 's/0xBE19999Au,/0xBE4CCCCDu,/' "$D/harness.c" > "$OUT/nc1.c"
+# constant would match the reference forever. ANCHORED to the wx/wy/wz line so it cannot
+# also hit the estimator rung's IMU vector.
+sed '/wx wy wz/s/0xBE19999Au,/0xBE4CCCCDu,/' "$D/harness.c" > "$OUT/nc1.c"
 cmp -s "$D/harness.c" "$OUT/nc1.c" && fail "NC1 edit changed nothing — the perturbation did not apply"
+one_line_edit "$D/harness.c" "$OUT/nc1.c" "NC1"
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/nc1.c" -o "$OUT/nc1.o" || fail "nc1 compile"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc1.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc1.elf" || fail "nc1 link"
 
@@ -305,9 +322,56 @@ arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc1.o" "$OUT/init.o" "$OUT/
 # show the promises are load-bearing rather than ceremonial.
 sed 's/^    for (jess_usize s = 0/    return; for (jess_usize s = 0/' "$D/harness.c" > "$OUT/nc2.c"
 cmp -s "$D/harness.c" "$OUT/nc2.c" && fail "NC2 edit changed nothing"
+one_line_edit "$D/harness.c" "$OUT/nc2.c" "NC2"
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 -Wno-unreachable-code -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/nc2.c" -o "$OUT/nc2.o" || fail "nc2 compile"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" -o "$OUT/nc2.elf" || fail "nc2 link"
 echo "   nc1.elf (perturbed input) and nc2.elf (no embedder init) built"
+
+echo "== 5c. build the ESTIMATOR image and its controls (TEST-PIX-036) =="
+# Its OWN image, for a reason stronger than the soak's: TEST-PIX-032 carries the only FROZEN
+# baseline in this suite (EXP/EXPP in run-oracle.sh, from relay's SIL reference under v1.134.1,
+# still bit-exact on v1.139 per AFD-122). Adding a call into that image would advance shared
+# instance state and move the one number here that is not recomputed from the module under test.
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot-ekf.S" -o "$OUT/boot_ekf.o" || fail "boot-ekf.S"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/ekf.elf" || fail "ekf link"
+left="$(arm-none-eabi-nm "$OUT/ekf.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
+[ -z "$left" ] || fail "undefined after ekf link: $left"
+ne=$(arm-none-eabi-nm "$OUT/ekf.elf" | grep -cE ' T (jess_ekf_estimate|_reset|jess_init|jess_call_ekf)$')
+[ "$ne" -ge 4 ] || fail "ekf image missing expected symbols ($ne/4)"
+# The estimator's six arguments are passed FLATTENED, so they travel in VFP registers rather
+# than through linear memory. Assert the call site actually loads them into VFP: a build that
+# passed them on the stack, or passed a pointer, would be a different ABI wearing the same
+# signature. s0-s5 / d0-d2 are where the AAPCS hard-float variant puts six f32.
+arm-none-eabi-objdump -d "$OUT/ekf.elf" --disassemble=jess_call_ekf > "$OUT/ekf.dis" 2>/dev/null || true
+grep -qE '\bv(ldr|mov)[a-z.]*\s+s[0-9]' "$OUT/ekf.dis" \
+  || fail "jess_call_ekf does not move anything into a VFP single register — the six flattened
+   f32 are not being passed in VFP, so this would not be the ABI the manifest describes.
+   Disassembly is at $OUT/ekf.dis"
+echo "   ekf image: $(stat -f%z "$OUT/ekf.elf" 2>/dev/null || stat -c%s "$OUT/ekf.elf") B, 0 undefined, $ne/4 symbols, args in VFP"
+
+# CONTROL A (attributive) — perturb ONE imu scalar, gy, keeping the embedder init entirely.
+# ANCHORED to the IMU line so it cannot also hit ARGV_WORDS' wy, whose word is bit-identical.
+# Attributive here in a way the composed-app oracle's control is not: all SIX imu scalars were
+# measured LIVE in wasmtime (each moves 5-8 of the 14 state fields), whereas that oracle's own
+# scope line reports only 4 of its 18 inputs move the fold.
+sed '/gy -0.15/s/0xBE19999Au,/0xBDCCCCCDu,/' "$D/harness.c" > "$OUT/ekf_nc1.c"
+cmp -s "$D/harness.c" "$OUT/ekf_nc1.c" && fail "ekf NC1 edit changed nothing"
+one_line_edit "$D/harness.c" "$OUT/ekf_nc1.c" "ekf-NC1"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestanding -O2 \
+    -ffixed-r9 -ffixed-r10 -ffixed-r11 "$OUT/ekf_nc1.c" -o "$OUT/ekf_nc1.o" || fail "ekf_nc1 compile"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/ekf_nc1.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/ekf_nc1.elf" || fail "ekf_nc1 link"
+cmp -s "$OUT/ekf.elf" "$OUT/ekf_nc1.elf" && fail "ekf_nc1.elf is byte-identical to ekf.elf — the control is inert"
+
+# CONTROL B (liveness only) — init skipped. Labelled honestly: an image that never ran reports
+# the same all-zero fold, so this answers "did anything survive", not "are the promises
+# load-bearing". Same limitation the soak's control carries.
+[ -f "$OUT/nc2.o" ] || fail "nc2.o missing — step 5 must run before the ekf controls are linked"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/ekf_nc2.elf" || fail "ekf_nc2 link"
+cmp -s "$OUT/ekf.elf" "$OUT/ekf_nc2.elf" && fail "ekf_nc2.elf is byte-identical to ekf.elf — the control is inert"
+echo "   ekf_nc1.elf (perturbed gy, full init) and ekf_nc2.elf (no init) linked and both differ"
 
 echo "== 5b. the paint band must be ZERO in the module's own data =="
 # harness.c paints [0x400,0x2000) with 0xDEADBEEF to measure the linear-memory high-water

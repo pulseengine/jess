@@ -47,6 +47,48 @@ extern int jess_rate_tick(int arg);
  * Renamed by objcopy for the same '@'-begins-a-comment reason as rate. */
 extern int jess_mixer_mix(float tx, float ty, float tz, float thrust);
 
+/* ekf@<ver>#estimate : (param f32 f32 f32 f32 f32 f32) -> (result i32)
+ *
+ * THE THIRD CALLING SHAPE, and the reason this rung exists. The cascade uses all three:
+ *     rate#tick      18 flat params > 16  -> a POINTER in, pointer out
+ *     mixer#mix       4 flat params       -> FOUR FLATTENED f32, pointer out
+ *     ekf#estimate    6 flat params       -> SIX FLATTENED f32, pointer out
+ * ekf is NOT a pointer even though its argument is a record, because 6 <= the flattening
+ * limit. Assuming rate's convention here passes a float where a pointer is read, and the
+ * Canonical ABI does not error on that — it returns garbage (AFD-043).
+ * Every number above is CHECKED against meld's signature manifest by
+ * tools/abi/check-manifest.py rather than trusted from this comment.
+ *
+ * WHY THE ESTIMATOR AT ALL: jess's on-target differential has only ever invoked rate and
+ * mixer. ekf, attitude and position sit in the fused image and are never called — and
+ * relay's estimator fix, the change behind v1.134 -> v1.139, lives in that blind spot
+ * (AFD-122). Renamed by objcopy for the same '@'-begins-an-ARM-comment reason as the others. */
+extern int jess_ekf_estimate(float ax, float ay, float az, float gx, float gy, float gz);
+
+/* jess's OWN imu-sample, byte-identical to ekf_ref.py's IMU_SAMPLE. No upstream vector
+ * exists to inherit (relay#376 is where one would come from, still unanswered), so this must
+ * not be cited as relay's. A level hover: the accelerometer reads gravity on one axis, and
+ * the gyro carries the SAME body rates as ARGV_WORDS' wx/wy/wz below — note the three words
+ * are bit-identical there, so the two vectors describe one vehicle rather than two. */
+static const jess_u32 IMU_WORDS[6] = {
+    0x00000000u,   /* ax  0     */
+    0x00000000u,   /* ay  0     */
+    0xC11CF5C3u,   /* az -9.81  */
+    0x3E99999Au,   /* gx  0.3   == ARGV_WORDS[10] wx */
+    0xBE19999Au,   /* gy -0.15  == ARGV_WORDS[11] wy */
+    0x3D8F5C29u,   /* gz  0.07  == ARGV_WORDS[12] wz */
+};
+
+/* Bit-cast without libc. A union is the well-defined route in C99; memcpy may not exist in
+ * a freestanding cross toolchain (AFD-051), and a pointer cast through float* would be a
+ * strict-aliasing violation the optimiser is entitled to reorder. */
+static float jess_bits_to_f32(jess_u32 w)
+{
+    union { jess_u32 u; float f; } c;
+    c.u = w;
+    return c.f;
+}
+
 /* The SIL reference vector — byte-identical to tools/cascade-differential/cascade_ref.py.
  * Sharing it is the point: the ARM result is then directly comparable to the number
  * wasmtime already produces, so a wrong embedder register shows up as a wrong torque
@@ -170,4 +212,58 @@ void jess_call_soak(int arg, int n)
     o[0]  = iters;
     o[9]  = h;
     o[10] = 0x1E55B0A5u;   /* completion sentinel — distinct from the chain's */
+}
+
+/* ---------------------------------------------------------------------------
+ * TEST-PIX-036 — the ESTIMATOR on target, N ticks.
+ *
+ * Its own image (boot-ekf.S) and its own parking area, for the same reason the soak got
+ * one: TEST-PIX-032 carries the only FROZEN baseline in the suite — EXP/EXPP in
+ * run-oracle.sh, derived from relay's SIL reference under v1.134.1 and still passing
+ * bit-exact on v1.139 (AFD-122). Adding a call into that image would advance shared state
+ * and move the one number in this repo that is not recomputed from the module under test.
+ * Nothing here may touch it.
+ *
+ * WHY N TICKS AND NOT ONE, established in wasmtime BEFORE this was written:
+ *   - the estimator INTEGRATES (tick1 != tick2 != tick3), so one tick cannot tell a correct
+ *     lowering from one whose state update was dropped;
+ *   - five of the fourteen state fields (pos-n/e/d, vel-d, innovation) are IDENTICALLY ZERO
+ *     at tick1 and become nonzero by tick2. A single-tick oracle would fold five constants
+ *     and call it coverage.
+ *
+ * The fold is FNV-1a over all FOURTEEN words of EVERY tick, in order — not just the
+ * quaternion, because the position and velocity integration is exactly what those five
+ * zero-at-tick-1 fields carry. ekf_ref.py uses identical constants, so a divergence is a
+ * lowering defect rather than a fold difference. */
+#define EKF_BASE 0x20011400u
+
+void jess_call_ekf(int n)
+{
+    volatile jess_u32 *o = (volatile jess_u32 *)EKF_BASE;
+    jess_u32 h = FNV_OFF;
+    jess_u32 iters = 0;
+
+    const float ax = jess_bits_to_f32(IMU_WORDS[0]);
+    const float ay = jess_bits_to_f32(IMU_WORDS[1]);
+    const float az = jess_bits_to_f32(IMU_WORDS[2]);
+    const float gx = jess_bits_to_f32(IMU_WORDS[3]);
+    const float gy = jess_bits_to_f32(IMU_WORDS[4]);
+    const float gz = jess_bits_to_f32(IMU_WORDS[5]);
+
+    for (int i = 1; i <= n; ++i) {
+        ++iters;
+        /* SIX FLATTENED f32 — not a pointer. See the extern's note. */
+        int sp = jess_ekf_estimate(ax, ay, az, gx, gy, gz);
+        const volatile jess_u32 *w = (const volatile jess_u32 *)(LINMEM + (unsigned)sp);
+
+        for (int k = 0; k < 14; ++k) { h ^= w[k]; h *= FNV_PRIME; }
+
+        if (i == 1) { for (int k = 0; k < 14; ++k) o[1 + k]  = w[k]; }
+        if (i == n) { for (int k = 0; k < 14; ++k) o[15 + k] = w[k]; }
+    }
+    /* o[0] is the OBSERVED trip count, incremented inside the loop — not the requested n.
+     * Writing n before the loop proves only that the constant arrived (AFD-060). */
+    o[0]  = iters;
+    o[29] = h;
+    o[30] = 0x1E55E4F0u;   /* completion sentinel — distinct from the chain's and the soak's */
 }
