@@ -62,7 +62,29 @@ falcon/iekf.wasm              cf9c57385d1a4ad3e32956088b8317e2a07e372bd58a5d4327
 galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc955ec6fce271fdc  oci:ghcr.io/pulseengine/gale-nano:0.9.0!fused-gustos.component.wasm
 
 [synth]
-# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.64.0.
+# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.77.0.
+#
+# BUMPED 0.64.0 -> 0.77.0 (AFD-126), thirteen releases, for a reason and not for currency: the
+# first question about any lowering defect is whether a newer compiler already fixes it, and
+# AFD-125 is a lowering defect. IT DOES NOT. The estimator image relinked on 0.77.0 produces all
+# 31 parked words BIT-IDENTICAL to 0.64.0 — same four diverging fields, same fold 0x684578D1 —
+# even though synth changed that function's codegen (ekf#estimate 15424 -> 15300 B). Reported on
+# synth#1436.
+#
+# NOT BYTE-IDENTICAL, so every byte is attributed (the AFD-120 rule, applied to a SHRINK):
+#   cortex-m7dp cascade  .text 40886 -> 40746 (-140): ekf#estimate -124, position#tick -18,
+#                        rate#tick -2 = -144, plus a padding residual 26 -> 30 (+4). Identical
+#                        symbol set, nothing added or dropped.
+#   cortex-m3 gale-nano  .text 2340 -> 2272 (-68) across 7 functions, +2 padding. 41 symbols both.
+# Behaviour bit-identical everywhere measurable: TEST-PIX-032's FROZEN baseline still exact, the
+# 64-tick soak fold still 0x3466E91F, appcompose still 1068280774, all four silicon rungs build
+# with REQUIRE_VERIFY=1.
+#
+# CARRIES A CONSEQUENCE: AFD-124 justified gale-nano 0.9.0 without hardware BECAUSE the lowered
+# cortex-m3 object was byte-identical, which transferred AFD-113's on-silicon reading by
+# construction. That argument held synth constant. This bump changes that object (and
+# gust:os/exec#poll-round, the exact function AFD-113 is about, shrank 56 -> 44 B), so the
+# reading is no longer transferred — it needs a re-run on the VLDISCOVERY, blocked on gale's host.
 #
 # BUMPED 0.60.0 -> 0.64.0 for synth#1189: on the ARM DIRECT SELECTOR — which is "every
 # --relocatable compile", i.e. every lowering jess does — an if/else join register could
@@ -79,8 +101,8 @@ galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc9
 # differential is NOT vacuous: a module carrying the #1189 shape DOES differ (504 -> 510 B).
 # So jess was never exposed, and the pin now excludes a silent wrong-answer class.
 # That divergence is real and is why this is pinned by digest here (AFD-053 S5).
-synthpin/synth               fa96245bf55e562d70b058e72316dcef6e3c9413d83cdff1019b5a41e1134d02  release:pulseengine/synth@v0.64.0!synth-v0.64.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
-synthpin/synth               5f7042ac07d30b40d58161ec0e7ed5fec23020bfc1589051a1a752c94bc6156c  release:pulseengine/synth@v0.64.0!synth-v0.64.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
+synthpin/synth               4b29826f1726386c72c166f536e097fcfa26d0c54e798339c866c569819f34ab  release:pulseengine/synth@v0.77.0!synth-v0.77.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
+synthpin/synth               ed3fd70a93caca4c67ee422506df8aa824bd4f25ee75f2fe3ae439343f319dad  release:pulseengine/synth@v0.77.0!synth-v0.77.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
 
 [toolchain]
 # The lowering toolchain, pinned per platform so a CI runner can reconstruct the SAME BYTES

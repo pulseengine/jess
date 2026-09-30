@@ -7527,3 +7527,100 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-30T11:22:51Z
+
+  - id: AFD-126
+    type: ai-found-defect
+    title: "Release-watch: synth 0.64.0 -> 0.77.0 adopted — every byte of a -140/-68 B code shrink attributed, every measurable behaviour bit-identical, and it does NOT fix AFD-125 (which also breaks AFD-124's byte-identity transfer argument for AFD-113)"
+    status: open
+    description: |-
+      2026-09-30. Release-watch: synth 0.64.0 -> 0.77.0, thirteen releases at once. Adopted. Every byte
+      of the change is attributed, every measurable behaviour is bit-identical, and it does NOT fix
+      AFD-125 — which is the answer the tick was really after.
+
+      *** WHY NOW: THE BUMP AND AFD-125 ARE THE SAME QUESTION ***
+      AFD-125 reports the synth-lowered falcon estimator diverging from wasmtime on the
+      accelerometer-rotation path, with loom and Renode both eliminated. The obvious first question for
+      any lowering defect is whether a newer compiler already fixes it. The release-watch backlog had
+      synth 0.64 -> latest outstanding anyway, so one experiment answers both.
+
+      *** IT DOES NOT FIX IT ***
+      Lowered the same c.loom.wasm with 0.77.0, relinked the estimator image, ran it. All 31 parked
+      words are BIT-IDENTICAL to the 0.64.0 build: same four diverging fields (pos-d 36A495A2,
+      vel-n 0, vel-e 0, vel-d 3C20BA20), same FNV-1a fold over 16 ticks (0x684578D1), same sentinel.
+      So thirteen releases did not touch it, and AFD-125 is not a known-and-fixed issue.
+      AND A DATUM WORTH SENDING UPSTREAM: synth DID change that function's codegen. `ekf#estimate`
+      shrank 15424 -> 15300 B between 0.64 and 0.77 — the very function that diverges — and the wrong
+      result did not move. So this is not a pass that never looked at that code.
+
+      *** THE LOWERED OBJECTS ARE NOT BYTE-IDENTICAL, SO EVERY BYTE IS ATTRIBUTED ***
+      The release-watch rule is "behaviour-neutral, proven by byte-identity of the lowered objects; if
+      NOT byte-identical, ATTRIBUTE every added byte to a symbol before adopting" (the shape AFD-120
+      used for meld's cabi_realloc). Here bytes were REMOVED, which needs the same treatment.
+
+        cortex-m7dp, the falcon cascade (.text 40886 -> 40746, -140 B; 25 unique T/t symbols, 35 total,
+        IDENTICAL symbol set, nothing added or dropped):
+            ekf@0.10.0#estimate     15424 -> 15300   -124
+            position@0.10.0#tick    10792 -> 10774    -18
+            rate@0.10.0#tick         2612 ->  2610     -2
+                                           attributed -144
+            padding/alignment residual 26 -> 30         +4
+                                           .text      -140   RECONCILED
+
+        cortex-m3, gale-nano (jess LINKS this on the F100, so it is flight-path):
+        (.text 2340 -> 2272, -68 B; 41 symbols both, identical set)
+            gust:os/exec#poll-round      56 ->  44    -12
+            gust:os/exec#admit           66 ->  54    -12
+            gust:sched/tasks#admit       46 ->  34    -12
+            gust:sched/tasks#state      172 -> 166     -6
+            func_25                     146 -> 118    -28
+            func_13                     282 -> 278     -4
+            func_12                     268 -> 272     +4
+                                           attributed  -70
+            padding residual                            +2
+                                           .text       -68   RECONCILED
+      Nothing is unexplained in either direction, and no symbol appeared or disappeared.
+
+      *** BEHAVIOUR: BIT-IDENTICAL EVERYWHERE IT CAN BE MEASURED ***
+          TEST-PIX-032   PASS. The FROZEN baseline — the one number in this repo not recomputed from the
+                         module under test — is still bit-exact: tx=1 ty=0.472507507 tz=-0.147003502
+                         thrust=0.5, and the mixer stage m3=0.348992109 m4=1.
+          TEST-PIX-033   PASS, and the 64-tick fold is the IDENTICAL 0x3466E91F, with tick 1 and tick 64
+                         matching word for word. 256 motor-pwm words across a stateful run, unchanged.
+          appcompose     PASS, fold 1068280774 — the same value.
+          dispatch       PASS, poll-round drains through poll-task, return value load-bearing.
+          timer-probe    PASS 6/6 and the wake fired.
+          flight-loop    PASS 8/8, iteration 1 matches the single-shot reference.
+          all four F100/RT1176 silicon rungs build clean with REQUIRE_VERIFY=1, so verify-embedder and
+          its refusal control both still hold on the new compiler.
+          the ABI-MANIFEST gate passes with the same seven assertions.
+      Everything above ran in wasmtime, Renode or the toolchain. NOTHING executed on silicon.
+
+      *** THE CONSEQUENCE THAT MUST NOT BE GLOSSED: AFD-124's TRANSFER ARGUMENT NO LONGER HOLDS ***
+      AFD-124 justified adopting gale-nano 0.9.0 WITHOUT hardware by showing the lowered cortex-m3
+      object was BYTE-IDENTICAL to 0.7.0's, so AFD-113's on-silicon reading (exec_poll_round reaches
+      poll-task ZERO times on a real F100) transferred by construction. That argument held synth
+      CONSTANT. This bump changes synth, and the F100 object is no longer the bytes that reading was
+      taken on: 4775 -> 4707 B, and `gust:os/exec#poll-round` — the exact function AFD-113 is about —
+      shrank 56 -> 44 B.
+      So: AFD-113's reading is now a statement about an object jess no longer builds. It is not
+      invalidated (nothing suggests the behaviour changed) but it is no longer TRANSFERRED, and the
+      distinction matters because "byte-identical, therefore unchanged" was the whole argument. A
+      re-run on the VLDISCOVERY is needed to re-establish it under this pin, and that is blocked on
+      gale's host. Recorded here rather than left implicit, because a future tick reading AFD-124 alone
+      would over-claim.
+
+      *** WHAT THE PIN NOW IS ***
+      synth 0.77.0, both platforms, fetched through tools/deps/fetch.sh and digest-verified:
+          aarch64-apple-darwin      4b29826f1726386c72c166f536e097fcfa26d0c54e798339c866c569819f34ab
+          x86_64-unknown-linux-gnu  ed3fd70a93caca4c67ee422506df8aa824bd4f25ee75f2fe3ae439343f319dad
+      All five flags jess depends on still exist on 0.77 and were checked before anything was built:
+      --relocatable --all-exports --embedder-data-init --embedder-global-init --cortex-m.
+    tags: [release-watch, synth, byte-identity, attribution, afd-125, afd-124, afd-113, afd-120]
+    fields:
+      detected-by: testing whether a newer synth fixes AFD-125, which doubles as the outstanding synth release-watch, 2026-09-30
+      severity: minor
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-30T16:58:55Z
