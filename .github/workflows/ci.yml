@@ -181,6 +181,7 @@ jobs:
       # against the very artifact it replaced. This asserts every .scratch directory a script
       # names is either pin-owned or a declared build output, so an orphaned one cannot survive.
       - name: pin consumers — no script points at an orphaned .scratch directory (AFD-124)
+        working-directory: jess
         run: tools/deps/check-consumers.sh --self-test
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
