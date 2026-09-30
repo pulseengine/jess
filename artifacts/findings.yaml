@@ -7311,7 +7311,47 @@ artifacts:
          unparseable locator). Callers that cannot resolve it must print NO version, never a stale one.
          Also caught: the F100 build's GALE default still pointed at the old path, and its digest gate
          REFUSED rather than lowering the wrong artifact — the gate behaving exactly as designed.
-    tags: [phase-b, gale-nano, release-watch, byte-identity, afd-113, afd-114, afd-121, afd-122, afd-047, negative-control, vacuous-checker]
+
+      *** AFD-047 REPEATED, BY ME, INSIDE THE FINDING THAT CITES AFD-047 ***
+      CI refused this change, and it was right to. tools/flight-loop/run.sh and tools/timer-probe/run.sh
+      plus a ci.yml step still pointed at the OLD pin path `.scratch/galenano7/gale-nano-0.7.0.wasm`.
+      Both scripts had PASSED LOCALLY an hour earlier — because the stale 0.7.0 artifact was still
+      sitting in that directory. I deleted it only later, while fixing something else. So two of the
+      five "verified on 0.9.0" legs above were, when first run, verified on 0.7.0.
+      This is AFD-047 exactly: a stale artifact jess's OWN script selected, which AFD-049 had to
+      retract. I cited that pair in this very finding as the reason not to over-read AFD-113, and
+      committed the same error three paragraphs later. The conclusions do not change — the lowered
+      object is byte-identical, so 0.7.0 and 0.9.0 cannot disagree on any of these legs, which is
+      precisely why the wrong artifact produced an indistinguishable pass — but "the answer happens to
+      be the same" is not "the measurement was sound", and only the byte-identity result makes that
+      distinction safe to draw here. RE-RUN with galenano7 absent: flight-loop PASS 8/8 with iteration
+      1 matching the single-shot reference, timer-probe PASS 6/6 with the wake firing.
+
+      HOW THE THREE WERE MISSED, WHICH IS THE ACTUAL DEFECT: the grep that "confirmed no references
+      remain" was
+          grep -rn 'galenano7' --include='*.sh' ... . | grep -v '\.scratch'
+      The exclusion was meant to skip the .scratch DIRECTORY. It matched the LINE CONTENT instead, and
+      every one of these lines reads `NANO="${NANO:-$ROOT/.scratch/galenano7/...}"` — so the filter
+      deleted exactly the hits it was looking for, and then I reported "no galenano7 references left".
+      A filter that silently removes its own target reads identically to a clean result. Anchoring it
+      to the path (`grep -v '^\./\.scratch'`) finds all three immediately. Two further hits in WIT
+      provenance comments were hidden the same way.
+
+      GATED MECHANICALLY: tools/deps/check-consumers.sh asserts every `.scratch/<dir>/` a script names
+      is either PIN-OWNED (derived from the pin keys) or a DECLARED build output, so an orphaned
+      directory cannot survive a rename. Reads both sides — the scripts and the pins — so there is no
+      third copy to drift (the AFD-120 shape). Verified against the REAL defect, not only a fixture:
+      reinstating the actual missed line in flight-loop/run.sh makes it print
+          ORPHANED .scratch DIRECTORY (1 reference(s)):
+            tools/flight-loop/run.sh  ->  .scratch/galenano7/
+      and exit 1 (confirmed BARE, not through a pipe). Two negative controls in --self-test: a consumer
+      on a non-pin path is refused, and finding NO references at all is a refusal rather than a pass.
+      STATED LIMITATION, because a gate oversold is worse than a narrow one: it works at DIRECTORY
+      granularity and would NOT catch a renamed FILE inside a directory that is kept. Pin-owned
+      directories also hold build outputs (.scratch/falcon/ holds both the pinned components and
+      casc_new.*), so checking filenames there would be permanently red. Deliberately narrower than the
+      whole hazard rather than noisy.
+    tags: [phase-b, gale-nano, release-watch, byte-identity, afd-113, afd-114, afd-121, afd-122, afd-047, negative-control, vacuous-checker, afd-049]
     fields:
       detected-by: "executing Phase B: fetching all four published gale-nano tags and comparing both the wasm and the lowered cortex-m3 object, 2026-09-30"
       severity: major

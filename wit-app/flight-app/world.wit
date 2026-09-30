@@ -6,7 +6,7 @@ package jess:flight-app@0.1.0;
 // owns integration under DD-026, so this world is jess's to define.
 //
 // EVERY DEPENDENCY BELOW WAS EXTRACTED FROM THE SHIPPED WASM, not from a repo copy:
-//   deps/gust-os, deps/gust-hal        <- wasm-tools component wit gale-nano-0.7.0.wasm
+//   deps/gust-os, deps/gust-hal        <- wasm-tools component wit the pinned gale-nano (tools/deps/artifacts.pins)
 //   deps/falcon-cascade                <- unioned across the five falcon-v1.134.1 components
 //                                         (each ships a TREE-SHAKEN `types` carrying only the
 //                                          records it needs, so the full type set exists in no

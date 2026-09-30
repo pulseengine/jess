@@ -8,7 +8,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/tprobe}"; mkdir -p "$OUT"
-NANO="${NANO:-$ROOT/.scratch/galenano7/gale-nano-0.7.0.wasm}"
+NANO="${NANO:-$ROOT/.scratch/galenano/gale-nano.wasm}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 [ -f "$NANO" ] || fail "gale-nano not found at $NANO (supplier artifact, not vendored)"
 

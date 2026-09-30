@@ -12,7 +12,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/floop}"; mkdir -p "$OUT"
-NANO="${NANO:-$ROOT/.scratch/galenano7/gale-nano-0.7.0.wasm}"
+NANO="${NANO:-$ROOT/.scratch/galenano/gale-nano.wasm}"
 RATE="${RATE:-$ROOT/.scratch/falcon/rate.wasm}"
 MIXER="${MIXER:-$ROOT/.scratch/falcon/mixer.wasm}"
 ITERS="${ITERS:-8}"; TICKS="${TICKS:-3}"
