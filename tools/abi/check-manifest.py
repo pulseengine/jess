@@ -37,13 +37,26 @@ def manifest_from(path):
         k += 1
     return json.loads(d[j:k+1].decode('utf-8', errors='replace'))
 
-def argv_words_len(harness):
+def harness_array_len(harness, name):
+    """The length the harness DECLARES for one of its input vectors. Read, never assumed: the
+    gate exists to compare the harness's assumption against what meld says it emitted, so a
+    gate that cannot read the assumption must not report a pass."""
     src = pathlib.Path(harness).read_text()
-    m = re.search(r'ARGV_WORDS\s*\[\s*(\d+)\s*\]', src)
-    if not m:
-        sys.exit(f"FAIL: could not find ARGV_WORDS[N] in {harness} — the gate cannot read the\n"
-                 "   assumption it is supposed to check, so it must not report a pass.")
-    return int(m.group(1))
+    # Match the DECLARATION, not the first `NAME[n]` anywhere in the file. The loose form
+    # `NAME\s*\[(\d+)\]` read 10 out of a COMMENT ("== ARGV_WORDS[10] wx") the moment the
+    # estimator rung documented which IMU word corresponds to which state word, and reported
+    # ARGV_WORDS[10] vs manifest 18. It went red rather than mis-comparing, but a gate whose
+    # reading of the source can be changed by a comment is not reading the source.
+    decls = re.findall(r'\b' + name + r'\s*\[\s*(\d+)\s*\]\s*=', src)
+    if len(decls) != 1:
+        sys.exit(f"FAIL: expected exactly ONE `{name}[N] = ` declaration in {harness}, found "
+                 f"{len(decls)}: {decls}\n"
+                 "   the gate cannot read the assumption it is supposed to check, so it must\n"
+                 "   not report a pass.")
+    return int(decls[0])
+
+def argv_words_len(harness):
+    return harness_array_len(harness, 'ARGV_WORDS')
 
 def main():
     fused   = sys.argv[1] if len(sys.argv) > 1 else '.scratch/invoke/c.wasm'
@@ -99,6 +112,29 @@ def main():
     mf = mix['flat_param_count']
     tag = "ok " if mf == 4 and mf <= 16 else "FAIL"; ok &= (mf == 4 and mf <= 16)
     print(f"  [{tag}] mixer#mix flattened to {mf} (harness passes 4 floats, not a pointer)")
+
+    # 5-7. ekf#estimate — the THIRD calling shape, and the one the estimator rung added
+    # (TEST-PIX-036). The cascade uses all three: rate is indirect (18 > 16), mixer is
+    # flattened to 4, and ekf is flattened to 6. Assuming rate's pointer convention for ekf
+    # passes a float where a pointer is read, and the Canonical ABI returns garbage rather
+    # than erroring — which is the whole reason this gate reads both sides.
+    ek, ekf = find('/ekf#estimate')
+    ef = ekf['flat_param_count']
+    iw = harness_array_len(harness, 'IMU_WORDS')
+    tag = "ok " if ef == iw else "FAIL"; ok &= (ef == iw)
+    print(f"  [{tag}] ekf#estimate flat_param_count: harness IMU_WORDS[{iw}] vs manifest {ef}")
+
+    tag = "ok " if ef <= 16 else "FAIL"; ok &= ef <= 16
+    print(f"  [{tag}] ekf#estimate is FLATTENED: {ef} <= 16 (harness passes {ef} floats, not a pointer)")
+
+    # The estimator returns the 14-field vehicle-state through a return area. The harness folds
+    # all fourteen words of every tick, so a return area of a different width would mean it is
+    # folding either short or past the end of the record.
+    era = ekf.get('return_area') or {}
+    en  = len(era.get('layout', []))
+    good = (en == 14 and era.get('size') == 56)
+    tag = "ok " if good else "FAIL"; ok &= good
+    print(f"  [{tag}] ekf#estimate return area: {era.get('size')} B / {en} field(s); harness folds 14 words")
 
     print("ABI-MANIFEST:", "PASS" if ok else "FAIL")
     return 0 if ok else 1

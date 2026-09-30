@@ -587,6 +587,17 @@ jobs:
           RENODE: /tmp/renode/renode
       - name: TEST-PIX-033 — 64-tick soak tracks the wasmtime reference
         run: hardware/renode/cascade-invoke/run-soak-oracle.sh
+      # TEST-PIX-035 (the ESTIMATOR rung) is NOT gated here, deliberately. run-ekf-oracle.sh
+      # currently FAILS: the estimator executes on emulated RT1176 with 10 of 14 state words
+      # bit-exact, but the accelerometer-rotation path diverges from wasmtime and no single
+      # input vector explains it (AFD-125). A red gate would make main red, and an
+      # "expected-fail" gate is a vacuous gate — it goes green the moment the divergence
+      # changes shape. What IS gated: the ekf image and its two controls are BUILT by build.sh
+      # above (with the VFP-argument assertion), the three new ekf ABI assertions run in the
+      # ABI-MANIFEST gate, and the reference's own vacuity guards are self-tested below.
+      # Wire the oracle in when it passes.
+      - name: ekf reference vacuity guards self-test (AFD-125)
+        run: python3 tools/cascade-differential/ekf_ref.py --self-test
         env:
           RENODE: /tmp/renode/renode
 

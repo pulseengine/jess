@@ -7360,3 +7360,105 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-30T05:04:26Z
+
+  - id: AFD-125
+    type: ai-found-defect
+    title: "First on-target invocation of a cascade stage other than rate/mixer: the ESTIMATOR runs 16 ticks on emulated RT1176 with 10 of 14 state words bit-exact, but the accelerometer-rotation path DIVERGES — and no single input vector explains it"
+    status: open
+    description: |-
+      2026-09-30. jess invoked a falcon cascade stage OTHER than rate/mixer for the first time. The
+      estimator runs on emulated RT1176 — and it DIVERGES from wasmtime over the same module, in a
+      bounded and reproducible way. The oracle REFUSES; this is a red result reported as red.
+
+      *** WHY THE ESTIMATOR, AND WHY THIS IS THE GAP THAT MATTERED ***
+      jess's on-target differential has only ever invoked rate and mixer. ekf, attitude and position
+      sit in the fused image and are NEVER CALLED. relay's estimator fix — the change behind falcon
+      v1.134 -> v1.139 that invalidated 18 of their closed-loop tests — lives in exactly that blind
+      spot. AFD-122 recorded both that TEST-PIX-032's frozen baseline still holds bit-exact on v1.139
+      AND that this says nothing about the stages jess does not call. This rung was built to close the
+      estimator half, and the first thing it did was find something.
+
+      *** WHAT EXECUTED, ON EMULATED RT1176 CORTEX-M7 ***
+      16 estimator ticks, own image (boot-ekf.S), own parking area. Completion sentinel 0x1E55E4F0
+      present; the loop's OWN trip counter reports 16. So the code ran, all the way, the requested
+      number of times.
+      TEN of the fourteen state words are BIT-EXACT against an independent wasmtime reference over
+      the SAME fused module: the whole quaternion (qw qx qy qz), the gyro passthrough (wx wy wz),
+      pos-n, pos-e and innovation.
+      FOUR diverge: pos-d, vel-n, vel-e, vel-d.
+
+      *** THE DIVERGENCE IS NOT ARGUMENT PASSING, AND THAT WAS TESTED, NOT ASSUMED ***
+      First hypothesis was that `az` (the third of six flattened f32) was lost. It is not that:
+        - with a fully distinctive vector (ax1 ay2 az3 gx4 gy5 gz6) the target's vel-n is EXACTLY
+          ax*dt = 0.001 and vel-e EXACTLY ay*dt = 0.002, and wx/wy/wz come back as 4/5/6 — so ax, ay
+          and the whole gyro demonstrably ARRIVE;
+        - the target's quaternion matches the az=3 reference EXACTLY, while its pos/vel match the
+          az=0 reference exactly. One value of az cannot produce both.
+        - SWEEP: 93 candidate values of az (0, +-3, +-9.81, 1e-45, inf, nan, and 0.25 steps across
+          +-10) with the other five held at their confirmed-arriving values. NO value reproduces all
+          14 target words; the best is az=3.0 at 10/14. So the target is not simply receiving a
+          different input vector.
+
+      *** WHERE IT LOCALISES ***
+      The four diverging fields are exactly the ones the accelerometer reaches THROUGH THE QUATERNION
+      ROTATION, and the target's values are the UNROTATED ones: vel-n = ax*dt and vel-e = ay*dt to the
+      bit, where the reference has the rotated 0.00102170615 and 0.00204315153. Meanwhile the
+      quaternion INTEGRATION is bit-exact. So the lowered code appears to integrate the attitude
+      correctly and then apply an identity rotation to the accelerometer, on target only.
+
+      *** RULED OUT ***
+        - the harness's linear-memory PAINT: a no-paint variant (one variable, paint loop disabled)
+          produces a BIT-IDENTICAL result, so 0xDEADBEEF over [0x400,0x2000) is not the cause.
+        - the caller's ABI: build.sh asserts the six arguments travel in VFP, and the disassembly
+          shows s0-s5 loaded. tools/abi/check-manifest.py confirms the manifest's own numbers —
+          flat_param_count 6, <= the flattening limit, return area 56 B / 14 fields.
+        - a broad Renode VFP fault: rate#tick does extensive float arithmetic through the SAME
+          emulated FPU and reproduces relay's SIL reference to the last bit (TEST-PIX-032, still
+          PASSING unchanged with this rung added). Basic single-precision works.
+        - stage-name static analysis: attempted and it yielded nothing, because meld's fusion leaves
+          the functions unnamed, so "which float opcodes does ekf use that rate does not" cannot be
+          answered from the fused WAT. Recorded so the next attempt does not repeat it.
+
+      *** NOT ESTABLISHED — the cause ***
+      Remaining candidates are a synth lowering defect on a float op or sequence used only on that
+      path, or a Renode fpv5-d16 modelling defect for a specific instruction. jess CANNOT discriminate
+      them without real silicon, and the bench has been empty since 2026-09-25. Stated as two open
+      candidates rather than asserted as either; this repo has twice concluded from where it happened
+      to look (AFD-107, AFD-121) and once blamed a supplier for its own stale artifact (AFD-047/049).
+      IN PARTICULAR this is NOT reported as a falcon or relay defect. The wasm is relay's; the lowering
+      and the harness are jess's, and jess's side is the more likely one.
+
+      *** THE ORACLE IS RED AND IS NOT WIRED INTO CI ***
+      run-ekf-oracle.sh fails, correctly, naming the four fields and both values. It is deliberately
+      NOT added as a CI gate: a red gate would make main red, and an "expected-fail" gate is a vacuous
+      gate that goes green the moment the divergence changes shape. What IS wired is everything that
+      is green and load-bearing: the build of ekf.elf and its two controls, the VFP-argument assertion,
+      the three new ABI assertions, and ekf_ref.py's own self-test. The oracle gets wired when it
+      passes.
+
+      *** TWO DEFECTS OF JESS'S OWN, FOUND BY BUILDING THIS ***
+      1. THE EXISTING NEGATIVE CONTROL WOULD HAVE BECOME A TWO-VARIABLE PERTURBATION. TEST-PIX-032's
+         NC1 is built by `sed 's/0xBE19999Au,/0xBE4CCCCDu,/' harness.c`. The estimator's IMU vector
+         uses that same word for gy (deliberately — it is bit-identical to ARGV_WORDS' wy so the two
+         vectors describe one vehicle). sed without /g still substitutes once PER LINE, so the control
+         would have perturbed BOTH wy and gy. It would still have "passed" — the torque moves — for
+         two reasons instead of one, which is exactly what a negative control must not do. MEASURED
+         rather than reasoned: the unanchored sed changes 2 lines. Both seds are now anchored, and a
+         shared `one_line_edit` helper ASSERTS exactly one line differs, so the next control that
+         silently widens fails loudly.
+      2. THE ABI GATE'S READING OF THE SOURCE COULD BE CHANGED BY A COMMENT. check-manifest.py read
+         the harness's assumption with `ARGV_WORDS\s*\[(\d+)\]`, first match anywhere in the file. The
+         moment the estimator rung documented which IMU word corresponds to which state word
+         ("== ARGV_WORDS[10] wx"), the gate read 10 and reported "harness ARGV_WORDS[10] vs manifest
+         18". It went RED rather than mis-comparing, which is the right failure — but a gate whose
+         reading of the source a comment can change is not reading the source. Now anchored on the
+         DECLARATION (`NAME[n] = `) and refuses unless there is exactly one.
+    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker]
+    fields:
+      detected-by: building the estimator rung (TEST-PIX-035) and running it against an independent wasmtime reference over the same fused module, 2026-09-30
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-30T11:22:51Z

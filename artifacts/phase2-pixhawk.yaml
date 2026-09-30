@@ -1454,3 +1454,76 @@ artifacts:
       model: claude-opus-4-8
       timestamp: 2026-09-03T18:52:56Z
     release: v0.7.0
+
+  - id: TEST-PIX-035
+    type: test-spec
+    title: The falcon ESTIMATOR (ekf#estimate) runs 16 ticks on emulated RT1176 and is differentialled word-for-word against wasmtime — the first jess rung to invoke a stage other than rate/mixer, and it is currently FAILING (AFD-125)
+    status: draft
+    description: |-
+      The falcon ESTIMATOR (ekf#estimate) runs N=16 ticks on emulated RT1176 Cortex-M7 and is compared,
+      word for word, against an independent wasmtime reference over the SAME fused module.
+
+      WHY IT IS A DISTINCT RUNG. TEST-PIX-032 and TEST-PIX-033 invoke rate and mixer. ekf, attitude and
+      position are present in the fused image and are NEVER CALLED by any jess measurement — and relay's
+      estimator fix, the change behind falcon v1.134 -> v1.139, lives in that blind spot (AFD-122). This
+      is the first jess rung to invoke any stage other than rate/mixer.
+
+      THE ABI CONTENT. The cascade uses THREE calling shapes and this rung adds the third:
+          rate#tick      18 flat params > 16  -> a POINTER in
+          mixer#mix       4 flat params       -> four FLATTENED f32
+          ekf#estimate    6 flat params       -> six FLATTENED f32, 56-byte / 14-field return area
+      Assuming rate's convention for ekf passes a float where a pointer is read, and the Canonical ABI
+      returns garbage rather than erroring. build.sh asserts the six arguments really travel in VFP
+      registers; tools/abi/check-manifest.py checks all three shapes against meld's signature manifest
+      rather than against a comment.
+
+      ITS OWN IMAGE, for a stronger reason than the soak's. TEST-PIX-032 carries the ONLY FROZEN
+      baseline in the suite (EXP/EXPP in run-oracle.sh, from relay's SIL reference under v1.134.1).
+      Calling another stage inside that image would advance shared instance state and move the one
+      number here that is not recomputed from the module under test. Verified: both TEST-PIX-032 and
+      TEST-PIX-033 still PASS unchanged with this rung added.
+
+      NON-VACUITY, established in wasmtime BEFORE any ARM code was written:
+        - the estimator INTEGRATES (tick1 != tick2 != tick3), so one tick cannot distinguish a correct
+          lowering from one whose state update was dropped;
+        - all SIX imu scalars are LIVE — each moves 5-8 of the 14 state fields. Contrast the
+          composed-app oracle, whose own scope line reports only 4 of its 18 inputs move its fold;
+        - five of the fourteen fields (pos-n/e/d, vel-d, innovation) are IDENTICALLY ZERO at tick 1 and
+          nonzero by tick 2, so N > 1 is required rather than merely nicer.
+
+      CURRENT RESULT: FAILING, and the failure is the finding (AFD-125). On emulated RT1176 the image
+      completes all 16 ticks (sentinel 0x1E55E4F0, loop's own trip counter = 16) and TEN of fourteen
+      state words are bit-exact — the whole quaternion, the gyro passthrough, pos-n, pos-e, innovation.
+      FOUR diverge: pos-d, vel-n, vel-e, vel-d, which are exactly the fields the accelerometer reaches
+      through the quaternion rotation, and the target's values are the UNROTATED ones (vel-n = ax*dt
+      and vel-e = ay*dt to the bit). No single input vector explains it: a 93-value sweep of az finds
+      none reproducing all 14 words, best 10/14.
+
+      STATUS OF THE GATE: run-ekf-oracle.sh is NOT wired into CI while it fails. A red gate would make
+      main red, and an expected-fail gate is vacuous — it goes green the moment the divergence changes
+      shape. Gated instead: the image and its two controls are built, the VFP-argument assertion runs,
+      the three new ekf ABI assertions run, and ekf_ref.py's vacuity guards are self-tested. The oracle
+      is wired when it passes.
+
+      CONTROLS the oracle carries:
+        1 COMPLETION + TRIP COUNT — sentinel 0x1E55E4F0 and the loop's OWN counter, incremented inside
+          the loop. Writing the requested N up front would prove only that the constant arrived.
+        2 BIT-EXACTNESS at tick 1 and tick N, all 14 words each, named field by field on failure.
+        3 THE FOLD over all 14 words of every tick (FNV-1a, identical constants both sides).
+        4 ENDPOINT MOTION — tick1 != tickN; ekf_ref.py REFUSES to emit a reference where they are
+          equal, and that refusal is self-tested along with a "dead output" guard.
+        5 ATTRIBUTIVE CONTROL — one imu scalar (gy) perturbed with the embedder init fully intact; the
+          fold must move. Attributive because all six inputs were measured live.
+        6 LIVENESS CONTROL — init skipped. Labelled honestly as liveness only: an image that never ran
+          reports the same all-zero fold, so it answers "did anything survive", not "are the embedder
+          promises load-bearing".
+
+      SCOPE, stated because it is easy to overstate: both sides run the SAME c.loom.wasm, so the
+      reference is an independent BACKEND, not an independent artifact. This covers SYNTH'S LOWERING
+      ONLY. A defect in falcon's source, in meld's fusion or in loom's optimisation is invisible here
+      because both backends would agree on it. Nothing here executed on silicon.
+    tags: [estimator, on-target-differential, canonical-abi, afd-125, failing]
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-30T11:24:22Z
