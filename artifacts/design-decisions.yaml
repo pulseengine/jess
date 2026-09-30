@@ -1618,3 +1618,60 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-010
+
+  - id: DD-028
+    type: design-decision
+    title: "M7-side contract for relay's @0.11.0 observer seam: 32-B aligned and padded to 96 B, and the seqlock read RE-INVALIDATES on every attempt (a one-shot invalidate is an infinite loop, not a torn read)"
+    status: proposed
+    description: |-
+      The M7-side contract for reading relay's `observer` seam (`pulseengine:falcon-cascade/observer@0.11.0`,
+      announced on jess#167, not yet published — relay#493).
+
+      DECISION
+        1. PLACEMENT. The `flight-state` record is placed 32-byte aligned in the shared window and PADDED
+           TO 96 B, so it occupies exactly three 32-byte cache lines and shares no line with any other
+           writer. Measured layout under the Canonical ABI from relay's field set: 88 B, align 8, with
+           tick-head at offset 0 (line 0) and tick-tail at offset 80 (line 2).
+        2. THE SEQLOCK READ RE-INVALIDATES ON EVERY ATTEMPT. The M7 invalidates the whole 96-byte range
+           before each read attempt, not once before the loop.
+        3. TIME COMES FROM THE M7, NOT THE CONTRACT. Each successful read is stamped from the M7's own
+           cycle counter at the MU doorbell. relay's seam deliberately carries no cadence and no
+           timestamp; jess does not ask for one.
+
+      WHY (2) IS THE LOAD-BEARING PART
+        A seqlock reader that invalidates once and then retries re-reads the SAME cached lines. head and
+        tail then disagree forever and the reader SPINS — a correct-looking seqlock with a one-shot
+        invalidate is an infinite loop, not a torn read. The M7 has an L1 D-cache and the M4 does not, so
+        the reader is the only party that can see staleness and the only one that can fix it.
+
+      WHY (1) IS A CORRECTNESS RULE AND NOT A PERFORMANCE ONE
+        On a non-coherent boundary, two cores writing different objects that share one 32-byte line can
+        clobber each other through a cache writeback. Padding to a whole number of lines removes the
+        possibility rather than making it unlikely.
+
+      WHY THIS IS jess's SIDE
+        relay stated it and jess agrees: 32-byte alignment is not expressible in WIT. It is a property of
+        the lowered struct and its placement in the shared window, which is jess's half of the boundary.
+        Their field ORDER is already correct for it (head first, tail last, no variable-shape members),
+        so nothing in their contract needs to change.
+
+      STATUS: UNVERIFIED, AND UNVERIFIABLE ON THE CURRENT INSTRUMENT.
+        jess's dual-core Renode platform declares NO cache on either core (AFD-127), so none of the
+        reasoning above can be exercised there — a wrong implementation and a right one produce the same
+        green. This is architecture until the vehicle returns; the bench has been empty since 2026-09-25.
+        Recorded now so the constraint is not re-derived later, and so the gap is visible rather than
+        implicit.
+
+      SUPERSEDES IN PRACTICE, ONCE IMPLEMENTED: the current single READY-flag handshake at
+      0x20400040 (flag written last, polled for acquire), which cannot distinguish "new data" from
+      "being overwritten" and which AFD-127 shows emits neither barrier it claims.
+    tags: [inter-core, cache-coherency, seqlock, observer, relay, afd-127, jess-167, unverified]
+    fields:
+      rationale: "The M7 has an L1 D-cache and the M4 does not, so the reader is the only party that can observe staleness and the only one that can correct it. A seqlock reader that invalidates once and then retries re-reads the same cached lines, so head and tail disagree forever and it spins — re-invalidating per attempt is what makes the protocol terminate. Padding to whole 32-byte lines removes cross-core writeback clobbering by construction rather than making it unlikely. Both are jess's side because 32-byte alignment is not expressible in WIT; it is a property of the lowered struct and its placement, and relay's field order is already correct for it. Recorded UNVERIFIED and unverifiable on the current instrument: the dual-core Renode platform declares no cache on either core (AFD-127), so a wrong implementation and a right one produce the same green."
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-30T23:00:01Z
+    links:
+      - type: satisfies
+        target: REQ-PIX-007

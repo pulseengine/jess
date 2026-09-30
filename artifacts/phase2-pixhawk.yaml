@@ -1089,29 +1089,31 @@ artifacts:
     title: Inter-core NavState crossing - the 16xf32 NavState message crosses M4 -> shared SRAM -> M7 byte-exact on the dual-core RT1176 Renode model (REQ-PIX-007)
     status: valid
     release: v0.9.0
-    description: >
-      hardware/renode/navstate-xcore/ - proves the payload-fidelity half of REQ-PIX-007: the 3-core
-      partition's sole M7<->M4 crossing is the NavState message (16 x f32 = 64 B, DD-025/PART), and it
-      must cross the shared-SRAM ring BYTE-EXACT (no corruption, no partial read) or the M7 flight core
-      acts on a torn estimator state. Built on the proven dual-core RT1176 model
-      (hardware/renode/vehicle/rt1176-dualcore.repl: cpu_m7 + cpu_m4 on the shared sysbus, SHMEM ring
-      @0x20400000, full NXP MU doorbell). cpu_m4 (estimator core) writes the 16-word NavState to SHMEM
-      then publishes a READY flag @0x20400040 LAST (flag-last release order); cpu_m7 (flight core) spins
-      on the flag (acquire), copies the 16 words to its DTCM @0x20010000. ORACLE (navstate-crossing.robot,
-      renode-test): asserts ALL 16 DTCM output words == the producer pattern 0x4E560000+i - so the
-      NavState survived M4 -> shared-SRAM -> M7 bit-for-bit. CONFIRMED GREEN 2026-07-23 (jess local,
-      Renode 1.16.1; 16/16 words byte-exact). WIRED into .github/workflows/ci.yml renode-smoke job.
-      Hermetic: committed producer/consumer ELFs (arm-none-eabi, build.sh regenerates; ELF addresses +
-      the robot are a matched pair). This is the inter-core IPC foundation the FIRST-FLASH 3-core model
-      needs; the MU doorbell datapath (M4->M7 RR0) is separately exercised by the vehicle multinode demo
-      (TEST-PIX-019). WIT-TYPING DONE 2026-07-23 (AFD-036 resolved): the NavState is now a structured
-      WIT record - hardware/pixhawk6x-rt.aadl carries VehicleState.nav (16xf32) + ActuatorCmd.pwm (4xf32),
-      ports bound to the data implementations, and `spar codegen` emits `record vehicle-state-nav {qw:f32
-      ..baz:f32}` + `record actuator-cmd-pwm {m0..m3:f32}` (verified by the TEST-PIX-023 WIT-derivation
-      gate). So REQ-PIX-007 now has BOTH halves: the byte-exact crossing (this test) + the typed contract
-      (the record). NEXT RUNG: swap the fixed pattern for gale's verified k_msgq (gale v0.4.0, DD-023) +
-      relay's real estimator NavState when the M4 estimator lowers on-target.
-    tags: [phase-2, inter-core, ipc, navstate, shmem, dual-core, rt1176, byte-exact, on-target, ci-gate, oracle, verification, req-pix-007]
+    description: |-
+      hardware/renode/navstate-xcore/ - proves the payload-fidelity half of REQ-PIX-007: the 3-core partition's sole M7<->M4 crossing is the NavState message (16 x f32 = 64 B, DD-025/PART), and it must cross the shared-SRAM ring BYTE-EXACT (no corruption, no partial read) or the M7 flight core acts on a torn estimator state. Built on the proven dual-core RT1176 model (hardware/renode/vehicle/rt1176-dualcore.repl: cpu_m7 + cpu_m4 on the shared sysbus, SHMEM ring @0x20400000, full NXP MU doorbell). cpu_m4 (estimator core) writes the 16-word NavState to SHMEM then publishes a READY flag @0x20400040 LAST (flag-last release order); cpu_m7 (flight core) spins on the flag (acquire), copies the 16 words to its DTCM @0x20010000. ORACLE (navstate-crossing.robot, renode-test): asserts ALL 16 DTCM output words == the producer pattern 0x4E560000+i - so the NavState survived M4 -> shared-SRAM -> M7 bit-for-bit. CONFIRMED GREEN 2026-07-23 (jess local, Renode 1.16.1; 16/16 words byte-exact). WIRED into .github/workflows/ci.yml renode-smoke job. Hermetic: committed producer/consumer ELFs (arm-none-eabi, build.sh regenerates; ELF addresses + the robot are a matched pair). This is the inter-core IPC foundation the FIRST-FLASH 3-core model needs; the MU doorbell datapath (M4->M7 RR0) is separately exercised by the vehicle multinode demo (TEST-PIX-019). WIT-TYPING DONE 2026-07-23 (AFD-036 resolved): the NavState is now a structured WIT record - hardware/pixhawk6x-rt.aadl carries VehicleState.nav (16xf32) + ActuatorCmd.pwm (4xf32), ports bound to the data implementations, and `spar codegen` emits `record vehicle-state-nav {qw:f32 ..baz:f32}` + `record actuator-cmd-pwm {m0..m3:f32}` (verified by the TEST-PIX-023 WIT-derivation gate). So REQ-PIX-007 now has BOTH halves: the byte-exact crossing (this test) + the typed contract (the record). NEXT RUNG: swap the fixed pattern for gale's verified k_msgq (gale v0.4.0, DD-023) + relay's real estimator NavState when the M4 estimator lowers on-target.
+
+      SCOPE CORRECTION 2026-10-01 (AFD-127) — what this test does and does not establish. The wording
+      above says the crossing must be byte-exact "(no corruption, NO PARTIAL READ) or the M7 flight core
+      acts on a torn estimator state". That over-claims, and the reason it stayed green is that the
+      instrument has removed the failure mode:
+        ESTABLISHED: PAYLOAD FIDELITY through the transport model. 16 words written by cpu_m4 into the
+        shared window are read back identically by cpu_m7. Real, CI-gated, and worth having.
+        NOT ESTABLISHED: that the crossing is untorn or non-stale ON SILICON. "No partial read" is a
+        coherency and ordering property. hardware/renode/vehicle/rt1176-dualcore.repl declares NO CACHE
+        on either core and Renode's CPU.CortexM does not model the M7 L1 D-cache — and on the real part
+        the M7 has one while the M4 does not, which is exactly the mechanism that would stale this
+        transport. A correct implementation and a broken one produce the same green here.
+        AND THE ORDERING THE SOURCE NAMES IS NOT EMITTED: nav_producer_m4.S says the flag is published
+        "LAST" and nav_consumer_m7.S says it polls "(acquire)", but both files contain ZERO barriers and
+        zero cache maintenance (measured: grep for dsb/dmb/isb/cache -> 0 in both). On ARMv7-M, Normal-
+        memory accesses may be reordered and store ordering between observers is not guaranteed without
+        a DMB, so "written last in program order" does not mean "observed last".
+        PREDICTION, recorded as one: this transport run unchanged on real silicon would likely FAIL, with
+        the M7 polling the flag and then reading payload from its cache. Nothing here is measured on
+        silicon; the bench has been empty since 2026-09-25.
+      The test is kept and its claim bounded rather than deleted — the treatment AFD-121 gave the falcon
+      baselines. DD-028 records what the @0.11.0 observer seam requires instead.
+    tags: [phase-2, inter-core, ipc, navstate, shmem, dual-core, rt1176, byte-exact, on-target, ci-gate, oracle, verification, req-pix-007, scope-corrected]
     links:
       - type: verifies
         target: REQ-PIX-007
