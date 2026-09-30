@@ -7363,7 +7363,7 @@ artifacts:
 
   - id: AFD-125
     type: ai-found-defect
-    title: "First on-target invocation of a cascade stage other than rate/mixer: the ESTIMATOR runs 16 ticks on emulated RT1176 with 10 of 14 state words bit-exact, but the accelerometer-rotation path DIVERGES — and no single input vector explains it"
+    title: "Two independent Cortex-M7 emulators agree bit-for-bit and both disagree with wasmtime: the synth-lowered falcon ESTIMATOR diverges from the same module on the accelerometer-rotation path — loom and Renode both exonerated"
     status: open
     description: |-
       2026-09-30. jess invoked a falcon cascade stage OTHER than rate/mixer for the first time. The
@@ -7481,7 +7481,44 @@ artifacts:
       unreachable script, a Renode step with no RENODE, a workflow where nothing is checkable (a
       refusal, not a pass), and — the false-alarm direction — RENODE inherited from the workflow env
       must be ACCEPTED.
-    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker, afd-124]
+
+      *** NARROWED TO THE LOWERING: TWO MORE VARIABLES ELIMINATED ***
+      Both done after the first write-up, and both change the conclusion, so the "two open candidates"
+      above are now one.
+
+      1. LOOM IS EXONERATED. The pipeline is meld fuse -> c.wasm -> loom optimize -> c.loom.wasm ->
+         synth compile. The rung ran on the post-loom module, so loom's optimisation was a live
+         candidate. Repeated end to end on the PRE-LOOM module — synth compile of c.wasm, init tables
+         re-extracted from that same module so the embedder promises match it, linked, run — and the
+         divergence PERSISTS BIT-IDENTICALLY: pos-d 36A495A2, vel-d 3C20BA20, vel-n and vel-e zero,
+         the same four fields and the same values. The reference over c.wasm likewise matches the
+         reference over c.loom.wasm. So loom changes nothing here, in either direction.
+
+      2. RENODE IS EXONERATED, and this is the one that matters. A Renode fpv5-d16 modelling defect
+         was the other candidate and jess has no silicon to break the tie. It does not need silicon: a
+         SECOND, independently written emulator answers it. The same ekf.elf, unmodified and unrelinked,
+         was run on QEMU 11.1.1 `-machine mps2-an500 -cpu cortex-m7` — a different machine model, a
+         different memory map, different peripherals, a separately implemented FPU.
+         ALL 31 PARKED WORDS ARE BIT-IDENTICAL to Renode 1.16.1 on hardware/renode/pixhawk6xrt.repl:
+         the trip count, tick-1 and tick-N state, the four diverging words, the FNV-1a fold over 16
+         ticks (0x684578d1) and the sentinel 0x1E55E4F0. Compared programmatically, word by word, not
+         by eye.
+         CONCLUSION: the emulator is not the variable. Two independent Cortex-M7 implementations
+         produce the same bits from the same synth-lowered object, and both disagree with wasmtime over
+         the same wasm module. This is a LOWERING defect.
+         WHAT IT STILL DOES NOT SAY: which instruction, or which synth pass. "The lowering is wrong on
+         this path" is as far as the evidence reaches; naming the instruction needs someone who can read
+         synth's output against its input, which is why this goes upstream rather than being guessed at
+         here.
+         A USEFUL SIDE RESULT: the image boots and completes on a machine model jess has never targeted,
+         which exercises the embedder-register contract (R9/R10/R11, synth#1131) on a second
+         implementation for the first time.
+         Reproducible: hardware/qemu/run-ekf-qemu.sh, which REFUSES rather than reporting if the
+         sentinel is absent, and — if the two emulators ever disagree — says so as a DIFFERENT and more
+         alarming finding rather than folding it into the lowering question.
+
+      Upstream: reported as synth#1436 with the full measurement and a reproducer path.
+    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker, afd-124, qemu]
     fields:
       detected-by: building the estimator rung (TEST-PIX-035) and running it against an independent wasmtime reference over the same fused module, 2026-09-30
       severity: major
