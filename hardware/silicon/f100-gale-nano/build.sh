@@ -12,7 +12,7 @@ ROOT="$(cd "$D/../../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/f100gale}"; mkdir -p "$OUT"
 SYNTH="${SYNTH:?set SYNTH to a synth binary}"
 PY="${PY:-python3}"
-GALE="${GALE:-$ROOT/.scratch/galenano7/gale-nano-0.7.0.wasm}"
+GALE="${GALE:-$ROOT/.scratch/galenano/gale-nano.wasm}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 [ -f "$GALE" ] || fail "gale-nano artifact not found: $GALE"
@@ -22,7 +22,7 @@ command -v arm-none-eabi-gcc >/dev/null || fail "arm-none-eabi-gcc not on PATH"
 # READ the expected digest from artifacts.pins rather than carrying a second copy here.
 # Two hardcoded hashes that agree today, with nothing enforcing that they keep agreeing, is
 # the drifted-mirror shape AFD-104 deleted a registry for. Found by clean-room verification.
-want=$(awk '$1=="galenano7/gale-nano-0.7.0.wasm"{print $2; exit}' "$ROOT/tools/deps/artifacts.pins")
+want=$(awk '$1=="galenano/gale-nano.wasm"{print $2; exit}' "$ROOT/tools/deps/artifacts.pins")
 [ ${#want} -eq 64 ] || fail "could not read the gale-nano digest from tools/deps/artifacts.pins
    (got '${want}') — refusing to verify against a digest this script invented"
 got=$(shasum -a 256 "$GALE" 2>/dev/null | awk '{print $1}')

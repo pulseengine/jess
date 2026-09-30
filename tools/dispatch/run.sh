@@ -4,7 +4,7 @@
 # gale#223 states: "Drive one round at time `now`: fire the tickless alarm, then drain every
 # ready task exactly once through `taskdisp.poll-task`", and that the embedder IMPLEMENTS
 # {gust:hal/mmio, gust:os/taskdisp} while it CALLS {gust:os/exec, time, timer, spawn, log}.
-# Both halves are verified here against the SHIPPED gale-nano 0.7.0 artifact.
+# Both halves are verified here against the SHIPPED, digest-pinned gale-nano artifact.
 #
 # WHY A PROBE COMPONENT: jess's existing taskdisp implementations returned 0 and recorded
 # NOTHING, so "poll-round drained the task" and "poll-round did nothing" produced identical
@@ -19,10 +19,15 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${OUT:-$ROOT/.scratch/dispatch}"; mkdir -p "$OUT"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
-NANO="$SCRATCH/galenano7/gale-nano-0.7.0.wasm"
+NANO="$SCRATCH/galenano/gale-nano.wasm"
+# The version is READ FROM THE PIN, never repeated here. This script printed
+# "gale-nano 0.7.0's poll-round drains..." while running 0.9.0 — green, and naming the wrong
+# artifact (AFD-124). Refuse rather than print a stale one.
+NANOVER="$("$ROOT/tools/deps/pinver.sh" galenano/gale-nano.wasm)" \
+  || { echo "cannot determine the pinned gale-nano version — refusing to label the result"; exit 1; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 for t in cargo wasm-tools wac wasmtime; do command -v "$t" >/dev/null || fail "$t not on PATH"; done
-SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" --only galenano7 >/dev/null 2>&1 \
+SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" --only galenano >/dev/null 2>&1 \
   || fail "gale-nano does not match its pin — refusing to measure a lookalike"
 
 echo "== 1. build the probe and the driver =="
@@ -50,7 +55,7 @@ EOP
 wasm-tools component new "$OUT/probe1/target/wasm32-unknown-unknown/release/jess_gust_dispatch_probe.wasm" -o "$OUT/probe1.wasm" || fail "variant componentize"
 cmp -s "$OUT/probe.wasm" "$OUT/probe1.wasm" && fail "the ret-0 variant is byte-identical to the ret-1 probe — the control is inert"
 
-echo "== 2. compose against SHIPPED gale-nano 0.7.0 =="
+echo "== 2. compose against SHIPPED gale-nano $NANOVER =="
 cp "$ROOT/tools/dispatch/compose.wac" "$OUT/"
 ( cd "$OUT" && wac compose --dep jess:gust-dispatch-probe=probe.wasm  --dep gust:runtime=gale-nano.wasm --dep jess:dispatch-driver=driver.wasm compose.wac -o exp.wasm  ) || fail "compose (ret1)"
 ( cd "$OUT" && wac compose --dep jess:gust-dispatch-probe=probe1.wasm --dep gust:runtime=gale-nano.wasm --dep jess:dispatch-driver=driver.wasm compose.wac -o exp0.wasm ) || fail "compose (ret0)"
@@ -70,7 +75,7 @@ echo "== 4. 'drain EVERY ready task' =="
 want "$OUT/exp.wasm" "two-tasks-one-round()" 2 "two admitted tasks, one round -> two polls"
 
 echo "== 5. the return value of poll-task is LOAD-BEARING (and undocumented upstream) =="
-# gale-nano 0.7.0 ships `poll-task: func(id: u32) -> u32` with NO documented semantics.
+# gale-nano ships `poll-task: func(id: u32) -> u32` with NO documented semantics.
 # These two lines are the measurement that gives it meaning.
 want "$OUT/exp.wasm"  "one-task-two-rounds()" 1 "returning 1 -> task is NOT re-polled"
 want "$OUT/exp0.wasm" "one-task-two-rounds()" 2 "returning 0 -> task IS re-polled next round"
@@ -85,7 +90,7 @@ want "$OUT/exp.wasm" "observed-id()"          0 "so a reported id of 0 is a REAL
 want "$OUT/exp.wasm" "admitted-handle()"      0 "gale hands out handle 0 first — which is why the sentinel cannot be 0"
 
 echo
-echo "Result: PASS — gale-nano 0.7.0's poll-round drains admitted tasks through taskdisp.poll-task,"
+echo "Result: PASS — gale-nano $NANOVER's poll-round drains admitted tasks through taskdisp.poll-task,"
 echo "        every ready task once per round, and the poll-task RETURN VALUE decides whether the"
 echo "        task is re-polled: 1 completes it (state 1 -> 2), 0 leaves it ready. Executed in"
 echo "        wasmtime against the shipped, digest-pinned artifact. NOT on target."

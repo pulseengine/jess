@@ -7206,3 +7206,117 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-29T23:04:14Z
+
+  - id: AFD-124
+    type: ai-found-defect
+    title: "Phase B: gale-nano 0.7.0 -> 0.9.0 lowers to a BYTE-IDENTICAL cortex-m3 object — the wasm differs only by rustc symbol hashes, 0.8.0/0.9.0 are the same bytes, and AFD-113's dispatch gap is therefore not a version problem"
+    status: open
+    description: |-
+      2026-09-30. Phase B of the post-falcon-switch plan: gale-nano 0.7.0 -> 0.9.0. jess LINKS gale-nano
+      on the STM32F100, so this is a supplier bump under the flight path, not a dev-tool bump.
+
+      *** THE HEADLINE: THE LOWERED CORTEX-M3 OBJECT IS BYTE-IDENTICAL ***
+      Adopting gale-nano 0.9.0 changes NOTHING in what jess puts on the part. Measured, same pinned
+      synth 0.64.0, same flags, one variable:
+          lowered 0.7.0   4775 B   .text 2340 B   41 symbols
+          lowered 0.9.0   4775 B   .text 2340 B   41 symbols
+          cmp             BYTE-IDENTICAL; `nm` sets identical in names AND types
+      This is the strongest form of the release-watch criterion ("behaviour-neutral, proven by
+      byte-identity of the lowered objects") and it means the bump needed no hardware to clear.
+      NEGATIVE CONTROL, so the comparison is not vacuous: gale-nano 0.6.0 through the SAME pipeline
+      lowers to 5547 B / .text 3046 B / 44 symbols and is NOT byte-identical. Byte-identity here
+      discriminates; it is not an artefact of the method.
+
+      *** THE WASM DOES DIFFER — AND ATTRIBUTING IT IS THE WHOLE POINT ***
+      The component digests differ (546531952a5c… -> 6f91ded4df59…) at IDENTICAL size, 30476 B both,
+      and with an IDENTICAL exported WIT (`wasm-tools component wit` diff is empty). 1379 bytes differ.
+      Every one of them is compiler-generated naming. Proven by normalising exactly three classes and
+      showing the printed WAT then matches EXACTLY:
+          1. rust StableCrateId disambiguators   165 occurrences each side, 12 distinct, ZERO shared
+          2. anonymous-constant labels  .Lanon.<md5>.    4 each side
+          3. the rustc version in the producers section  5 each side
+              0.7.0  rustc 1.98.0 (88d9e12ae 2026-08-18)
+              0.9.0  rustc 1.98.1 (48a229cea 2026-09-01)
+      Everything else in producers is unchanged: wac-parser 0.10.1, wit-bindgen-rust 0.52.0,
+      wit-component 0.244.0 and 0.245.1. `reloc.CODE` is unchanged, so code layout is unchanged.
+      CONCLUSION: gale-nano 0.9.0 is the SAME SOURCE rebuilt on a newer rustc patch release. synth's
+      lowering discards the Rust symbol names, which is exactly why the ARM object comes out identical.
+
+      SIX NEGATIVE CONTROLS on the normaliser itself, because "normalise until equal" is how a
+      comparison is made to say anything you like. Each mutation differs from 0.7.0 in EXACTLY one
+      place and each remains VISIBLE after normalising: an instruction operand (offset=2376->2377), an
+      export name, a memory limit, a table size, the wit-component version, the wit-bindgen version.
+      So the normaliser erases only the three classes it names and cannot hide a code, export, type,
+      limit or non-rustc toolchain change.
+
+      AND A VACUOUS FIRST ATTEMPT, CAUGHT: the first normaliser used `Cs[0-9A-Za-z]{13}_` and matched
+      NOTHING — the hashes are 11 characters. It reported "not identical", which was a statement about
+      the regex and not about gale-nano; and the negative control run beside it PASSED VACUOUSLY,
+      because a mutation trivially survives a normaliser that does nothing. Fixed by asserting every
+      class matches a nonzero count before any comparison is reported. This is the recurring failure
+      appearing in the CHECKER again, and this time inside the very check written to avoid it.
+
+      *** THE WHOLE 0.7 -> 0.9 RANGE IS ONE CODE STATE, AND 0.8/0.9 ARE THE SAME BYTES ***
+      Measured all four published tags rather than only the endpoints (AFD-121's lesson):
+          0.6.0  20741 B  657f3bb36f0b…  rustc 1.97.1  code DIFFERS from 0.7.0
+          0.7.0  30476 B  546531952a5c…  rustc 1.98.0  (base)
+          0.8.0  30476 B  6f91ded4df59…  rustc 1.98.1  code identical to 0.7.0
+          0.9.0  30476 B  6f91ded4df59…  rustc 1.98.1  code identical to 0.7.0
+      0.8.0 and 0.9.0 are BYTE-IDENTICAL to each other — `cmp` clean. The gale 0.9.0 release did not
+      rebuild gale-nano at all; the OCI tag carries the 0.8.0 content. Worth knowing before anyone reads
+      a gale release note as evidence about this artifact: gale's v0.9.0 release ASSETS contain no fused
+      gale-nano at all (they ship the msgq/mutex/sem primitives), so the artifact jess consumes versions
+      INDEPENDENTLY of the gale release it is named after.
+
+      *** WHAT THIS SETTLES ABOUT AFD-113, AND WHAT IT DOES NOT ***
+      AFD-113 is open: on real F100 silicon gale-nano's `exec_poll_round` reaches `poll-task` ZERO
+      times, where the wasmtime reference over the same pinned artifact reaches it once.
+      SETTLED: that is NOT a stale-version problem, and 0.9.0 cannot fix it. The lowered object is
+      byte-identical, so re-flashing under the new pin would reproduce the same reading by construction.
+      NOT SETTLED, and stated because AFD-047 is exactly this trap: AFD-047 concluded "the clock does not
+      advance on shipped gale-nano" and was WRONG — the cause was a STALE ARTIFACT jess's own script
+      selected (AFD-049). Nothing here re-validates AFD-113's own measurement; it only rules out the
+      version as an explanation. The on-silicon re-run is blocked on hardware in any case: the
+      VLDISCOVERY is on wohl.local, which is gale's host, and re-flashing needs a claim plus consent.
+
+      *** VERIFIED ON 0.9.0, IN WASMTIME AND THROUGH THE LOWERING — NOT ON SILICON ***
+          native residual        EXACTLY as before: gust:os/taskdisp@0.1.0, gust:hal/mmio@0.1.0,
+                                 pulseengine:falcon-cascade/types@0.10.0. The types import is the only
+                                 thing the fully composed image still wants and it is TYPES-ONLY, so
+                                 nothing is owed for it.
+          appcompose             PASS, fold 1068280774 — the same value 0.7.0 produced — clock leg live,
+                                 and the reference's own negative control distinct (1070923226)
+          dispatch contract      PASS, poll-round drains through poll-task, return value load-bearing
+          timer probe            PASS 6/6 and the wake fired
+          flight loop            PASS 8/8 periods, iteration 1 matches the single-shot reference,
+                                 and 0 iterations once the clock stops ticking
+          F100 lowering+link     seam is EXACTLY {poll-task, deadline, read32}; 11 init segments /
+                                 10 globals; highest data address 3089 B <= the 4096 B window on the
+                                 real 8 KB part; verify-embedder OK with its refusal control; 4349 B
+      Everything above ran in wasmtime or in the toolchain. NOTHING here executed on silicon.
+
+      *** TWO DEFECTS OF JESS'S OWN, FIXED IN PASSING ***
+      1. THE VERSION WAS ENCODED IN THE PIN PATH, TWICE: `galenano7/gale-nano-0.7.0.wasm` — the
+         directory AND the filename. This is the third instance of the same hazard (AFD-114 fixed
+         `fg60` -> `synthpin` for synth; AFD-121 fixed `v1341/` -> `falcon/` for falcon) and it made a
+         supplier bump touch four files for no reason. Now `galenano/gale-nano.wasm`, with the version
+         only in the locator, where the digest check makes it load-bearing.
+      2. A PASSING ORACLE NAMED THE WRONG VERSION, exactly AFD-122's finding one tick later in a
+         different script: tools/dispatch/run.sh printed "Result: PASS — gale-nano 0.7.0's poll-round
+         drains admitted tasks…" while running 0.9.0. Since the fix for that in the cascade oracles was
+         local, the fix here is structural: tools/deps/pinver.sh reads the version from the pin's own
+         locator — the one place it already lives, kept honest by the digest check. It handles both
+         locator shapes (`oci:…:<ver>!` and `release:…@<tag>!`) and REFUSES rather than returning
+         something plausible, with a --self-test carrying two negative controls (a missing pin; an
+         unparseable locator). Callers that cannot resolve it must print NO version, never a stale one.
+         Also caught: the F100 build's GALE default still pointed at the old path, and its digest gate
+         REFUSED rather than lowering the wrong artifact — the gate behaving exactly as designed.
+    tags: [phase-b, gale-nano, release-watch, byte-identity, afd-113, afd-114, afd-121, afd-122, afd-047, negative-control, vacuous-checker]
+    fields:
+      detected-by: "executing Phase B: fetching all four published gale-nano tags and comparing both the wasm and the lowered cortex-m3 object, 2026-09-30"
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-30T05:04:26Z
