@@ -860,3 +860,68 @@ fn an_already_permissive_lockdir_is_not_narrowed() {
     let after = std::fs::metadata(&locks).unwrap().permissions().mode() & 0o7777;
     assert_eq!(after, 0o1777, "mode was changed from 1777 to {after:o}");
 }
+
+/// `--status` MUST CARRY THE THIRD STATE IN ITS EXIT CODE TOO.
+///
+/// This is the jess#280 defect one level up, and it was found by running the FIXED binary on
+/// fourpi.local: every device printed `UNKNOWN — Permission denied` and the process still
+/// exited 0. A caller that branches on the exit code, or greps for `CLAIMED` and finds none,
+/// reads "the board is clear" out of "nothing could be read" — which is exactly the
+/// could-not-run/answered-no conflation the tri-state exists to prevent.
+#[test]
+fn status_exits_undetermined_when_it_could_not_read_a_device() {
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("statusunk");
+    let locks = b.dir.join("locks");
+    std::fs::create_dir_all(&locks).unwrap();
+    let lf = locks.join("dev-a.lock");
+    std::fs::write(&lf, b"").unwrap();
+    std::fs::set_permissions(&lf, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    let o = b.cmd().args(["--status"]).output().unwrap();
+    let _ = std::fs::set_permissions(&lf, std::fs::Permissions::from_mode(0o666));
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    let err = String::from_utf8_lossy(&o.stderr).to_string();
+    assert!(
+        out.contains("UNKNOWN"),
+        "status must print UNKNOWN for an unreadable device: {out}"
+    );
+    assert_eq!(
+        rc(&o),
+        4,
+        "an incomplete listing must exit 4, not 0 — exit 0 reads as 'the board is clear'. \
+stdout: {out} stderr: {err}"
+    );
+    assert!(
+        err.contains("INCOMPLETE"),
+        "the exit must be explained on stderr: {err}"
+    );
+}
+
+/// THE CONTROL THAT KEEPS THE ABOVE FROM BEING VACUOUS. If `--status` exited 4 whenever
+/// anything was odd, the test above would pass while saying nothing. A listing that ANSWERED
+/// for every device — here one genuinely claimed, which is the state most easily confused with
+/// "unreadable" — must still exit 0. The two must differ in exactly this one variable.
+#[test]
+fn status_still_exits_zero_when_every_device_answered() {
+    let b = Bench::new("statusok");
+    let mut holder = b.hold(&["dev-a"], "a-reason", 30);
+
+    let o = b.cmd().args(["--status"]).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    assert!(
+        out.contains("CLAIMED"),
+        "fixture did not produce a live claim: {out}"
+    );
+    assert!(
+        !out.contains("UNKNOWN"),
+        "fixture unexpectedly produced an unreadable device: {out}"
+    );
+    assert_eq!(
+        rc(&o),
+        0,
+        "a complete listing must still exit 0, claims and all: {out}"
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+}

@@ -142,13 +142,18 @@ environment:
                      devices held for its lifetime. Read it, do not set it yourself.
 
 exit codes:
-  0   the wrapped command's status, or success for --status/--self-test
+  0   the wrapped command's status; for --status, that every device ANSWERED (free or claimed);
+      for --self-test, that it ran and passed
   2   usage error: unknown flag, bad arguments, or an unregistered device name
   3   a device is already claimed; NOTHING was run
   4   the state COULD NOT BE DETERMINED — the lock file could not even be opened; NOTHING was
       run. Distinct from 3 on purpose (jess#280): an EACCES used to report as 3, so a
       permissions problem was indistinguishable from a claim and sent the operator hunting a
       holder that did not exist. Retrying or --wait cannot help a 4; fix the lockdir.
+      --status exits 4 TOO when any device was unreadable, because a listing that reports
+      UNKNOWN and exits 0 is the same conflation in the other channel: a caller that greps
+      for CLAIMED and finds none would read an unreadable board as a clear one, and that
+      direction fails OPEN.
 NOTE: the wrapped command's status passes through unchanged, so a 2, 3 or 4 may come from it.
 
 the lock directory is SHARED, and the tool widens it accordingly: 1777 on the directory (sticky,

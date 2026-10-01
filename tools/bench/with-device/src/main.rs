@@ -343,7 +343,26 @@ Re-run as: with-device {} --purpose '<why>' -- <your command>",
             std::process::exit(EXIT_USAGE);
         }
         Mode::Status { json } => {
-            println!("{}", render_status(&scan_status(), json));
+            // THE EXIT CODE MUST CARRY THE THIRD STATE TOO. Printing "UNKNOWN" and exiting 0 is
+            // the jess#280 defect one level up: a caller that branches on the exit code, or
+            // greps for CLAIMED and finds none, reads "nothing is claimed" out of "nothing could
+            // be read". Measured on fourpi.local on 2026-10-02 — every device UNKNOWN, exit 0.
+            // So an unreadable state exits 4, exactly as a claim attempt does. 0 now means the
+            // scan ANSWERED for every device, whether free or claimed.
+            let rows = scan_status();
+            println!("{}", render_status(&rows, json));
+            let unknown = rows
+                .iter()
+                .filter(|(_, st, _)| matches!(st, State::Unknown(_)))
+                .count();
+            if unknown > 0 {
+                eprintln!(
+                    "{PROG}: {unknown} of {} device(s) could not be read — this listing is \
+                     INCOMPLETE, not a clean board. Exiting {EXIT_UNDETERMINED}.",
+                    rows.len()
+                );
+                std::process::exit(EXIT_UNDETERMINED);
+            }
             std::process::exit(0)
         }
         Mode::Run(a) => a,

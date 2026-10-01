@@ -8321,18 +8321,70 @@ artifacts:
       models it exactly without needing a second user. Recorded because "the fix broke my test" is
       usually the test being a bad model, and here it was.
 
-      *** WHAT IS NOT VERIFIED, STATED PLAINLY ***
-      NOT verified on fourpi.local. There is no Rust toolchain on any of the three Pis and this Mac has
-      no aarch64-linux cross-linker, so the fixed binary could not be built for the host where the bug
-      was reported. What WAS confirmed there, independently of relay: the lockdir is `pi:pi`, `r` is not
-      in group `pi`, writing the lock file returns Permission denied, and `fuser` shows nothing holding
-      the flock. Plus a fact relay's own diagnosis did not have: `r` cannot even EXECUTE
-      /home/pi/bench/with-device (exit 126), because /home/pi is not traversable by `r` — which explains
-      their empty `find` more completely than the `~` scope alone.
-      The fix is verified on darwin against the identical code path (EACCES from OpenOptions::open).
-      Cross-building or installing a toolchain on a Pi is the remaining step before the operational
-      claim can be made on the vehicle host.
-    tags: [bench-interlock, with-device, jess-280, relay, gate-potency, mutation-tested, afd-082, afd-128]
+      *** RETRACTION OF THIS FINDING'S OWN "CANNOT BE VERIFIED" CLAIM — IT COULD, AND NOW IS ***
+      The paragraph that stood here said the fix could NOT be verified on fourpi.local because there is
+      no Rust toolchain on any of the three Pis and this Mac has no aarch64-linux cross-linker. The
+      second half was WRONG, and it was wrong in the way worth recording: it was a claim about a
+      toolchain that was never tested, only assumed. with-device has ZERO dependencies and no build.rs,
+      so it cross-builds statically with no external linker at all:
+
+          rustup target add aarch64-unknown-linux-musl
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld \
+            cargo build --release --target aarch64-unknown-linux-musl
+
+      rust-lld ships inside the toolchain and the musl target's libc.a ships with rust-std, so the
+      "missing cross-linker" never needed to exist. Result: ELF 64-bit LSB aarch64, statically linked,
+      487,440 B, sha256 5f3aeb061c9d9727ac1fd85bf778e59d3c5fb52e8c69c8acbb7bf4b2586f4b07. The general
+      lesson, which is the reason this is in the record rather than quietly deleted: AN UNTESTED
+      BLOCKER IS A HYPOTHESIS, NOT A FINDING, and writing one into a safety artifact as a limitation is
+      the same error class as a vacuous pass pointing the other way.
+
+      *** NOW VERIFIED ON fourpi.local — THE REPORTED HOST, THE REPORTED ACCOUNT ***
+      2026-10-02, with-device 0.4.0 run as `r` on fourpi.local (aarch64).
+        THE REPRODUCTION, before anything was repaired (lockdir still `pi:pi drwxrwxr-x`):
+          --status        -> all 6 devices `UNKNOWN - cannot open ... (Permission denied (os error 13))`
+                             and json `"state":"unknown"` with a `why`. Was: CLAIMED with an empty holder.
+          a claim attempt -> exit 4, `CANNOT DETERMINE whether 'pixhawk-6xrt' is in use`, and
+                             `Nothing was run. This is NOT 'the device is busy'`. Was: exit 3 BUSY.
+          --self-test     -> `PRECONDITION FAIL - lockdir ... is not writable` + `self-test: CANNOT RUN
+                             (this says nothing about the locking)`. Was: 3 of 5 failures accusing the
+                             locking.
+        NEGATIVE CONTROL, same binary, same host, same account, ONE variable changed (a writable
+        lockdir): `--status` -> exit 0, a claim -> exit 0 and the wrapped command ran. The directory came
+        out `drwxrwxrwt` and the lock file `-rw-rw-rw-`, i.e. half two's modes, measured not asserted.
+        AFTER REPAIR (`chmod 1777` the lockdir, `0666` the stale pi-owned lock files — exactly what the
+        fixed tool creates), as `r`:
+          --status     -> all 6 free, exit 0
+          --self-test  -> PASS, 7 of 7 including contender-while-held, after-holder-CRASHED and the
+                          opposite-order deadlock pair
+          a real claim -> exit 0, and `--require-claim pixhawk-6xrt` SATISFIED inside it
+          a second agent while held -> exit 3 with a LIVE holder record {"pid":7628,"purpose":"holder"},
+                          which is the property the defect had destroyed: BUSY now means busy
+          the lock file is still `pi:pi 0666`, so `pi` is not locked out — widening never narrows
+      THE EXECUTION HALF OF THE BUG IS ALSO FIXED, not just diagnosed: the binary is installed at
+      /usr/local/bin/with-device (0755, root) on all three hosts, so the exit-126 failure — `r` could
+      not traverse /home/pi to even execute the old copy — cannot recur. gale.local and wohl.local both
+      report `--self-test: PASS` as `r`. The interlock is therefore LIVE ON THE WHOLE BENCH for the
+      standard account, which also unblocks AFD-113's F100 re-run on gale.local.
+
+      *** A SECOND DEFECT OF THE SAME CLASS, FOUND BY THAT VERIFICATION, ONE LEVEL UP ***
+      On fourpi the fixed `--status` printed `UNKNOWN` for all six devices and EXITED 0. That is
+      jess#280 again in the exit code: a caller that branches on the status, or greps for CLAIMED and
+      finds none, reads "the board is clear" out of "nothing could be read" — and unlike the original it
+      fails OPEN. `--status` now exits 4 when any device is unreadable, and says on stderr `N of M
+      device(s) could not be read — this listing is INCOMPLETE, not a clean board`. Exit 0 now means the
+      scan ANSWERED for every device, free or claimed.
+      MUTATION TEST: changing that branch back to `exit(0)` makes the new test fail on the exit code
+      while still printing UNKNOWN — so the test pins the exit code, not the message. And its CONTROL
+      (`--status` over a genuinely CLAIMED device must still exit 0) is INSENSITIVE to that mutation,
+      which is what stops exit-4-on-anything from passing both. Re-measured on fourpi after the change:
+      broken lockdir -> exit 4; writable lockdir -> exit 0. 65 tests (30 lib + 35 behavioural), clippy
+      clean.
+      Worth stating because it is the pattern and not an incident: the tri-state was added to the
+      RETURN VALUE and the EXIT CODE was left behind. Fixing a could-not-run/answered-no conflation in
+      one channel does not fix it in the others, and only running the fixed tool on the real host
+      surfaced the one that was missed.
+    tags: [bench-interlock, with-device, jess-280, relay, gate-potency, mutation-tested, afd-082, afd-128, cross-build, retraction]
     fields:
       detected-by: relay filing jess#280 with a reproduction and a control, while installing with-device on fourpi per jess#266, 2026-10-01
       severity: major
