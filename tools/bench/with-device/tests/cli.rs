@@ -657,3 +657,271 @@ fn an_ambiguous_registry_is_refused() {
     let err = String::from_utf8_lossy(&o.stderr);
     assert!(err.contains("ambiguous"), "must name the problem: {err}");
 }
+
+// ── jess#280: an unreadable lockdir must say CANNOT DETERMINE, not BUSY ─────────────────────
+//
+// On fourpi.local the lockdir is `pi:pi` and the standard account is `r`, so an exclusive flock
+// could not be taken and EVERY device reported busy forever. It failed closed, which is the right
+// direction — but "I cannot tell" rendered as "it is claimed" is absence-looks-like-data in a
+// safety tool, and it sent the reporter hunting a holder (`pid 4827`) that was not running.
+//
+// The pair below is the point: both outcomes refuse, and they must refuse DIFFERENTLY.
+
+#[test]
+fn an_unwritable_lock_file_is_undetermined_not_busy() {
+    // MODELS THE REAL CASE: on fourpi.local the lock files were created by `pi` and the standard
+    // account `r` cannot write them. A read-only lock file reproduces that exactly without
+    // needing a second account.
+    //
+    // NOTE WHY THIS IS NOT "seal the lockdir": an earlier version of this test chmod'd the
+    // DIRECTORY to 0o500, and the fix legitimately widened it straight back — the test user owns
+    // it, so re-opening it is correct behaviour. The test was the wrong model, not the fix. A
+    // lock FILE is not re-chmod'd before the open, which is the code path the bug was in.
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("eacces");
+    let locks = b.dir.join("locks");
+    std::fs::create_dir_all(&locks).unwrap();
+    let lf = locks.join("dev-a.lock");
+    std::fs::write(&lf, b"").unwrap();
+    std::fs::set_permissions(&lf, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    let o = b.run(&["dev-a"], &[], &["true"]);
+    let _ = std::fs::set_permissions(&lf, std::fs::Permissions::from_mode(0o666));
+    let err = String::from_utf8_lossy(&o.stderr).to_string();
+    assert_eq!(
+        rc(&o),
+        4,
+        "an unwritable lock file must exit 4 (CANNOT DETERMINE), not 3 (BUSY). stderr: {err}"
+    );
+    assert!(
+        err.contains("CANNOT DETERMINE"),
+        "must say so in words: {err}"
+    );
+    assert!(
+        err.contains("not writable") || err.contains("Permission denied"),
+        "must name the cause so the operator fixes the file: {err}"
+    );
+    assert!(
+        !err.contains("DEVICE BUSY"),
+        "must NOT claim the device is busy — that is the bug: {err}"
+    );
+}
+
+#[test]
+fn an_uncreatable_lockdir_is_also_undetermined() {
+    // The other way the state can be unreadable: the lockdir cannot be created at all. Sealing
+    // the PARENT works here because the tool never chmods a parent.
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("nodir");
+    let parent = b.dir.join("sealed");
+    std::fs::create_dir_all(&parent).unwrap();
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+
+    let mut c = Command::new(BIN);
+    c.env("BENCH_LOCKDIR", parent.join("locks"))
+        .env("BENCH_WHO", "test")
+        .args(["dev-a", "--registry", b.reg.to_str().unwrap(), "--", "true"]);
+    let o = c.output().unwrap();
+    let _ = std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700));
+    let err = String::from_utf8_lossy(&o.stderr).to_string();
+    assert_eq!(rc(&o), 4, "must exit 4, not 3. stderr: {err}");
+    assert!(err.contains("CANNOT DETERMINE"), "must say so: {err}");
+    assert!(
+        !err.contains("DEVICE BUSY"),
+        "must not blame a holder: {err}"
+    );
+}
+
+/// THE OTHER HALF. Without this, exiting 4 on everything would also pass the test above. A
+/// genuinely held device must still be BUSY, with the holder named.
+#[test]
+fn a_genuinely_held_device_is_still_busy_not_undetermined() {
+    let b = Bench::new("eacces-nc");
+    let mut holder = b.hold(&["dev-a"], "really holding it", 30);
+    let o = b.run(&["dev-a"], &[], &["true"]);
+    let _ = holder.kill();
+    let _ = holder.wait();
+    let err = String::from_utf8_lossy(&o.stderr).to_string();
+    assert_eq!(
+        rc(&o),
+        3,
+        "a real claim must still exit 3 (BUSY). stderr: {err}"
+    );
+    assert!(err.contains("DEVICE BUSY"), "must say BUSY: {err}");
+    assert!(
+        !err.contains("CANNOT DETERMINE"),
+        "a real claim is a real answer, not an unknown: {err}"
+    );
+}
+
+/// `--self-test` must diagnose an unwritable lockdir UP FRONT rather than failing three checks in
+/// a pattern that accuses its own locking — which is what jess#280 actually observed (3 of 5
+/// failing, reading as "locks are never released").
+#[test]
+fn self_test_refuses_on_an_unwritable_lockdir_instead_of_blaming_the_locking() {
+    // Sealing the PARENT, not the lockdir: the tool widens a lockdir it owns (correctly), so
+    // sealing the lockdir would be the wrong model — see the note on the EACCES test above.
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("eacces-st");
+    let parent = b.dir.join("sealed");
+    std::fs::create_dir_all(&parent).unwrap();
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let mut c = Command::new(BIN);
+    c.env("BENCH_LOCKDIR", parent.join("locks"))
+        .env("BENCH_WHO", "test")
+        .arg("--self-test");
+    let o = c.output().unwrap();
+    let _ = std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700));
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert_eq!(
+        rc(&o),
+        4,
+        "must exit 4 (CANNOT RUN), not report locking failures. out: {all}"
+    );
+    assert!(
+        all.contains("PRECONDITION FAIL"),
+        "must name it a precondition: {all}"
+    );
+    assert!(
+        all.contains("CANNOT RUN"),
+        "must say it could not run: {all}"
+    );
+    assert!(
+        all.contains("says nothing about the locking") || all.contains("not what is wrong"),
+        "must explicitly exonerate the locking: {all}"
+    );
+    assert!(
+        !all.contains("after release"),
+        "must not run the checks it cannot meaningfully run: {all}"
+    );
+}
+
+/// The lock file must come out GROUP- AND OTHER-WRITABLE, or the first account to claim a device
+/// silently owns the interlock for everyone (jess#280's operational half). umask would otherwise
+/// leave it 0644.
+#[test]
+fn lock_and_holder_files_are_writable_by_other_accounts() {
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("modes");
+    let o = b.run(&["dev-a"], &["--purpose", "mode check"], &["true"]);
+    assert_eq!(
+        rc(&o),
+        0,
+        "claim failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let locks = b.dir.join("locks");
+
+    let dmode = std::fs::metadata(&locks).unwrap().permissions().mode() & 0o7777;
+    assert_eq!(
+        dmode & 0o777,
+        0o777,
+        "lockdir must be world-writable, got {dmode:o}"
+    );
+    assert_eq!(
+        dmode & 0o1000,
+        0o1000,
+        "lockdir must be STICKY so users cannot delete each \
+other's locks, got {dmode:o}"
+    );
+
+    let lmode = std::fs::metadata(locks.join("dev-a.lock"))
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(
+        lmode, 0o666,
+        "lock file must be world-writable (an exclusive flock needs write \
+access), got {lmode:o}"
+    );
+}
+
+/// And it must never NARROW an existing path — otherwise running it could lock out an account
+/// that was already using the directory.
+#[test]
+fn an_already_permissive_lockdir_is_not_narrowed() {
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("nonarrow");
+    let locks = b.dir.join("locks");
+    std::fs::create_dir_all(&locks).unwrap();
+    std::fs::set_permissions(&locks, std::fs::Permissions::from_mode(0o1777)).unwrap();
+    let o = b.run(&["dev-a"], &[], &["true"]);
+    assert_eq!(
+        rc(&o),
+        0,
+        "claim failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let after = std::fs::metadata(&locks).unwrap().permissions().mode() & 0o7777;
+    assert_eq!(after, 0o1777, "mode was changed from 1777 to {after:o}");
+}
+
+/// `--status` MUST CARRY THE THIRD STATE IN ITS EXIT CODE TOO.
+///
+/// This is the jess#280 defect one level up, and it was found by running the FIXED binary on
+/// fourpi.local: every device printed `UNKNOWN — Permission denied` and the process still
+/// exited 0. A caller that branches on the exit code, or greps for `CLAIMED` and finds none,
+/// reads "the board is clear" out of "nothing could be read" — which is exactly the
+/// could-not-run/answered-no conflation the tri-state exists to prevent.
+#[test]
+fn status_exits_undetermined_when_it_could_not_read_a_device() {
+    use std::os::unix::fs::PermissionsExt;
+    let b = Bench::new("statusunk");
+    let locks = b.dir.join("locks");
+    std::fs::create_dir_all(&locks).unwrap();
+    let lf = locks.join("dev-a.lock");
+    std::fs::write(&lf, b"").unwrap();
+    std::fs::set_permissions(&lf, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    let o = b.cmd().args(["--status"]).output().unwrap();
+    let _ = std::fs::set_permissions(&lf, std::fs::Permissions::from_mode(0o666));
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    let err = String::from_utf8_lossy(&o.stderr).to_string();
+    assert!(
+        out.contains("UNKNOWN"),
+        "status must print UNKNOWN for an unreadable device: {out}"
+    );
+    assert_eq!(
+        rc(&o),
+        4,
+        "an incomplete listing must exit 4, not 0 — exit 0 reads as 'the board is clear'. \
+stdout: {out} stderr: {err}"
+    );
+    assert!(
+        err.contains("INCOMPLETE"),
+        "the exit must be explained on stderr: {err}"
+    );
+}
+
+/// THE CONTROL THAT KEEPS THE ABOVE FROM BEING VACUOUS. If `--status` exited 4 whenever
+/// anything was odd, the test above would pass while saying nothing. A listing that ANSWERED
+/// for every device — here one genuinely claimed, which is the state most easily confused with
+/// "unreadable" — must still exit 0. The two must differ in exactly this one variable.
+#[test]
+fn status_still_exits_zero_when_every_device_answered() {
+    let b = Bench::new("statusok");
+    let mut holder = b.hold(&["dev-a"], "a-reason", 30);
+
+    let o = b.cmd().args(["--status"]).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    assert!(
+        out.contains("CLAIMED"),
+        "fixture did not produce a live claim: {out}"
+    );
+    assert!(
+        !out.contains("UNKNOWN"),
+        "fixture unexpectedly produced an unreadable device: {out}"
+    );
+    assert_eq!(
+        rc(&o),
+        0,
+        "a complete listing must still exit 0, claims and all: {out}"
+    );
+    let _ = holder.kill();
+    let _ = holder.wait();
+}

@@ -1,6 +1,7 @@
 //! Thin CLI over the `with_device` library. All logic worth testing lives in lib.rs so that
 //! `cargo test` can reach it; this file is argv in, exit code out.
 
+use std::fs::{create_dir_all, File};
 use std::process::{self, Command, Stdio};
 use std::time::{Duration, Instant};
 use with_device::*;
@@ -10,6 +11,51 @@ use with_device::*;
 /// who most need to verify this tool are the ones who cannot build it.
 fn self_test() -> i32 {
     let me = std::env::current_exe().unwrap();
+
+    // PRECONDITION, CHECKED FIRST (jess#280). Without this, an unwritable lockdir makes three of
+    // the five checks below fail in a pattern that reads as "locks are never released" — a far
+    // more alarming and entirely wrong diagnosis than "you cannot write here". The self-test was
+    // accusing its own locking. Name the real problem and refuse rather than producing a
+    // misleading report.
+    {
+        let dir = lockdir();
+        let probe = dir.join(".selftest-writable");
+        if let Err(e) = create_dir_all(&dir) {
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                println!(
+                    "  PRECONDITION FAIL — cannot create lockdir {}: {e}",
+                    dir.display()
+                );
+                println!("  self-test: CANNOT RUN (this says nothing about the locking)");
+                return EXIT_UNDETERMINED;
+            }
+        }
+        match File::create(&probe) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&probe);
+            }
+            Err(e) => {
+                println!(
+                    "  PRECONDITION FAIL — lockdir {} is not writable: {e}",
+                    dir.display()
+                );
+                println!("    An exclusive flock(2) needs the lock file WRITABLE, so every device");
+                println!("    would report busy and three checks below would fail in a pattern");
+                println!("    that accuses the locking. The locking is not what is wrong.");
+                println!(
+                    "    Check `ls -ld {}` and your group membership.",
+                    dir.display()
+                );
+                println!("    Do NOT set a private BENCH_LOCKDIR to get past this: a lockdir of");
+                println!(
+                    "    one's own excludes nobody, which is the vacuous lock this tool exists"
+                );
+                println!("    to prevent. Fix the directory's ownership or group instead.");
+                println!("  self-test: CANNOT RUN (this says nothing about the locking)");
+                return EXIT_UNDETERMINED;
+            }
+        }
+    }
     let reg = std::env::temp_dir().join("with-device-selftest.yaml");
     std::fs::write(
         &reg,
@@ -297,7 +343,26 @@ Re-run as: with-device {} --purpose '<why>' -- <your command>",
             std::process::exit(EXIT_USAGE);
         }
         Mode::Status { json } => {
-            println!("{}", render_status(&scan_status(), json));
+            // THE EXIT CODE MUST CARRY THE THIRD STATE TOO. Printing "UNKNOWN" and exiting 0 is
+            // the jess#280 defect one level up: a caller that branches on the exit code, or
+            // greps for CLAIMED and finds none, reads "nothing is claimed" out of "nothing could
+            // be read". Measured on fourpi.local on 2026-10-02 — every device UNKNOWN, exit 0.
+            // So an unreadable state exits 4, exactly as a claim attempt does. 0 now means the
+            // scan ANSWERED for every device, whether free or claimed.
+            let rows = scan_status();
+            println!("{}", render_status(&rows, json));
+            let unknown = rows
+                .iter()
+                .filter(|(_, st, _)| matches!(st, State::Unknown(_)))
+                .count();
+            if unknown > 0 {
+                eprintln!(
+                    "{PROG}: {unknown} of {} device(s) could not be read — this listing is \
+                     INCOMPLETE, not a clean board. Exiting {EXIT_UNDETERMINED}.",
+                    rows.len()
+                );
+                std::process::exit(EXIT_UNDETERMINED);
+            }
             std::process::exit(0)
         }
         Mode::Run(a) => a,
@@ -351,7 +416,15 @@ create its own lock and exclude nobody.",
         Ok(c) => c,
         Err(msg) => {
             eprintln!("{msg}");
-            std::process::exit(EXIT_BUSY);
+            // BUSY and CANNOT-DETERMINE are different answers and get different codes (jess#280).
+            // A caller that retries on 3 would spin forever on a permissions problem; one that
+            // treats 3 as "someone else is working" would blame a phantom agent.
+            let code = if msg.starts_with("CANNOT DETERMINE") {
+                EXIT_UNDETERMINED
+            } else {
+                EXIT_BUSY
+            };
+            std::process::exit(code);
         }
     };
     // Export the claim so the wrapped command can PROVE it is claimed (see CLAIM_ENV). This

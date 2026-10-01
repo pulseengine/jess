@@ -64,6 +64,18 @@ const LOCK_NB: i32 = 4;
 /// implementation detail: `2` usage, `3` busy, otherwise the wrapped command's own status.
 pub const EXIT_USAGE: i32 = 2;
 pub const EXIT_BUSY: i32 = 3;
+/// COULD NOT DETERMINE whether the device is free — distinct from BUSY on purpose (jess#280).
+///
+/// An `EACCES` on the lock file used to collapse into "claimed": `try_claim` returned `None` for
+/// ANY open failure and `None` means held at every call site. On fourpi.local, where the lockdir
+/// is `pi:pi` and the standard account is `r`, that made EVERY device permanently busy and made
+/// `--self-test` fail three checks in a pattern accusing its own locking — a far more alarming
+/// bug than "you cannot write here".
+///
+/// It failed CLOSED, which is the right direction, but "I cannot tell" rendered as "it is
+/// claimed" is absence-looks-like-data in a safety tool, and this repo's own rule is that
+/// "could not run" is not "answered no". A caller that needs to branch now can.
+pub const EXIT_UNDETERMINED: i32 = 4;
 
 /// Name of the environment variable a claim exports into the wrapped command: the
 /// comma-separated, sorted list of devices held for the lifetime of that command.
@@ -130,10 +142,26 @@ environment:
                      devices held for its lifetime. Read it, do not set it yourself.
 
 exit codes:
-  0   the wrapped command's status, or success for --status/--self-test
+  0   the wrapped command's status; for --status, that every device ANSWERED (free or claimed);
+      for --self-test, that it ran and passed
   2   usage error: unknown flag, bad arguments, or an unregistered device name
   3   a device is already claimed; NOTHING was run
-NOTE: the wrapped command's status passes through unchanged, so a 2 or 3 may come from it.
+  4   the state COULD NOT BE DETERMINED — the lock file could not even be opened; NOTHING was
+      run. Distinct from 3 on purpose (jess#280): an EACCES used to report as 3, so a
+      permissions problem was indistinguishable from a claim and sent the operator hunting a
+      holder that did not exist. Retrying or --wait cannot help a 4; fix the lockdir.
+      --status exits 4 TOO when any device was unreadable, because a listing that reports
+      UNKNOWN and exits 0 is the same conflation in the other channel: a caller that greps
+      for CLAIMED and finds none would read an unreadable board as a clear one, and that
+      direction fails OPEN.
+NOTE: the wrapped command's status passes through unchanged, so a 2, 3 or 4 may come from it.
+
+the lock directory is SHARED, and the tool widens it accordingly: 1777 on the directory (sticky,
+so accounts cannot delete each other's locks) and 0666 on the lock files, because an exclusive
+flock(2) needs the file writable. Without that, the first account to claim a device silently owns
+the interlock for everyone. Widening is best-effort and never NARROWS an existing path. Do NOT
+work around a permissions failure with a private BENCH_LOCKDIR: a lockdir of one's own excludes
+nobody, which is the vacuous lock this tool exists to prevent.
 
 Several devices are claimed in sorted order, and a blocked claimant releases what it already
 holds rather than waiting on it. Deadlock is impossible regardless of the order you list them.
@@ -461,6 +489,22 @@ pub struct Claim {
     pub device: String,
 }
 
+/// Widen a path so a SHARED bench works across accounts. Best-effort by design: it fails on a
+/// path owned by another user, and the caller must not treat that as an error — jess#280's
+/// Undetermined diagnosis is what explains such a case to the operator.
+///
+/// Deliberately never NARROWS: if the path is already more permissive than requested it is left
+/// alone, so this cannot be used to lock other accounts out of a directory they were using.
+fn set_shared_mode(path: &Path, want: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    if let Ok(md) = std::fs::metadata(path) {
+        let cur = md.permissions().mode() & 0o7777;
+        if cur | want != cur {
+            let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(cur | want));
+        }
+    }
+}
+
 pub fn lockdir() -> PathBuf {
     std::env::var("BENCH_LOCKDIR")
         .unwrap_or_else(|_| "/var/tmp/pulseengine-bench".to_string())
@@ -470,10 +514,51 @@ pub fn lockdir() -> PathBuf {
 /// `None` means the device is claimed by someone else, or the lock file could not be opened.
 /// There is deliberately no error detail: from a caller's point of view "not yours right now"
 /// is the whole answer, and the holder record is what says who has it.
-pub fn try_claim(dev: &str, purpose: &str, who: &str) -> Option<Claim> {
+/// What a claim attempt actually learned. `Option<Claim>` cannot express the third case, which
+/// is why the third case was reported as the second for months (jess#280).
+pub enum Outcome {
+    /// The flock was taken; the claim is held for as long as this value lives.
+    Got(Claim),
+    /// Another holder has it. This is a real answer about the device.
+    Held,
+    /// The state is UNKNOWN: the lock file could not even be opened. Carries the reason so the
+    /// operator is told what to fix instead of hunting a phantom holder.
+    Undetermined(String),
+}
+
+/// Attempt a claim, distinguishing "someone has it" from "I could not look".
+pub fn try_claim_outcome(dev: &str, purpose: &str, who: &str) -> Outcome {
     let dir = lockdir();
-    let _ = create_dir_all(&dir);
-    let file = OpenOptions::new()
+    // A failure to create the lockdir is itself undetermined-worthy, and used to be discarded
+    // with `let _ =`.
+    if let Err(e) = create_dir_all(&dir) {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            return Outcome::Undetermined(format!(
+                "cannot create lockdir {}: {e}\n   fix the directory or set BENCH_LOCKDIR; this is \
+NOT a statement about whether '{dev}' is in use",
+                dir.display()
+            ));
+        }
+    }
+    // THE OPERATIONAL HALF OF jess#280. Diagnosing EACCES is not enough: the interlock has to
+    // WORK across accounts, and it could not. Nothing here ever set a mode, so the lockdir and
+    // the lock files inherited the creating user's umask — on fourpi.local that left them
+    // `pi:pi drwxrwxr-x` / `-rw-rw-r--`, and the standard account `r` is not in group `pi`. An
+    // exclusive flock(2) needs the file WRITABLE, so cross-account claiming was impossible by
+    // construction and every device looked busy.
+    //
+    // A shared rendezvous directory is the /tmp pattern: 1777 on the directory so any user can
+    // create their lock, with the sticky bit so they cannot delete each other's, and 0666 on the
+    // lock file so any user can take the exclusive lock. That is safe here BECAUSE THE FILE
+    // CARRIES NO DATA — the lock lives on the fd, and the file is a zero-byte rendezvous point
+    // (see the truncate(false) note below). A local user who can write it could already take the
+    // lock by running this tool, so world-writable adds no exposure it did not have.
+    //
+    // ALL BEST-EFFORT: on a directory owned by someone else these calls fail, and that is fine —
+    // the Undetermined diagnosis below now explains the situation instead of blaming a holder.
+    set_shared_mode(&dir, 0o1777);
+    let path = dir.join(format!("{dev}.lock"));
+    let file = match OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
@@ -481,6 +566,71 @@ pub fn try_claim(dev: &str, purpose: &str, who: &str) -> Option<Claim> {
         // file is a rendezvous point other processes may already hold open. Truncating it on
         // every claim would be a pointless write race against them. Its CONTENT is unused —
         // the lock lives on the fd, via flock(2).
+        .truncate(false)
+        .open(&path)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            // THE jess#280 BUG WAS HERE: this was `.ok()?`, so EACCES became None became
+            // "claimed". An exclusive flock needs the file WRITABLE, so a readable-but-not-
+            // writable lock file fails here and tells you nothing about the device.
+            let hint = match e.kind() {
+                std::io::ErrorKind::PermissionDenied => format!(
+                    "\n   {} is not writable by this user. An exclusive flock(2) needs write \
+access.\n   Check `ls -ld {}` and your groups: a lockdir owned by another account makes every \
+device look busy.\n   Do NOT work around it with a private BENCH_LOCKDIR — a lockdir of one's \
+own excludes nobody, which is the vacuous lock this tool exists to prevent.",
+                    path.display(),
+                    dir.display()
+                ),
+                _ => String::new(),
+            };
+            return Outcome::Undetermined(format!("cannot open {} ({e}){hint}", path.display()));
+        }
+    };
+    // Widen the lock file too, for the next user — umask would otherwise leave it 0644 and the
+    // account that creates it first would silently own the interlock.
+    set_shared_mode(&path, 0o666);
+    if unsafe { flock(file.as_raw_fd(), LOCK_EX | LOCK_NB) } != 0 {
+        // This IS an answer about the device: the fd opened and the kernel refused the lock.
+        return Outcome::Held;
+    }
+    let hpath = dir.join(format!("{dev}.holder"));
+    if let Ok(mut h) = File::create(&hpath) {
+        let _ = write!(
+            h,
+            "{{\"who\":\"{}\",\"pid\":{},\"purpose\":\"{}\"}}",
+            who.replace('"', "'"),
+            std::process::id(),
+            purpose.replace('"', "'")
+        );
+        // Otherwise the next account cannot overwrite it and `--status` reports a stale holder.
+        set_shared_mode(&hpath, 0o666);
+    }
+    Outcome::Got(Claim {
+        _file: file,
+        device: dev.to_string(),
+    })
+}
+
+/// Back-compatible wrapper. DELIBERATELY collapses Undetermined into None, so any caller still
+/// using it keeps failing CLOSED — but new code should use [`try_claim_outcome`] so it can tell
+/// the operator which of the two happened.
+pub fn try_claim(dev: &str, purpose: &str, who: &str) -> Option<Claim> {
+    match try_claim_outcome(dev, purpose, who) {
+        Outcome::Got(c) => Some(c),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+fn _try_claim_old(dev: &str, purpose: &str, who: &str) -> Option<Claim> {
+    let dir = lockdir();
+    let _ = create_dir_all(&dir);
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
         .truncate(false)
         .open(dir.join(format!("{dev}.lock")))
         .ok()?;
@@ -532,14 +682,29 @@ pub fn claim_all(
     loop {
         let mut held: Vec<Claim> = Vec::new();
         let mut blocked = None;
+        let mut undetermined: Option<(String, String)> = None;
         for d in &order {
-            match try_claim(d, purpose, who) {
-                Some(c) => held.push(c),
-                None => {
+            match try_claim_outcome(d, purpose, who) {
+                Outcome::Got(c) => held.push(c),
+                Outcome::Held => {
                     blocked = Some(d.clone());
                     break;
                 }
+                Outcome::Undetermined(why) => {
+                    // NOT a busy device. Retrying cannot help and waiting cannot help, so bail
+                    // immediately rather than spinning until --wait expires reporting BUSY
+                    // (jess#280: that is how a permission problem came to look like a claim).
+                    undetermined = Some((d.clone(), why));
+                    break;
+                }
             }
+        }
+        if let Some((d, why)) = undetermined {
+            drop(held);
+            return Err(format!(
+                "CANNOT DETERMINE whether '{d}' is in use: {why}\nNothing was run. This is NOT \
+'the device is busy' — the state could not be read at all."
+            ));
         }
         match blocked {
             None => return Ok(held),
@@ -565,17 +730,35 @@ pub fn release_holder_files(claims: &[Claim]) {
 }
 
 /// Render `--status`. Split from I/O so the JSON shape is assertable in a unit test.
-pub fn render_status(rows: &[(String, bool, String)], json: bool) -> String {
+/// The three states a device can be in from here. A `bool` could only carry two, which is the
+/// structural reason jess#280's third state was reported as the second.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum State {
+    Free,
+    Claimed,
+    /// Could not be determined — carries why, so `--status` names the fix instead of implying a
+    /// phantom holder.
+    Unknown(String),
+}
+
+/// Render `--status`. Split from I/O so the JSON shape is assertable in a unit test.
+pub fn render_status(rows: &[(String, State, String)], json: bool) -> String {
     if json {
         let body: Vec<String> = rows
             .iter()
-            .map(|(d, free, h)| {
-                format!(
-                    "{{\"device\":\"{}\",\"state\":\"{}\",\"holder\":{}}}",
-                    d,
-                    if *free { "free" } else { "claimed" },
-                    if *free { "null" } else { h }
+            .map(|(d, st, h)| match st {
+                State::Free => format!("{{\"device\":\"{d}\",\"state\":\"free\",\"holder\":null}}"),
+                State::Claimed => {
+                    format!("{{\"device\":\"{d}\",\"state\":\"claimed\",\"holder\":{h}}}")
+                }
+                // A distinct state, not claimed-with-an-empty-holder. A consumer branching on
+                // `state` now gets the truth rather than having to infer it from `holder == {}`.
+                State::Unknown(why) => {
+                    format!(
+                    "{{\"device\":\"{d}\",\"state\":\"unknown\",\"holder\":null,\"why\":\"{}\"}}",
+                    why.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ")
                 )
+                }
             })
             .collect();
         format!("{{\"devices\":[{}]}}", body.join(","))
@@ -583,11 +766,11 @@ pub fn render_status(rows: &[(String, bool, String)], json: bool) -> String {
         "  no claims".to_string()
     } else {
         rows.iter()
-            .map(|(d, free, h)| {
-                if *free {
-                    format!("  {d:<18} free")
-                } else {
-                    format!("  {d:<18} CLAIMED {h}")
+            .map(|(d, st, h)| match st {
+                State::Free => format!("  {d:<18} free"),
+                State::Claimed => format!("  {d:<18} CLAIMED {h}"),
+                State::Unknown(why) => {
+                    format!("  {d:<18} UNKNOWN — {}", why.lines().next().unwrap_or(why))
                 }
             })
             .collect::<Vec<_>>()
@@ -595,7 +778,7 @@ pub fn render_status(rows: &[(String, bool, String)], json: bool) -> String {
     }
 }
 
-pub fn scan_status() -> Vec<(String, bool, String)> {
+pub fn scan_status() -> Vec<(String, State, String)> {
     let mut rows = Vec::new();
     if let Ok(rd) = std::fs::read_dir(lockdir()) {
         let mut names: Vec<String> = rd
@@ -606,8 +789,12 @@ pub fn scan_status() -> Vec<(String, bool, String)> {
             .collect();
         names.sort();
         for dev in names {
-            let free = try_claim(&dev, "status probe", "status").is_some();
-            rows.push((dev.clone(), free, read_holder(&dev)));
+            let st = match try_claim_outcome(&dev, "status probe", "status") {
+                Outcome::Got(_) => State::Free,
+                Outcome::Held => State::Claimed,
+                Outcome::Undetermined(why) => State::Unknown(why),
+            };
+            rows.push((dev.clone(), st, read_holder(&dev)));
         }
     }
     rows
@@ -885,8 +1072,12 @@ devices:
     #[test]
     fn status_json_shape_is_stable() {
         let rows = vec![
-            ("a".to_string(), true, "{}".to_string()),
-            ("b".to_string(), false, "{\"who\":\"gale\"}".to_string()),
+            ("a".to_string(), State::Free, "{}".to_string()),
+            (
+                "b".to_string(),
+                State::Claimed,
+                "{\"who\":\"gale\"}".to_string(),
+            ),
         ];
         assert_eq!(
             render_status(&rows, true),
@@ -897,10 +1088,82 @@ devices:
 
     #[test]
     fn status_human_output_names_the_holder() {
-        let rows = vec![("b".to_string(), false, "{\"who\":\"gale\"}".to_string())];
+        let rows = vec![(
+            "b".to_string(),
+            State::Claimed,
+            "{\"who\":\"gale\"}".to_string(),
+        )];
         let out = render_status(&rows, false);
         assert!(out.contains("CLAIMED"));
         assert!(out.contains("gale"));
+    }
+
+    // ── jess#280: UNKNOWN must not render as CLAIMED ────────────────────────────────────────
+    //
+    // The bug was that `--status` printed `CLAIMED {}` for a device whose lock file could not be
+    // opened. An empty holder was the ONLY hint, and it is indistinguishable from a real claim
+    // whose metadata is missing. These pin the third state into the output shape so it cannot
+    // collapse back.
+
+    #[test]
+    fn unknown_is_not_rendered_as_claimed() {
+        let rows = vec![(
+            "pixhawk-6xrt".to_string(),
+            State::Unknown(
+                "cannot open /var/tmp/pulseengine-bench/x.lock (Permission denied)".into(),
+            ),
+            "{}".to_string(),
+        )];
+        let human = render_status(&rows, false);
+        assert!(
+            human.contains("UNKNOWN"),
+            "human output must say UNKNOWN: {human}"
+        );
+        assert!(
+            !human.contains("CLAIMED"),
+            "must NOT claim a holder it never saw: {human}"
+        );
+        assert!(
+            human.contains("Permission denied"),
+            "must name the cause: {human}"
+        );
+
+        let json = render_status(&rows, true);
+        assert!(
+            json.contains("\"state\":\"unknown\""),
+            "json state must be unknown: {json}"
+        );
+        assert!(
+            !json.contains("\"claimed\""),
+            "json must not say claimed: {json}"
+        );
+        // A consumer branching on `state` gets the truth instead of inferring from holder=={}.
+        assert!(
+            json.contains("\"why\""),
+            "json must carry the reason: {json}"
+        );
+        assert!(
+            json.contains("\"holder\":null"),
+            "no holder was observed: {json}"
+        );
+    }
+
+    #[test]
+    fn unknown_json_escapes_its_reason() {
+        // The reason is an OS error string and goes into JSON. A quote or newline in it must not
+        // produce unparseable output — the status JSON is something a gate may read.
+        let rows = vec![(
+            "d".to_string(),
+            State::Unknown("he said \"no\"\nand a newline".into()),
+            "{}".to_string(),
+        )];
+        let json = render_status(&rows, true);
+        assert!(
+            !json.contains("\"no\"\n"),
+            "raw quote+newline leaked into JSON: {json}"
+        );
+        assert!(json.contains("\\\""), "quote must be escaped: {json}");
+        assert!(!json.contains('\n'), "newline must be flattened: {json}");
     }
 
     #[test]
