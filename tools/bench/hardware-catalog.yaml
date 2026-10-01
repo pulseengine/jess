@@ -75,9 +75,24 @@ parts:
         1021-byte endpoints. macOS binds class 0x03 to IOHIDDevice, so libusb can NEVER claim it
         there; spsdk reaches it on Linux via libusbsio HIDAPI over /dev/hidraw0.
       - >
-        NOT ESTABLISHED: whether the debug port is fused open on a given board. Some parts fuse
-        debug shut alongside HAB. One measurement, once a cable exists.
-    measured-by: [AFD-092, AFD-086, AFD-080]
+        THE DEBUG PORT IS FUSED OPEN, and HAB being locked does NOT imply otherwise — both facts
+        are now measured on the same board (AFD-130). Over an MCU-Link on the Pixhawk Debug Full
+        connector, openocd 0.12.0 reads SWD DPIDR 0x6ba02477 (DPv2) and detects a Cortex-M7 r1p2
+        with 8 breakpoints and 4 watchpoints. So "Load-to-RAM over SWD is the remaining path" is
+        a real path, not a hope. This replaces the entry that read "NOT ESTABLISHED: whether the
+        debug port is fused open ... one measurement, once a cable exists".
+      - >
+        TWO ACCESS PORTS, so the M4 is reachable over SWD: AP 0 (ID 0x84770001, MEM-AP AHB3, base
+        0xe00fd003) is the M7 and walks a full CoreSight ROM table — M7 ROM 0x4c8, PPB ROM 0x4c7,
+        SCS, DWT, FPB, ITM, Cortex-M7 ETM 0x975, CoreSight CTI 0x906, trace funnel 0x908. AP 1
+        (ID 0x24770011, base 0xe00ff003) is the second core's, with a valid ROM table. AP 2 is
+        empty, so there are exactly two MEM-APs.
+        CAREFUL: "the M4's AP answers" is NOT "the M4 runs". The M4 is held in reset and released
+        through the SRC by the M7, which is a separate thing to demonstrate. Debug ACCESS exists.
+      - >
+        ETM IS PRESENT (Cortex-M7 ETM 0x975, plus a CTI and a trace funnel). Worth knowing before
+        designing a timing measurement around polling.
+    measured-by: [AFD-092, AFD-086, AFD-080, AFD-130]
 
   stm32wl55:
     what: STM32WL55 sub-GHz wireless MCU — Cortex-M4 application core (+ a Cortex-M0+ radio core)
