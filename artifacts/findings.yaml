@@ -7913,3 +7913,192 @@ artifacts:
         target: AFD-113
       - type: traces-to
         target: AFD-126
+
+  - id: AFD-130
+    type: ai-found-defect
+    title: "MEASURED on the real Pixhawk 6X-RT: the RT1176 debug port is FUSED OPEN (DPIDR 0x6ba02477, Cortex-M7 r1p2) with TWO access ports — HAB being locked does not imply debug fused shut, and the M4's AP answers, so DD-028/AFD-127 have a silicon route"
+    status: open
+    description: |-
+      2026-10-01. THE RT1176's DEBUG PORT IS FUSED OPEN. Measured on the real Holybro Pixhawk 6X-RT over
+      an MCU-Link on the Pixhawk Debug Full connector. This is the measurement the catalogue has carried
+      as NOT ESTABLISHED since Phase 2 began, and the one the loop names as the first job the moment a
+      probe appears.
+
+      *** WHAT THE CATALOGUE SAID, AND WHAT IS NOW MEASURED ***
+      The imxrt1176 entry recorded: "NOT ESTABLISHED: whether the debug port is fused open on a given
+      board. Some parts fuse debug shut alongside HAB. One measurement, once a cable exists." AFD-092 had
+      established HAB IS LOCKED — `sdphost write-file` returns HAB_IS_LOCKED(2)/UNSUPPORTED_CONF_ITEM(36),
+      so the SDP/blhost route is closed BY THE PART — and named "Load-to-RAM over SWD" as the remaining
+      path. Whether that path existed at all was unknown.
+      IT EXISTS. openocd 0.12.0+dev over MCU-Link r0FF CMSIS-DAP V0.078 (serial ARMCR0OKTRM5Q, 1fc9:0143),
+      SWD at 1000 kHz:
+          SWD DPIDR 0x6ba02477 DPv2
+          [rt.cpu] Cortex-M7 r1p2 processor detected
+          [rt.cpu] target has 8 breakpoints, 4 watchpoints
+          [rt.cpu] Examination succeed
+      So HAB being locked does NOT imply debug being fused shut on this part. Both facts now measured on
+      the same board, and they differ.
+
+      *** TWO ACCESS PORTS — THE M4 IS REACHABLE ***
+          AP 0  ID 0x84770001  MEM-AP AHB3  BASE 0xe00fd003  valid ROM table
+                Designer 0x00e Freescale, Part 0x88c, then the CoreSight walk:
+                Cortex-M7 ROM (0x4c8), M7 PPB ROM (0x4c7), SCS (0x00c), DWT (0x002),
+                M7 FPB (0x00e), ITM (0x001), Cortex-M7 ETM (0x975), CoreSight CTI (0x906),
+                CoreSight CSTF trace funnel (0x908)
+          AP 1  ID 0x24770011  MEM-AP AHB3  BASE 0xe00ff003  valid ROM table
+          AP 2  empty -> exactly TWO MEM-APs
+      AP 1 is the second core's debug access port. CAREFUL ABOUT WHAT THAT DOES AND DOES NOT ESTABLISH: it
+      means the M4's debug AP ANSWERS and exposes a ROM table. It does NOT yet establish that jess can RUN
+      code on the M4 — on the RT1176 the M4 is held in reset and released through the SRC by the M7, which
+      is a separate thing to demonstrate. "The AP responds" is not "the core runs"; this repo has made that
+      class of overstatement before.
+      WHAT IT DOES CHANGE: DD-028 and AFD-127 (the M7/M4 cache-coherency work, where jess's own Renode
+      model has NO cache on either core and therefore cannot exhibit the failure) now have a route to real
+      silicon rather than none. jess recorded that as blocked on hardware; the hardware path exists.
+      ETM is present (Cortex-M7 ETM 0x975 plus a CTI and a trace funnel), which is worth knowing before
+      anyone designs a timing measurement around polling.
+
+      *** READ-ONLY, AND THE VEHICLE WAS VERIFIED UNDISTURBED AFTERWARDS ***
+      The probe asserted no reset (`reset_config none`), did not halt, did not write flash and did not
+      enter ISP. That is a claim jess CHECKED rather than asserted: immediately after the DAP read, the
+      FMU's MAVLink stream was re-read and gave 52,400 bytes in 5 s with a longest chained v1 run of 1,237
+      frames. The flight controller kept running throughout.
+      Run under a `with-device` claim on `pixhawk-6xrt`. The claim is taken on the BOARD, not on the probe
+      or the cable — which is the per-board rule agreed on jess#266, and is the right granularity here
+      because two agents reaching the same board by different paths still conflict.
+
+      *** A DEAD END WORTH RECORDING SO IT IS NOT RE-WALKED ***
+      Before the MCU-Link appeared, an FT231X USB-UART (0403:6015, serial D30K1YZS) was on the same host
+      and was briefly taken for the probe. It is not one: a single interface, class ff/ff/ff, driver
+      ftdi_sio — a plain UART bridge with no DAP of any kind. It also yielded ZERO bytes at both 57600 and
+      115200 in raw mode, so it was not carrying the FMU debug console either; reported as "cannot
+      determine", not "the console is silent".
+      A diagnostic worth keeping: an MCU-Link enumerates on USB as soon as it has bus power, REGARDLESS of
+      whether the SWD ribbon is attached to a target. So its absence from lsusb is never a target-cable
+      problem — it is a USB-side problem. Confirmed by sweeping 1fc9/0d28/1366 across all three Pis and
+      the Mac and finding zero before the cable change, and 1fc9:0143 immediately after.
+
+      *** STILL NOT DONE ***
+      Nothing has been EXECUTED on the RT1176. This establishes that the door is open, not that anything
+      walked through it. Load-to-RAM over SWD is the next rung and it writes to the vehicle, so it needs
+      explicit go-ahead. The MCU-Link and the FT231X are also both absent from jess's hardware catalogue
+      and from any registry, so they are currently unnameable by the interlock — the jess#266 class again,
+      on jess's own host this time.
+    tags: [hardware, on-target, rt1176, swd, debug-access, afd-092, dd-028, afd-127, jess-266, h1]
+    fields:
+      detected-by: MCU-Link on the Pixhawk Debug Full connector, read-only DAP probe under a with-device claim, 2026-10-01
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T14:05:59Z
+    links:
+      - type: traces-to
+        target: DD-028
+
+  - id: AFD-131
+    type: ai-found-defect
+    title: "THE FALCON CASCADE RAN ON THE REAL PIXHAWK 6X-RT: rate->mixer on the actual RT1176 M7, bit-exact against relay's SIL reference AND against Renode including return-area offsets, with an attributive negative control — blocked until VTOR was set, which Renode can never show"
+    status: open
+    description: |-
+      2026-10-01. THE VERIFIED FALCON CASCADE EXECUTED ON THE REAL PIXHAWK 6X-RT. A two-stage
+      rate -> mixer chain ran on the actual i.MX RT1176 Cortex-M7 and reproduced relay's SIL reference
+      BIT-EXACTLY, with its negative control also bit-identical to emulation. This is the campaign's
+      target, and it is the first time any of it has executed on silicon.
+
+      *** THE RESULT ***
+      Load-to-RAM over SWD (MCU-Link, openocd 0.12.0), image = .scratch/invoke/invoke.elf, the SAME ELF
+      TEST-PIX-032 runs in Renode. 84,813 bytes into ITCM at 0x00000000, SP 0x20040000, PC 0x8.
+        halted at PC 0x00000052 -- the `1: b 1b` spin at the end of _reset, i.e. it ran to completion
+        RESULT 0x20011000  00000298  3f800000 3ef1ec81 be168816 3f000000
+        CHAIN  0x20011100  00002510  00000000 00000000 3eb2af18 3f800000  1e55d09e
+      Against the FROZEN baseline in run-oracle.sh -- the one number in this repo that is NOT recomputed
+      from the module under test, derived from relay's SIL reference under falcon v1.134.1:
+        EXP  = 3F800000 3EF1EC81 BE168816 3F000000   -> EXACT MATCH (torque)
+        EXPP = 00000000 00000000 3EB2AF18 3F800000   -> EXACT MATCH (motor pwm)
+        sentinel 0x1E55D09E                          -> EXACT MATCH
+      And against the Renode run from the same session: identical, INCLUDING the return-area offsets
+      0x298 and 0x2510. So the emulated and the real part agree on where the Canonical ABI put the
+      records, not merely on the arithmetic.
+
+      *** THE NEGATIVE CONTROL ALSO RAN ON SILICON, AND IT MOVES ***
+      nc1.elf -- one variable changed, wy perturbed, embedder init fully intact:
+        RESULT 00000298  3f800000 3f214856 be168816 3f000000   ty MOVED (was 3ef1ec81)
+        CHAIN  00002510  00000000 00000000 3d0b35e0 3f800000   m3 MOVED (was 3eb2af18)
+        sentinel 1e55d09e, PC 0x52 -- completed
+      ty = 0x3F214856 is BIT-IDENTICAL to the perturbed value Renode produced earlier the same session.
+      So on real hardware: the baseline matches the reference, the perturbed input produces a different
+      and specific answer, and both agree with emulation. The oracle is attributive on silicon, not just
+      non-zero.
+
+      *** WHAT BLOCKED IT, AND WHY EMULATION COULD NEVER HAVE SHOWN IT ***
+      The first attempt failed with `external reset detected` and PX4 rebooting (PC 0x00223104, MSP
+      0x20241db0 -- both PX4's). The cause was VTOR.
+        PX4 sets VTOR = 0x00210000, its own vector table. jess's image puts its table at 0x00000000 and
+        NEVER WRITES VTOR, because in Renode VTOR defaults to 0 and the image's table is therefore
+        already in use. On the real part any exception vectored into PX4's handlers, which reset the
+        board. Writing `mww 0xE000ED08 0x00000000` before resume fixed it, and the run then worked
+        first time.
+      This is a genuine emulation-vs-silicon divergence IN JESS'S HARNESS, not in the lowered code, and
+      it is invisible in Renode by construction. Worth stating because the campaign has leaned on
+      "the same ELF runs in both": it does, but only once the harness stops relying on a reset-default
+      the real part does not have.
+      TWO HYPOTHESES RULED OUT BY MEASUREMENT rather than argued away:
+        - WATCHDOG. WDOG1 and WDOG2 both read WCR = 0x0030, so WDE (bit 2) is CLEAR -> disabled.
+          RTWDOG3 CS = 0x00002520, so EN (bit 7) is CLEAR -> disabled. RTWDOG4 at 0x4003C000 does not
+          respond at all. No watchdog was running.
+        - MPU. MPU_CTRL (0xE000ED94) read 0x00000000 BEFORE jess touched it -- PX4 had the MPU disabled,
+          so it was never the cause. jess's first hypothesis named the MPU and was wrong.
+
+      *** THE VEHICLE: READ-ONLY WHERE IT COULD BE, RESTORED WHERE IT COULD NOT ***
+      No flash was written. The PX4 APPLICATION lives in FlexSPI flash at 0x30000000 and was never
+      touched; load-to-RAM only overwrote ITCM and DTCM, which the boot ROM repopulates.
+      A CORE-ONLY reset was NOT sufficient to restore it -- openocd warned "Only resetting the Cortex-M
+      core" and afterwards the FMU did not enumerate at all. A HARDWARE reset via nRST (pin 9 of the
+      Pixhawk Debug Full connector, `reset_config srst_only srst_nogate`) brought it back: the board came
+      up first as `PX4 BL FMU v6XRT.x` (the bootloader) and chained to `PX4 FMU v6XRT.x` within ~18 s.
+      Verified healthy and DISARMED afterwards on every occasion.
+      A TRANSIENT, recorded rather than smoothed over: the first load attempt immediately after a board
+      reset produced all-zero parking words with NO sentinel -- i.e. "did not complete", which is not a
+      result. openocd had warned "target was in unknown state when halt was requested". The retry
+      succeeded with identical commands. So the procedure needs a settle after reset before the first
+      halt, and a run WITHOUT the sentinel must never be read as data. That is exactly why the sentinel
+      exists.
+
+      *** A SAFETY GATE WAS BUILT FIRST, AND IT REFUSED ONCE ***
+      tools/bench/preflight-disarmed.py proves the vehicle is DISARMED before anything halts the M7, by
+      checking MAV_MODE_FLAG_SAFETY_ARMED (0x80) across EVERY CRC-valid HEARTBEAT in the window -- not
+      just the last, because a vehicle that arms mid-window must block. FAIL-CLOSED: "could not
+      determine" blocks exactly like "armed".
+      It earned its keep immediately. A first, hand-rolled version walked 0xFE magic bytes WITHOUT
+      checking the CRC and reported "NO HEARTBEAT" while 64,285 bytes were streaming. The gate refused
+      and jess did NOT halt the core on the strength of an unverified parse. Replaced with
+      mav_bench.parse_frames, which computes the MAVLink X.25 CRC with the per-message CRC_EXTRA: same
+      window, 1,989 CRC-valid frames and 8 heartbeats, all with SAFETY_ARMED clear. The AFD-128 lesson
+      one layer up -- do not hand-roll a decoder you already have a validated one for.
+      Every action ran under a `with-device` claim on `pixhawk-6xrt` -- the BOARD, per jess#266.
+
+      *** WHAT THIS DOES AND DOES NOT ESTABLISH ***
+      ESTABLISHED: falcon's rate#tick and mixer#mix, lowered by synth 0.77.0 from the meld-fused v1.139
+      components, EXECUTE on the real RT1176 M7 and reproduce relay's SIL reference bit-exactly, with an
+      attributive negative control, via load-to-RAM over SWD.
+      NOT ESTABLISHED: anything about the OTHER three stages on silicon. In particular AFD-125's
+      estimator divergence was NOT retested here -- that is ekf.elf, a different image, and it is the
+      obvious next run now that the route works. Nothing about the M4. Nothing about flash. Nothing
+      about periodicity or a real control loop: this is one invocation of a two-stage chain, parked and
+      read, exactly as in Renode.
+    tags: [hardware, on-target, rt1176, silicon, load-to-ram, swd, afd-130, afd-092, afd-128, test-pix-032, milestone]
+    fields:
+      detected-by: load-to-RAM over SWD with an MCU-Link on the Pixhawk Debug Full connector, under a with-device claim and a disarmed pre-flight gate, 2026-10-01
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T14:24:58Z
+    links:
+      - type: traces-to
+        target: AFD-130
+      - type: traces-to
+        target: TEST-PIX-032
