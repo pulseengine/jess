@@ -7624,3 +7624,95 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-30T16:58:55Z
+
+  - id: AFD-127
+    type: ai-found-defect
+    title: jess's cross-core transport names release/acquire ordering and emits NEITHER — zero barriers, zero cache maintenance — and the dual-core model declares no cache on either core, so TEST-PIX-030 is green on a model with the failure mode it claims to exclude removed
+    status: open
+    description: |-
+      2026-10-01. Found while answering relay on jess#167, where they announced a seqlock-based
+      `observer` seam and asked what jess needs. Analysing their design against jess's own cross-core
+      transport exposed a blind spot in jess's, and a green gate whose wording outruns its scope.
+
+      *** THE CLAIMED RELEASE/ACQUIRE ORDERING IS NOT IMPLEMENTED ***
+      hardware/renode/navstate-xcore/ is jess's M4->SHMEM->M7 transport (TEST-PIX-030, CI-gated,
+      green since 2026-07-23). Its own comments describe the protocol in ordering terms:
+          nav_producer_m4.S  "publishes a READY flag @0x20400040 LAST"          (release)
+          nav_consumer_m7.S  "Polls the READY flag @0x20400040 (acquire)"       (acquire)
+      MEASURED: both files contain ZERO barriers and ZERO cache maintenance.
+          grep -c 'dsb|dmb|isb|cache|DCCMVAC|DCIMVAC' -> 0 and 0
+      So neither half of the ordering the comments name is actually emitted. On ARMv7-M, Normal-memory
+      accesses may be reordered and the architecture does not guarantee store ordering between two
+      observers without a DMB, so "flag written LAST" in program order does not mean "flag observed
+      last". The words `release` and `acquire` appear in the source; the instructions that would
+      implement them do not.
+
+      *** AND THE MODEL CANNOT SHOW IT, WHICH IS WHY IT STAYED GREEN ***
+      hardware/renode/vehicle/rt1176-dualcore.repl declares cpu_m7 (cortex-m7) and cpu_m4 (cortex-m4)
+      on a shared sysbus, a 4 KB SHMEM window @0x20400000, OCRAM @0x20240000 size 0x1C0000, and a real
+      NXP MU (TR0..3 @0x200/4/8/C, RR0..3 @0x280/4/8/C, per-core bus registration). What it declares
+      NOWHERE is a cache — neither core has any cache model, and Renode's CPU.CortexM does not simulate
+      the M7 L1 D-cache.
+      On the real part the M7 HAS an L1 D-cache and the M4 does NOT, so an M7 reader with no invalidate
+      reads its own stale lines. That is the exact mechanism that would tear or stale this transport,
+      and the emulator cannot exhibit it. TEST-PIX-030 is therefore green on a model that has removed
+      the failure mode it names.
+
+      *** THE OVER-CLAIM, STATED PRECISELY ***
+      TEST-PIX-030's description says the message "must cross the shared-SRAM ring BYTE-EXACT (no
+      corruption, NO PARTIAL READ) or the M7 flight core acts on a torn estimator state."
+      What it actually establishes: PAYLOAD FIDELITY through the transport model — 16 words written by
+      one core are read back identically by another across a shared region. That is real and worth
+      having.
+      What it does NOT establish: that the crossing is untorn on silicon. "No partial read" is a
+      coherency and ordering property, and neither is modelled. The test is not wrong; its wording
+      claims a property its instrument cannot observe. Scoped in place rather than deleted — the same
+      treatment AFD-121 gave the falcon baselines.
+      NOT A REGRESSION AND NOT SOMEONE ELSE'S: this has been true since the test was written. jess wrote
+      both the comments and the model.
+
+      *** WHAT THIS PREDICTS, AND IT IS NOT REASSURING ***
+      The current transport, run unchanged on real silicon, would likely FAIL — the M7 would poll a flag
+      and then read payload from cache. The green board says nothing about that either way. Nothing here
+      is measured on silicon; the bench has been empty since 2026-09-25, so this stays a prediction and
+      is recorded as one.
+
+      *** WHAT jess NOW OWES ON THE @0.11.0 SEAM (DD-028) ***
+      relay's `observer` seam replaces the flag with a seqlock (tick-head first, tick-tail last, retry
+      while they disagree), which is strictly better: a single flag cannot distinguish "new data" from
+      "being overwritten". Laid out under the Canonical ABI their field set is 88 B / align 8 spanning
+      THREE 32-byte cache lines, with head in line 0 and tail in line 2. Two consequences, both jess's:
+        1. THE RETRY MUST RE-INVALIDATE. An M7 reader that invalidates once and then retries the seqlock
+           re-reads the SAME cached lines, so head and tail disagree forever and the reader spins. The
+           whole 88-byte range must be invalidated on EVERY attempt. A correct-looking seqlock with a
+           one-shot invalidate is an infinite loop, not a torn read.
+        2. PLACEMENT MUST NOT SHARE A LINE. 32 B-aligned and padded to 96 B so it occupies exactly three
+           lines and no line is shared with another writer. On a non-coherent boundary two cores writing
+           different objects within one 32-byte line can clobber each other through a writeback — a
+           correctness bug, not a performance one.
+      Both told to relay on jess#167 so they know the constraint is jess-side and constrains nothing in
+      their contract. Neither is verified; both are architecture until the vehicle returns.
+
+      *** ALSO ANSWERED THERE, FROM MEASUREMENT RATHER THAN PREFERENCE ***
+      relay asked whether u64 or u32 is easier "across the MU mailbox". Premise corrected with the
+      register map: the tick does not cross the MU at all — the MU is the doorbell (four 32-bit
+      registers each way) and the struct rides SHMEM. On the struct, u32 is better because ARMv7-M
+      guarantees single-copy atomicity only for naturally aligned 32-bit and smaller accesses and LDRD
+      is explicitly not single-copy atomic, so a u64 seqlock counter can be read torn; with u32 that
+      class of reasoning disappears. Wrap is irrelevant to a seqlock, which only compares equality.
+    tags: [inter-core, cache-coherency, armv7-m, gate-potency, over-claim, jess-167, relay, dd-028, test-pix-030]
+    fields:
+      detected-by: analysing relay's @0.11.0 seqlock seam against jess's own SHMEM transport while answering jess#167, 2026-10-01
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-30T22:59:29Z
+    links:
+      - type: defect-against
+        target: TEST-PIX-030
+      - type: traces-to
+        target: DD-028
+      - type: traces-to
+        target: AFD-121
