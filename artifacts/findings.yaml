@@ -7817,3 +7817,99 @@ artifacts:
     links:
       - type: traces-to
         target: TEST-PIX-030
+
+  - id: AFD-129
+    type: ai-found-defect
+    title: "RETRACTED AND REPLACED before shipping: the bench is THREE Pi hosts and the F100 target MOVED to gale.local rather than vanishing — so AFD-113's re-run is UNBLOCKED; plus jess's Mac registry names a board that is not there and no gate checks presence"
+    status: open
+    description: |-
+      2026-10-01. The bench is THREE Pi hosts, not two. jess had been probing fourpi.local and
+      wohl.local, concluded from those two that the F100 target was physically gone, and WROTE THAT DOWN.
+      It is not gone — it moved to gale.local, a host jess had never probed. The wrong version of this
+      finding was caught before it was committed; this is what replaces it.
+
+      *** THE ERROR FIRST, BECAUSE IT IS THE SAME ONE TWICE ***
+      jess reasoned over the hosts it happened to know and reported a conclusion about the bench. That is
+      AFD-107 and AFD-121 exactly — "concluding from where jess happened to look rather than where the
+      answer lives" — and the loop prompt names those two findings specifically as the reason to measure
+      every artifact you generalise over. The generalisation here was "the bench", and jess had two
+      thirds of it. The operator supplied the third host; nothing jess did would have found it, because
+      jess never asked what the bench WAS.
+      WHAT WAS WRONG: "The F100 target is physically GONE from wohl.local" and, worse, the inference that
+      AFD-113's re-run was blocked by a missing board. Both retracted.
+
+      *** THE ACTUAL TOPOLOGY, measured on all three as user `r` ***
+        fourpi.local  kernel 6.12.75  up 6h29m
+            1-1.2  3643:001d  PX4 FMU v6XRT.x                       THE VEHICLE
+        gale.local    kernel 6.18.50  up 6h03m      registry at ~/.config/pulseengine/bench-devices.yaml
+            1-1.3  0483:3744  ST-LINK/V1   serial 48c3bf720650546556413710c281
+            1-1.4  0483:374e  STLINK-V3    serial 003B001A3235511337333439
+        wohl.local    kernel 6.18.50  up 6h04m
+            1-1.1  0483:374e  STLINK-V3    serial 000D000B4142500E20353451    nucleo-wl55jc1
+            1-1.2  1915:521f  Nordic Open DFU Bootloader  serial E5669E3CB6C9   UNCATALOGUED
+            1-1.3  0483:374b  ST-LINK/V2.1 serial 066EFF565750897187062110    nucleo-wb55rg
+            1-1.4  0483:374b  ST-LINK/V2.1 serial 066BFF565654847087115342    nucleo-g031k8
+
+      *** AFD-113 IS UNBLOCKED, AND THAT IS THE HEADLINE ***
+      The ST-LINK/V1 on gale.local is the SAME PHYSICAL PROBE, confirmed by serial rather than by model:
+      its 12 raw bytes are 48c3bf720650546556413710c281, byte-identical to what AFD-123 measured on
+      wohl.local. That probe is the STM32VLDISCOVERY's onboard one, and that board is jess's only route to
+      an F100 part fact (the vehicle's F100 has no debug port — the Pixhawk's single SWD connector reaches
+      the RT1176, and PX4 flashes the I/O coprocessor from the FMU over serial).
+      So the re-run AFD-126 made NECESSARY is possible after all. To restate why it is necessary: bumping
+      synth 0.64 -> 0.77 changed the lowered cortex-m3 object (4775 -> 4707 B) and `gust:os/exec#poll-round`
+      — the exact function AFD-113 is about — shrank 56 -> 44 B, so AFD-124's "byte-identical, therefore
+      the on-silicon reading transfers" argument no longer holds. AFD-113's reading is currently about an
+      object jess no longer builds, and the instrument to re-take it exists on gale.local.
+      NOT YET DONE, and not claimed: nothing has been measured on that board this tick. It is gale's host,
+      `with-device` is installed on NONE of the three Pis as user `r`, and jess's own rule is that
+      attaching a debug probe requires a claim. Installing the interlock tool there comes first.
+
+      *** A SECOND MOVE, AND A STALE REGISTRY ENTRY IT EXPOSES ***
+      The STLINK-V3 on gale.local, serial 003B001A3235511337333439, is `nucleo-g474re` — and jess's
+      COMMITTED Mac registry (tools/bench/devices.yaml) still lists it as present on this Mac, with that
+      exact serial. Measured: this Mac has NO ST-LINK at all (ioreg and system_profiler both return
+      nothing for it; an earlier `grep -c` that suggested one was a loose match counting something else,
+      and is retracted).
+      WHY THAT MATTERS BEYOND TIDINESS: the registry's documented job is "what is PRESENT HERE". A
+      registry naming an absent device means `with-device` grants a claim on hardware that is not there —
+      the claimant is told it holds a board it does not, and the lock excludes other agents from nothing.
+      That is a vacuous lock reached from the opposite direction to AFD-082: not two names for one board,
+      but one name for no board.
+      AND NOTHING CHECKS IT. check-catalog.sh asserts every registry name resolves in the CATALOGUE and
+      that provenance citations exist; it does not assert that a registered device is actually attached.
+      The registry carries an `identify:` command per device precisely so presence COULD be checked, and
+      no gate runs it. Recorded as the gap it is; a presence check is the obvious next gate and belongs
+      with the per-host registries rather than in the shared catalogue.
+
+      *** AND AN UNCATALOGUED, FLASHABLE BOARD IS ON A SHARED BENCH ***
+      wohl.local's Nordic device is in **Open DFU Bootloader** mode — waiting to be flashed by anything
+      that speaks DFU — and it is in neither jess's catalogue nor any registry jess can see. That is the
+      hazard jess#266 exists to close: an unnamed device means `with-device` fail-closes on the name, so
+      the honest path is unavailable while the DFU interface stays open to any tool that does not ask.
+      jess is NOT naming it unilaterally, because jess#266's finding was that a name invented on one side
+      produces two lock files and a vacuous interlock. Raised with gale, who own the bench inventory.
+
+      *** THE HOST-KEY HANDLING, FOR THE RECORD ***
+      wohl.local's key changed, including the key TYPE (ECDSA recorded, ED25519 offered). jess did NOT
+      clear known_hosts on its own initiative and did not reconnect — it reported the fingerprint
+      (SHA256:Ey5AUpS0PqYZz7QBng6aewN5KdqwtMM4awUxuraREI4) and asked, because clearing it to get on with
+      the tick is precisely what the check exists to prevent. Only after the operator confirmed an
+      intentional reinstall was the stale entry removed (ssh-keygen -R, retaining known_hosts.old).
+      CORROBORATION AFTER THE FACT, not the basis for the decision: wohl.local AND gale.local both run
+      kernel 6.18.50 while fourpi runs 6.12.75, and wohl was on 6.18.34 before the change — consistent
+      with a reinstall of the two.
+    tags: [bench-inventory, hardware, afd-113, afd-123, afd-126, jess-266, gale, security, blocked, self-correction, afd-107]
+    fields:
+      detected-by: re-verifying wohl.local's boards against the catalogue after an operator-confirmed host reinstall, 2026-10-01
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T12:51:58Z
+    links:
+      - type: traces-to
+        target: AFD-113
+      - type: traces-to
+        target: AFD-126
