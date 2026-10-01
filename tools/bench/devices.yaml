@@ -22,15 +22,24 @@
 # Genuinely claim-free is narrower than "reads": inspecting files, lsusb/ioreg, `pyocd list`,
 # reading a log someone already captured to disk. Not live streams.
 devices:
-  nucleo-g474re:
-    what: NUCLEO-G474RE (STM32G474, Cortex-M4) with its onboard STLINK-V3E
-    serial: 003B001A3235511337333439      # the PROBE's serial — this is how to select the board
-    identify: pyocd list
-    # RENAMED from `stlink-v3` on jess#266: every device name is a BOARD, never a probe model,
-    # because two boards can carry the same probe model and a probe-model name is then ONE lock
-    # for TWO devices. The old name is kept as an alias so it takes the SAME flock during the
-    # transition — without that, the rename itself opens the vacuous window it exists to close.
-    aliases: [stlink-v3]
+  # REMOVED 2026-10-01 (AFD-129): `nucleo-g474re` (probe serial 003B001A3235511337333439) is NOT
+  # on this Mac. It is on gale.local, confirmed by that same serial. Measured: this Mac has NO
+  # ST-LINK at all — both ioreg and system_profiler return nothing for one.
+  #
+  # It is REMOVED rather than annotated because a comment does not stop `with-device` granting a
+  # claim on it. This file's documented job is "what is PRESENT HERE", and a registry naming an
+  # absent device hands the claimant a lock over nothing while telling it the board is held — a
+  # vacuous lock reached from the opposite direction to AFD-082: not two names for one board, but
+  # one name for no board. The BOARD stays in hardware-catalog.yaml, which is "what we support";
+  # that is the split working as designed.
+  #
+  # Its host-local entry belongs in gale.local's own registry
+  # (~/.config/pulseengine/bench-devices.yaml), which exists there. Note the alias `stlink-v3` from
+  # jess#266 moves with it, not with this file.
+  #
+  # AND THE GAP THIS EXPOSED: nothing verifies presence. check-catalog.sh asserts registry names
+  # resolve in the catalogue; it does not assert a registered device is attached. Every device here
+  # carries an `identify:` command precisely so presence COULD be checked, and no gate runs one.
   pixhawk-6xrt:
     what: Holybro Pixhawk 6X-RT flight controller (i.MX RT1176)
     usb: PX4 FMU v6XRT.x, idVendor 13891
