@@ -4888,7 +4888,7 @@ artifacts:
 
   - id: AFD-092
     type: ai-found-defect
-    title: "H1 is CLOSED BY THE PART, not by tooling: the RT1176's HAB is LOCKED, so the ROM refuses any unsigned flashloader — the SDP/blhost route is unreachable and SWD is the remaining path"
+    title: "RETRACTED: 'HAB IS LOCKED' is WRONG — SEC_CONFIG measures 0b01 (OPEN) over SWD, and sdphost is the wrong protocol for RT117x (the ROM speaks MCUBOOT/blhost), so its status word was a framing artefact and not a refusal"
     status: open
     description: |-
       2026-09-05. Operator: "we need to bring this in. As long as we can recover somehow we need to
@@ -4937,7 +4937,55 @@ artifacts:
       to normal PX4 on its own (via the PX4 bootloader for ~3 s, which is expected) and was verified
       afterwards over the MAVLink shell: PX4 1.15.4, i.MX RT1170 rB0. Everything ran under a
       with-device pixhawk-6xrt claim.
-    tags: [h1, silicon, rt1176, hab, secure-boot, sdp, blhost, afd-086, afd-080, swd, blocked, strategy]
+      *** RETRACTED 2026-10-01: "HAB IS LOCKED" IS WRONG, AND SO WAS THE TOOL THAT SAID SO ***
+      MEASURED over the now-open SWD port, on the same board:
+          SRC_SBMR2 @0x40C0400C = 0x00000019  ->  SEC_CONFIG = bits[1:0] = 0b01
+      Closed configuration is SEC_CONFIG == 0b11. So HAB IS IN THE **OPEN** CONFIGURATION on this board.
+      The finding above says the opposite and is withdrawn.
+
+      TWO INDEPENDENT ERRORS WERE STACKED IN IT:
+      1. `sdphost` IS THE WRONG PROTOCOL FOR AN RT117x. The RT1176 boot ROM does not speak SDP. The
+         i.MX RT1170 Reference Manual (Rev. 3, §10.9) states the serial-boot protocol "is compatible with
+         the widely-used MCUBOOT protocol in the NXP MCU products" and gives the USB-HID identity as
+         VID 0x1FC9 / PID 0x013D — that is the kboot/`blhost` protocol. So the status word jess decoded
+         was read out of a protocol mismatch, not returned as a refusal.
+         In SPSDK, `StatusCode.HAB_IS_LOCKED` is set purely because the word read back was not
+         `ResponseValue.UNLOCKED` (0x56787856). It is NOT a refusal code. jess read a sentinel-mismatch
+         as a policy decision by the part.
+      2. EVEN A GENUINELY CLOSED PART WOULD NOT BLOCK THE APPLICATION. HAB authenticates only the image
+         the boot ROM itself loads; RM §10.2 says chaining to later stages is opt-in and requires that
+         stage to call `hab_rvt.authenticate_image()`. The PX4 *application* is never HAB-verified.
+
+      CORROBORATION, from the artifact PX4/Holybro actually ship: `px4_fmu-v6xrt_bootloader.bin` has
+      CSF = 0 in its IVT (and `imxrt_flexspi_nor_boot.h` has `#define CSF_ADDRESS 0`), i.e. it is an
+      UNSIGNED HAB image. A closed part would refuse to execute it. This board boots PX4, so it cannot be
+      closed — which agrees with the SEC_CONFIG read.
+
+      WHAT THIS CHANGES
+        - "the SDP/blhost route is CLOSED by the part, not by tooling" — WITHDRAWN. The route was never
+          tried with the right tool. `blhost -u 0x1fc9,0x013d` is the one this ROM speaks.
+        - "Load-to-RAM over SWD is the remaining path" — the premise was false, though the conclusion was
+          a good choice anyway: load-to-RAM leaves PX4's flash untouched, which is why AFD-131 used it.
+        - BUILDING AND FLASHING PX4 IS FEASIBLE, by the ordinary route: `make px4_fmu-v6xrt_default
+          upload`, i.e. `Tools/px4_uploader.py` over the resident bootloader's USB CDC-ACM protocol. That
+          board's bootloader defines neither BOOTLOADER_USE_TOC nor BOOTLOADER_USE_SECURITY, so there is
+          no signature check on the application; the only integrity check is the uploader's CRC32.
+        - BRICK RISK IS LOW BY CONSTRUCTION: the bootloader refuses to erase its own first 128 KiB
+          (sector floor 32 in imxrt_common/main.c), the protocol cannot address below 0x30020000, a
+          partial upload is not bootable (so the board stays in the bootloader), and RM §10.3.5 has the
+          ROM fall through to the USB serial downloader if internal boot fails. SWD is a further recovery
+          route and was exercised this session.
+        - THE ONE IRREVERSIBLE OPERATION is fuse programming — SEC_CONFIG, the SRK hash, JTAG_DISABLE.
+          eFuses are one-way. Burning SEC_CONFIG=0b11 would permanently stop the UNSIGNED PX4 bootloader
+          from booting, and burning JTAG_DISABLE would remove the SWD recovery route AFD-130/AFD-131
+          depend on. Nothing jess does goes near fuses, and nothing should.
+
+      HOW THE ERROR SURVIVED: it was recorded as a measurement ("sdphost returns HAB_IS_LOCKED(2)") and
+      that measurement was real — the tool did return that. What was wrong was the INTERPRETATION, and it
+      then propagated into the hardware catalogue as `hab-locked: true` and into the campaign's framing
+      that SWD was the only possible path. The numbers were right and the statement about them was wrong,
+      which is the same shape as four other corrections this week.
+    tags: [h1, silicon, rt1176, hab, secure-boot, sdp, blhost, afd-086, afd-080, swd, blocked, strategy, retraction]
     fields:
       detected-by: jess running H1 to completion on the Pi after operator go-ahead, 2026-09-05
       severity: critical
