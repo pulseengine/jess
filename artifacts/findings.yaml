@@ -7411,7 +7411,7 @@ artifacts:
 
   - id: AFD-125
     type: ai-found-defect
-    title: "Two independent Cortex-M7 emulators agree bit-for-bit and both disagree with wasmtime: the synth-lowered falcon ESTIMATOR diverges from the same module on the accelerometer-rotation path — loom and Renode both exonerated"
+    title: "CONFIRMED ON SILICON: the synth-lowered falcon ESTIMATOR diverges from wasmtime on the accelerometer-rotation path — Renode, QEMU and the REAL i.MX RT1176 all produce bit-identical results and all three disagree with wasmtime"
     status: open
     description: |-
       2026-09-30. jess invoked a falcon cascade stage OTHER than rate/mixer for the first time. The
@@ -7566,7 +7566,34 @@ artifacts:
          alarming finding rather than folding it into the lowering question.
 
       Upstream: reported as synth#1436 with the full measurement and a reproducer path.
-    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker, afd-124, qemu]
+      *** CONFIRMED ON REAL SILICON 2026-10-01 — THE LAST ALTERNATIVE IS ELIMINATED ***
+      The estimator image was loaded into the actual Holybro Pixhawk 6X-RT's i.MX RT1176 and run
+      (load-to-RAM over SWD, the route AFD-130/AFD-131 established). ALL 31 PARKED WORDS ARE
+      BIT-IDENTICAL to both emulators:
+          trip  0x00000010 (16 ticks)                      sentinel 1e55e4f0
+          tick1 3f800000 38571c87 b7d71c84 3812ccf7 00000000 00000000 36a495a2
+                00000000 00000000 3c20ba20 3e99999a be19999a 3d8f5c29 00000000
+          tickN 3f7ffff0 3a98a666 ba189445 3a12ccf6 34e23ae4 35627030 3aa49caf
+                38aee883 392f1ef4 3e20c510 3e99999a be19999a 3d8f5c29 00000000
+          fold  684578d1
+      So the full chain of agreement is now:
+          Renode 1.16.1 (RT1176 model)  ==  QEMU 11.1.1 (mps2-an500)  ==  REAL i.MX RT1176 SILICON
+      and all three disagree with wasmtime over the SAME fused module, on the same four fields:
+          pos-d  silicon 36a495a2   wasmtime 00000000
+          vel-n  silicon 00000000   wasmtime b581f691
+          vel-e  silicon 00000000   wasmtime b601f97a
+          vel-d  silicon 3c20ba20   wasmtime 00000000
+      THREE INDEPENDENT ARM IMPLEMENTATIONS, one of them the actual part the code is for, produce
+      identical bits from the same synth-lowered object. "It is an emulation artefact" is no longer
+      available as an explanation, and neither is "two emulators share a bug". This is a synth LOWERING
+      defect, confirmed on the target hardware.
+      WHAT STILL IS NOT ESTABLISHED, unchanged: which instruction or which pass. Reading synth's output
+      against its input is the step that names it, and that is synth#1436's to do.
+      PROCEDURE NOTE: the first attempt produced no sentinel and was correctly discarded as "did not
+      run" (the intermittency recorded in on-target-run.sh, cause still unknown, watchdog refuted by
+      measurement); attempt 2 completed. Run under a with-device claim on pixhawk-6xrt, behind the
+      disarmed pre-flight gate, and PX4 was restored and verified afterwards.
+    tags: [estimator, on-target-differential, falcon, canonical-abi, synth, renode, afd-122, afd-047, negative-control, open-blocker, afd-124, qemu, silicon]
     fields:
       detected-by: building the estimator rung (TEST-PIX-035) and running it against an independent wasmtime reference over the same fused module, 2026-09-30
       severity: major
@@ -7575,6 +7602,9 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-30T11:22:51Z
+    links:
+      - type: traces-to
+        target: AFD-131
 
   - id: AFD-126
     type: ai-found-defect
@@ -8150,3 +8180,69 @@ artifacts:
         target: AFD-130
       - type: traces-to
         target: TEST-PIX-032
+
+  - id: AFD-132
+    type: ai-found-defect
+    title: "A true sentence that misled: 'with-device on none of the three Pis AS USER r' made relay conclude the FMU had no interlock, which is false on all three counts — plus the RT1176's memory measured (~2 MB, 1.5 MB contiguous OCRAM), refuting SYSREQ-FALCON-022's 192 KB premise"
+    status: open
+    description: |-
+      2026-10-01. Two corrections of jess's own statements, both caught because an upstream agent acted
+      on them, plus the RT1176's memory measured on the real part.
+
+      *** A TRUE SENTENCE THAT MISLED, AND relay RE-PRIORITISED ON IT ***
+      jess wrote on jess#266: "`with-device` is installed on none of the three Pis AS USER `r`."
+      Literally true. relay read it as "the FMU has no interlock" and argued the ranking was inverted —
+      three NUCLEOs heading toward locks while the airframe's flight controller had none of the catalogue,
+      registry or tool. That conclusion is FALSE on all three counts, and the false impression is jess's
+      to own:
+          /home/pi/bench/with-device                         397,936 B, executable
+          /home/pi/.config/pulseengine/bench-devices.yaml    lists pixhawk-6xrt, stlink-v1, selftest-device
+          hardware-catalog.yaml                              `boards: pixhawk-6xrt` present
+          tools/bench/devices.yaml                           pixhawk-6xrt present
+      Every vehicle action jess has taken ran under a `with-device pixhawk-6xrt` claim, including the
+      load-to-RAM onto the RT1176 the same day. The honest phrasing was "the tooling is there under `pi`,
+      not under `r`".
+      THE NARROWER GAP IS REAL: access is account-dependent, and `r` is the standard account across all
+      three hosts. Under `r` the tool is not on PATH and there is no registry, which is a trip hazard and
+      is how jess would eventually race itself. That is worth fixing; it is not what relay was told.
+      WHY THIS CLASS KEEPS RECURRING: a statement scoped to a condition ("as user r") reads as unscoped
+      unless the scope is the point of the sentence. Same shape as AFD-129's "the F100 is gone" (true of
+      the two hosts jess had looked at) and AFD-092's HAB claim (the measurement was real, the
+      interpretation was not). The numbers keep being right while the sentence about them is wrong.
+
+      *** THE RT1176's MEMORY, MEASURED — AND IT REFUTES AN UPSTREAM PREMISE ***
+      relay flagged that SYSREQ-FALCON-022 argues a 1.1 MiB data-base spread is fatal partly because it
+      is "more RAM than any board on the bench has (largest 192 KB)", and that the 192 KB is gale's
+      WB55RG SRAM1. Read over SWD on the actual i.MX RT1176, under a claim:
+          IOMUXC_GPR17 FLEXRAM_BANK_CFG = 0x0000ffaa  -> 4 banks DTCM + 4 banks ITCM, i.e. PX4's split
+          DTCM   0x20000000 .. 0x2003FFFC read clean  -> 256 KB
+          OCRAM  0x20240000 .. 0x203BFFFC read clean  -> >= 1.5 MB contiguous
+          ITCM                                        -> 256 KB (an 84,813 B image loads there and runs)
+      So the largest board on this bench has ~2 MB on-chip with 1.5 MB of contiguous OCRAM, roughly EIGHT
+      TIMES the cited figure, and the 1.1 MiB spread fits by size.
+      STATED WITH ITS LIMIT, because the temptation is to read it as "so the spread is fine": it refutes
+      the PREMISE AS STATED and nothing more. That OCRAM is where PX4 already lives — its MSP was
+      0x20241db0 when jess halted it — it is slower than TCM, and jess has measured NOTHING about cache
+      behaviour or contention across a 1.1 MiB working set. Whether the spread is still fatal for those
+      reasons is relay's judgement. jess's claim is only that the board-size argument is not the reason,
+      and that citing 192 KB compares against a NUCLEO while the flight target sits on the same bench.
+      Recorded in the catalogue as measured part facts rather than left in a comment thread.
+
+      *** AND "NOTHING HAS EXECUTED ON AN RT1176" IS NOW FALSE TOO ***
+      relay corrected their own loop state this week, splitting "bench empty since 2026-09-25" (wrong) from
+      "nothing on silicon" (which they said still stood). The second half has now also moved: AFD-131
+      records the falcon rate->mixer chain executing on the real RT1176, bit-exact against relay's SIL
+      reference with an attributive negative control. Told to them on jess#266 so anything leaning on
+      "jess has no on-target evidence" can be revisited.
+    tags: [self-correction, bench-inventory, relay, jess-266, rt1176, measured, afd-129, afd-092]
+    fields:
+      detected-by: relay re-prioritising on a scoped sentence of jess's, and measuring the RT1176's FlexRAM over SWD, 2026-10-01
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T16:58:42Z
+    links:
+      - type: traces-to
+        target: AFD-129

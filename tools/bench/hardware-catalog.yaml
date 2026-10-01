@@ -64,6 +64,17 @@ parts:
       m7-fpu: fpv5-d16                 # double precision
       m4-fpu: fpv4-sp                  # single precision
       hab-locked: false            # MEASURED: SEC_CONFIG=0b01 (open). Was wrongly true — AFD-092 retraction
+      debug-port: open             # MEASURED over SWD: DPIDR 0x6ba02477, Cortex-M7 r1p2 (AFD-130)
+    memory:
+      # MEASURED on the real part over SWD (AFD-132), not read off a datasheet. The FlexRAM split
+      # is what PX4 configures, read back from the register that holds it.
+      itcm-bytes: 262144               # 256 KB; an 84,813 B image loads at 0x00000000 and runs
+      itcm-base: 0x00000000
+      dtcm-bytes: 262144               # 256 KB; reads clean 0x20000000..0x2003FFFC
+      dtcm-base: 0x20000000
+      ocram-bytes: 1572864             # >= 1.5 MB; reads clean 0x20240000..0x203BFFFC
+      ocram-base: 0x20240000
+      flexram-bank-cfg: 0x0000ffaa     # IOMUXC_GPR17: 4 banks DTCM + 4 banks ITCM
     caveats:
       - >
         HAB IS **OPEN**, and the earlier entry claiming it was LOCKED is RETRACTED (AFD-092).
