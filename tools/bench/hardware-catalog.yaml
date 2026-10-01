@@ -63,13 +63,35 @@ parts:
     capabilities:
       m7-fpu: fpv5-d16                 # double precision
       m4-fpu: fpv4-sp                  # single precision
-      hab-locked: true
+      hab-locked: false            # MEASURED: SEC_CONFIG=0b01 (open). Was wrongly true — AFD-092 retraction
     caveats:
       - >
-        HAB IS LOCKED. `sdphost write-file` returns StatusCode.HAB_IS_LOCKED (2) /
-        HabErrorReason.UNSUPPORTED_CONF_ITEM (36): the boot ROM accepts SIGNED images only, so the
-        SDP/blhost route is CLOSED by the part, not by tooling. Correct behaviour for a production
-        flight controller. Load-to-RAM over SWD is the remaining path.
+        HAB IS **OPEN**, and the earlier entry claiming it was LOCKED is RETRACTED (AFD-092).
+        MEASURED over SWD on this board: SRC_SBMR2 @0x40C0400C = 0x00000019, so SEC_CONFIG =
+        bits[1:0] = 0b01. Closed configuration is 0b11.
+        The retracted claim rested on `sdphost write-file` returning StatusCode.HAB_IS_LOCKED(2).
+        That status was real but misread twice over: `sdphost` speaks SDP and THE RT117x BOOT ROM
+        DOES NOT — RM Rev.3 §10.9 says its serial-boot protocol is MCUBOOT/kboot (`blhost`), USB-HID
+        identity 1FC9:013D. And in SPSDK that StatusCode is set merely because the word read back
+        was not ResponseValue.UNLOCKED (0x56787856); it is not a refusal code. So a framing mismatch
+        was read as a policy decision by the part.
+        Corroborated independently: the bootloader PX4/Holybro ship has CSF = 0 in its IVT (and
+        `imxrt_flexspi_nor_boot.h` sets CSF_ADDRESS 0) — an UNSIGNED HAB image, which a closed part
+        would refuse to execute. This board boots PX4.
+      - >
+        HAB VERIFIES ONLY THE FIRST STAGE the boot ROM loads (RM §10.2: chaining to later stages is
+        opt-in and needs that stage to call hab_rvt.authenticate_image()). The PX4 APPLICATION is
+        never HAB-verified, and this board's bootloader defines neither BOOTLOADER_USE_TOC nor
+        BOOTLOADER_USE_SECURITY, so it performs no signature check — only the uploader's CRC32. So
+        building and flashing a PX4 application is feasible by the ordinary
+        `make px4_fmu-v6xrt_default upload` route (Tools/px4_uploader.py over the resident
+        bootloader). Load-to-RAM over SWD remains the right choice for jess anyway, because it
+        leaves PX4's flash untouched (AFD-131).
+      - >
+        FUSE PROGRAMMING IS THE ONE IRREVERSIBLE OPERATION on this part — SEC_CONFIG, the SRK hash,
+        JTAG_DISABLE. eFuses are one-way. Burning SEC_CONFIG=0b11 would permanently stop the
+        UNSIGNED PX4 bootloader from booting, and burning JTAG_DISABLE would destroy the SWD
+        recovery route AFD-130/AFD-131 depend on. Nothing in this campaign goes near fuses.
       - >
         The serial-downloader ROM enumerates as USB 1FC9:013D with interface class 0x03 (HID) and
         1021-byte endpoints. macOS binds class 0x03 to IOHIDDevice, so libusb can NEVER claim it
