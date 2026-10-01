@@ -14,9 +14,11 @@ Usage:
   mav_bench.py summarize <file|->         # frame/msg counts, CRC-valid tally
   mav_bench.py identify  <file|->         # autopilot/type/mode from HEARTBEAT
   mav_bench.py attitude  <file|->         # roll/pitch/yaw (rad) from ATTITUDE
-  (a serial source like /dev/cu.usbmodem01 may be passed as <file>)
+  (a serial source like /dev/cu.usbmodem01 may be passed as <file>: a character
+   device is read in RAW mode for ~8 s. Cooked mode mangles framing and yields a
+   confident WRONG answer -- AFD-128.)
 """
-import sys, struct
+import os, sys, struct
 
 # CRC_EXTRA for the message ids this bench validates (MAVLink common.xml).
 CRC_EXTRA = {
@@ -84,9 +86,67 @@ def parse_frames(buf: bytes):
                     i = end; continue
         i += 1
 
-def load(path: str) -> bytes:
+def mangled_by_line_discipline(buf: bytes) -> bytes:
+    """What a tty's DEFAULT line discipline does to a binary stream, as a pure function.
+
+    Used as this module's negative control: it needs no hardware, and it shows that reading a
+    serial device without raw mode does not merely lose bytes, it DESTROYS FRAMING. See
+    read_tty_raw for why that matters and what it cost."""
+    # ONLCR/ICRNL translate CR<->NL; the worst of the default cooked-mode transforms for binary.
+    return buf.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def read_tty_raw(path: str, seconds: float) -> bytes:
+    """Read a CHARACTER DEVICE in raw mode. Host-side termios only — nothing is written to the
+    vehicle and there is no 1200-baud touch.
+
+    WHY THIS EXISTS (AFD-128), measured on the real Pixhawk 6X-RT. This module's docstring has
+    always offered "a serial source like /dev/cu.usbmodem01 may be passed as <file>", and `load`
+    honoured that with a plain `open(path, "rb")`. A plain open does NOT put the tty in raw mode,
+    so the default line discipline transforms the bytes. Measured, same board, same 8-second
+    window, the ONLY difference being raw mode:
+
+        cooked (what `load` did)   4,701 bytes,    588 B/s,   longest chained frame run 3
+        raw                       89,768 bytes, 11,221 B/s,   2,119 frames, 18 msgids
+
+    A 19x byte loss, and — the part that matters — it yields a CONFIDENT WRONG ANSWER rather than
+    an obviously broken one: the cooked capture decoded as "NOT MAVLink", which is exactly the
+    verdict jess reached and had to retract. CI never caught it because the mav_bench oracle runs
+    against a committed sample file, so the documented serial path was never exercised by the gate.
+
+    REFUSES rather than silently falling back: if termios is unavailable this raises, because a
+    quiet fallback to cooked mode is the defect it exists to remove."""
+    import termios, tty, time, os, select
+    fd = os.open(path, os.O_RDONLY | os.O_NOCTTY)
+    try:
+        saved = termios.tcgetattr(fd)      # raises if this is not a tty -> caller must not guess
+        tty.setraw(fd)
+        out, end = bytearray(), time.monotonic() + seconds
+        while time.monotonic() < end:
+            r, _, _ = select.select([fd], [], [], max(0.0, end - time.monotonic()))
+            if not r:
+                break
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            out += chunk
+        termios.tcsetattr(fd, termios.TCSANOW, saved)
+        return bytes(out)
+    finally:
+        os.close(fd)
+
+
+def load(path: str, seconds: float = 8.0) -> bytes:
     if path == "-":
         return sys.stdin.buffer.read()
+    import stat as _stat
+    try:
+        is_chardev = _stat.S_ISCHR(os.stat(path).st_mode)
+    except OSError:
+        is_chardev = False
+    if is_chardev:
+        # A serial device. Raw mode is not optional here — see read_tty_raw.
+        return read_tty_raw(path, seconds)
     with open(path, "rb") as f:
         return f.read()
 

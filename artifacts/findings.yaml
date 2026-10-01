@@ -7716,3 +7716,104 @@ artifacts:
         target: DD-028
       - type: traces-to
         target: AFD-121
+
+  - id: AFD-128
+    type: ai-found-defect
+    title: "The vehicle returned and jess's own read-only bench tool gave a confident WRONG answer: a serial path it documented but no gate ever walked read the tty in cooked mode, mangling framing into 'NOT MAVLink' (19x byte loss, measured)"
+    status: open
+    description: |-
+      2026-10-01. The vehicle came back after six days off the bench, and the first thing jess's own
+      read-only bench tool did with it was produce a confident WRONG answer.
+
+      *** HARDWARE IS BACK, AND WHAT THAT DOES NOT UNBLOCK ***
+      fourpi.local now carries the FMU, confirmed by IDENTITY and not by tty node:
+          Bus 001 Device 015: ID 3643:001d Dronecode Project, Inc. PX4 FMU v6XRT.x
+          /dev/serial/by-id/usb-Dronecode_Project__Inc._PX4_FMU_v6XRT.x_0-if00 -> ttyACM0
+      There is still NO SWD PROBE — no MCU-Link (1fc9:*), no ST-LINK (0483:*) anywhere on that host. So
+      the measurement the loop names as the first job when hardware returns, "is the RT1176 debug port
+      fused open?", CANNOT BE MADE. Nor can anything in DD-028/AFD-127 (needs M4+M7 on the real part,
+      i.e. a flashed image, i.e. explicit go-ahead) and nor can AFD-113's re-run (that is the
+      STM32VLDISCOVERY, which lives on wohl.local, which is separately unreachable — see below).
+      Stated plainly because "the vehicle is back" reads like more than it is: what it unblocks today is
+      read-only telemetry, and nothing else.
+
+      *** THE DEFECT: A DOCUMENTED PATH NO GATE EVER WALKED ***
+      tools/bench/mav_bench.py has always offered, in its own usage block, "a serial source like
+      /dev/cu.usbmodem01 may be passed as <file>". Its reader was:
+          def load(path): ... with open(path, "rb") as f: return f.read()
+      A plain open does NOT put a tty in raw mode, so the DEFAULT LINE DISCIPLINE transforms the bytes.
+      MEASURED on the real board, same 8-second window, raw mode the ONLY difference:
+          cooked (what load did)    4,701 bytes    588 B/s   longest chained frame run 3
+          raw                      89,768 bytes 11,221 B/s   2,119 chained frames, 18 msgids
+      A 19x byte loss — but the byte count is not the finding. THE FINDING IS THAT IT LIES: the cooked
+      capture decoded as "NOT MAVLink", and jess reported exactly that, with a chained-frame test and a
+      ULog magic check behind it, before noticing the method was unsound and retracting. A 3-frame
+      "longest run" against 2,119 is not a degraded signal, it is a different answer.
+      WHY NO GATE CAUGHT IT: the mav_bench oracle (REQ-PIX-010, CI) runs `test_mav_bench.py` against a
+      COMMITTED SAMPLE FILE. The file path and the serial path go through the same `load`, but only the
+      file path has ever been exercised, so the serial branch had no coverage at all while the tool
+      advertised it. This is the same shape as AFD-127 one day earlier: a green gate whose scope is
+      narrower than the claim around it.
+
+      *** FIXED, AND THE FIX REFUSES RATHER THAN FALLING BACK ***
+      `load` now stats the path and routes a CHARACTER DEVICE to `read_tty_raw`, which sets raw mode via
+      termios (host-side only — nothing is written to the vehicle, no 1200-baud touch) and RAISES if the
+      path cannot be put in raw mode. A quiet fallback to the cooked read is the defect itself, so there
+      is none.
+
+      *** THE NEGATIVE CONTROL NEEDS NO HARDWARE, WHICH IS THE POINT ***
+      A regression here must be catchable on a runner with no board. The mangling is therefore modelled
+      as a pure function, `mangled_by_line_discipline`, and applied to the SAME committed sample the test
+      already trusts:
+          cooked-mode mangling drops CRC-valid frames 166 -> 138 (16.9% lost)
+      The assertion is a strict inequality, not a threshold, and the test REFUSES if the model changes
+      nothing on the sample ("it needs a sample containing CR bytes; pick one that does rather than
+      deleting the check") — otherwise the control would be inert on a sample without CRs. A second
+      assertion reads `load`'s source and fails if character devices stop being routed to the raw reader,
+      so the specific regression cannot return silently.
+      The 16.9% on the sample is milder than the 19x on the live stream, because the sample carries fewer
+      CR bytes. Recorded rather than smoothed over: the control proves raw mode is load-bearing, it does
+      not reproduce the live magnitude.
+
+      *** VERIFIED ON THE BOARD, UNDER A CLAIM ***
+      Run on fourpi.local through with-device 0.2.2 (claim `pixhawk-6xrt` taken and reported; jess's own
+      rule is that ANY tty open needs a claim, even O_RDONLY, because two readers each silently get about
+      half the bytes):
+          frames 2381, CRC-VALID 2023, 19 distinct msgids
+          autopilot=PX4  type=QUADROTOR  sysid=1  mavlink_version=3
+          msgid  30 ATTITUDE            800     31 ATTITUDE_QUATERNION  401
+          msgid  32 LOCAL_POSITION_NED  241    105 HIGHRES_IMU          401
+          msgid 230 ESTIMATOR_STATUS      9    241 VIBRATION              5
+          msgid   0 HEARTBEAT             9      1 SYS_STATUS           34
+          attitude decodes to finite radians, static on the bench:
+              roll=-2.8061 pitch=0.0925 yaw=2.2202 rad  (inverted on the bench; yaw jitters in the last digit)
+      358 of 2381 frames fail CRC, consistent with resync at the capture start, and one msgid 7853248
+      appears once — a resync artifact the CRC correctly rejects. Reported rather than filtered out.
+      ANSWERS A STANDING QUESTION FROM relay (jess#167): they asked whether anything blocks a first
+      shadow flight beyond the rebuild. The capture side is now measured, not asserted — the estimate
+      (ATTITUDE, ATTITUDE_QUATERNION, LOCAL_POSITION_NED, ESTIMATOR_STATUS) and the raw sensors
+      (HIGHRES_IMU) all stream, at roughly 100 Hz and 50 Hz over the 8-second window, with no GCS
+      heartbeat required.
+
+      *** A SEPARATE SECURITY EVENT, NOT WORKED AROUND ***
+      wohl.local's SSH host key CHANGED between this tick and the last:
+          REMOTE HOST IDENTIFICATION HAS CHANGED
+          ED25519 SHA256:Ey5AUpS0PqYZz7QBng6aewN5KdqwtMM4awUxuraREI4
+          offending ECDSA key in /Users/r/.ssh/known_hosts:15
+      It is also a key TYPE change (ECDSA on record, ED25519 offered), which a reinstall or an sshd
+      regeneration would produce. jess did NOT clear the known_hosts entry and did NOT reconnect: that is
+      the operator's decision, and clearing it to get on with the tick is precisely the behaviour the
+      check exists to prevent. CONSEQUENCE: wohl.local is unreachable, so the three ST-LINK boards and
+      the STM32VLDISCOVERY are out of reach, which keeps AFD-113's re-run blocked for a second reason.
+    tags: [hardware, on-target, mav-bench, gate-potency, self-correction, afd-127, req-pix-010, security]
+    fields:
+      detected-by: "first hardware contact since 2026-09-25: reading the returned FMU read-only under a with-device claim, 2026-10-01"
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T11:00:31Z
+    links:
+      - type: traces-to
+        target: TEST-PIX-030

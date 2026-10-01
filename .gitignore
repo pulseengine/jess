@@ -29,3 +29,11 @@ app/*/*.wasm
 .scratch/einit/
 .scratch/floop/
 .scratch/invoke/
+
+# Python bytecode caches. Two were tracked (tools/bench/, tools/cascade-differential/)
+# and turned up when a source edit showed the .pyc as modified alongside it. A committed
+# bytecode cache is a stale artifact that CPython will prefer over the source when the
+# recorded mtime/size happen to match — exactly the staleness class AFD-047/049 and AFD-124
+# cost this repo days over, in a file nobody looks at.
+__pycache__/
+*.pyc
