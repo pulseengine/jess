@@ -190,6 +190,22 @@ jobs:
       - name: ci.yml is self-consistent — scripts reachable, Renode steps have RENODE
         working-directory: jess
         run: tools/ci/check-workflow.sh --self-test
+      # AFD-134's two instruments. Both are classifiers, and a classifier nobody has watched
+      # MIS-sort is a classifier nobody has checked — so what is gated is each one's
+      # both-directions self-test, not merely that it runs. linmem-differential must put 1 ulp
+      # in ULP-CLOSE and a sign flip in DIVERGENT, and must keep the sign flip divergent at an
+      # absurd threshold (otherwise the classification collapses to one bucket and the headline
+      # "six of six differ in sign" would be an artefact of the tool). memtrace's analyser must
+      # FIND an injected stale copy, must NOT find one in the one-variable control, and must
+      # report a non-distinctive value as SKIPPED rather than as "none found".
+      # Hardware-free and dependency-free on purpose: the self-tests need no QEMU and no
+      # wasmtime, so they gate on every run rather than only where a bench exists.
+      - name: AFD-134 instruments — both classifiers self-test in BOTH directions
+        working-directory: jess
+        run: |
+          set -euo pipefail
+          tools/cascade-differential/linmem-differential.py --self-test
+          hardware/qemu/memtrace/analyse.py --self-test
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so

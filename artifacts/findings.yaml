@@ -8393,3 +8393,116 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-01T23:02:35Z
+
+  - id: AFD-134
+    type: ai-found-defect
+    title: "synth#1436: the persistent quaternion is BIT-IDENTICAL between wasmtime and the lowered run, which RETIRES the lagged-attitude hypothesis jess proposed; a whole-linear-memory differential instead shows all six differing state fields disagree in SIGN over exactly the translational sub-vector"
+    status: open
+    description: |-
+      2026-10-02. synth#1436 asked jess for one measurement — "the QEMU run, watching which addresses
+      the rotation's quaternion loads actually resolve to against the ones the attitude update stores"
+      — and said why it could not be read statically: "all 236 r11 accesses are register-offset, none
+      constant-offset, so 'the update writes one field, the rotation reads another' cannot be settled
+      by comparing offsets; the addresses are computed at runtime."
+      Built the instrument, took the measurement, and it RETIRED THE HYPOTHESIS BOTH SIDES HELD.
+
+      *** WHAT WAS BUILT ***
+      hardware/qemu/memtrace/ — a QEMU TCG plugin recording every memory access the lowered image
+      makes as `<seq> <pc> <addr> <bytes> <R|W> <value>`, filterable by address window and pc range.
+      QEMU 11.1.1 accepts --plugin but ships none, so this is jess's. Values are captured because
+      without them "which address holds the quaternion" is an INFERENCE from the access pattern; with
+      them it is a lookup against the parked state words. The trailer carries `seen` (accesses before
+      filtering) so "the window is wrong" is distinguishable from "the tracer is blind", and analyse.py
+      REFUSES a trace whose potency control — the image's completion sentinel store, known in advance —
+      is absent.
+      tools/cascade-differential/linmem-{capture.sh,differential.py} — the better instrument, found
+      while using the first: dump ALL 64 KiB of linear memory from both runtimes and diff it.
+
+      *** THE RESULT, AND IT CONTRADICTS WHAT JESS PROPOSED ***
+      THE PERSISTENT QUATERNION IS BIT-IDENTICAL BETWEEN THE RUNTIMES, at wasm offset 0xac18 (ARM
+      0x2000ac18), at ticks 1, 2, 3, 15 and 16. Identified by VALUE, not by guessing: the slot is
+      whichever address the parked quaternion words were stored to.
+      That refutes the lagged/stale-attitude reading. jess proposed it from the tick-16 numbers and
+      synth adopted it into the v0.80 plan ("The lagged-attitude reading is now mine too"). A stale
+      attitude would appear at that offset. It does not. The attitude state AGREES; only what is
+      computed FROM it diverges.
+      RETRACTED EXPLICITLY rather than quietly dropped, because it is now in synth's plan on jess's
+      evidence.
+
+      *** AND THE FULL-MEMORY DIFF GIVES A SHARPER SIGNATURE THAN AFD-125 COULD ***
+      16,384 words compared after 16 identical ticks, same module (repro/synth-1436/c.loom.wasm),
+      same IMU:
+          744  masked      ARM still holds the harness's 0xdeadbeef paint and wasmtime zero-inits, so
+                           neither wrote them. These are 744 of the 972 raw differences — three
+                           quarters. Counting them would be a vacuous positive.
+            0  OMITTED STORES  no offset where ARM holds the paint and wasmtime wrote a value. The
+                           lowering is NOT dropping stores; it computes different values. A clean
+                           elimination.
+           11  ULP-CLOSE   <= 4 ulp, i.e. the same computation rounding differently.
+          217  DIVERGENT   a different exponent or sign — a different quantity.
+      Classified rather than counted, because a single number would let a hundred harmless roundings
+      hide one real one, or the reverse.
+
+      THE RETURN AREA (offset 0xb024), FIELD BY FIELD, AT TICK 16:
+          qw qx qy qz    SAME, bit-exact
+          pos-n pos-e pos-d  DIFFER, arm positive / wasmtime negative, all three
+          vel-n vel-e vel-d  DIFFER, arm positive / wasmtime negative, all three
+          wx wy wz       SAME (the gyro passthrough)
+          innovation     SAME (zero both sides)
+      SIX FIELDS DIFFER AND ALL SIX DISAGREE IN SIGN. Under independent signs that is 1 in 64. And the
+      split is not arbitrary: the agreeing fields are exactly the quaternion, the gyro passthrough and
+      the innovation; the differing fields are exactly the TRANSLATIONAL sub-vector — the part that
+      depends on rotating the accelerometer by the quaternion. The quaternion itself is bit-exact.
+      AFD-125 reported four differing words at tick 1; at tick 16 it is all six, with a sign pattern
+      that four words could not have revealed.
+      A corroborating pair in the same dump: offsets 0x01068 and 0x010a0 hold (+5.3722015e-06,
+      -5.3722015e-06) on ARM and (-9.8099718e-03, +9.8099718e-03) on wasmtime — the same two
+      magnitudes mirrored on each side, and wasmtime's magnitude is 31 ulp from the value the ARM run
+      RETURNS as vel-d (3c20ba20).
+
+      *** STATED AS A HYPOTHESIS, NOT A CONCLUSION ***
+      "Six of six differing fields disagree in sign, over exactly the translational sub-vector, with
+      the quaternion bit-exact" is MEASURED. "Therefore the sign of the rotation or of the gravity
+      subtraction is wrong in the lowering" is NOT — the magnitudes differ too, so it is not a pure
+      inversion, and naming the instruction still needs synth's disassembly. jess has no function
+      mapping for these pcs and will not guess one and present the guess as a measurement (AFD-127 was
+      exactly that error).
+
+      *** A PREDICATE THAT FLOODED, RECORDED BECAUSE THE FAILURE IS REUSABLE ***
+      The first attempt asked the trace directly: find an address loaded with a value that another
+      address has moved on from — the "two addresses, one logical field" shape. It returned 54,251
+      events over 1,662 address pairs, including symmetric pairs (A->B and B->A), which is not a
+      finding but a flood. Cause: WASM'S SHADOW STACK LIVES IN LINEAR MEMORY, so most of that traffic
+      is frame slots recycling the same values every tick. A positive result that large is as useless
+      as a vacuous zero and must be reported as "the predicate is not specific", not as 1,662 defects.
+      Restricting to addresses that demonstrably carry state across a tick boundary cuts it to 668
+      addresses in 62 contiguous runs, which is a usable map — but the whole-memory diff answered the
+      question better and is what the finding rests on.
+      A SECOND LIMIT, stated because it bears on the question: the value-identity method only works for
+      DISTINCTIVE values. Measured, 15,193 of 15,295 stored values go to <= 8 addresses, and the only
+      ones above 16 are deadbeef (1,792), 0 (987), 1.0 (62) and -0.0 (56). So it cannot see a stale copy
+      of the TICK-1 quaternion, which is exactly the identity (1,0,0,0). Ticks 2..n are covered. The
+      tool prints this blind spot rather than leaving a reader to assume full coverage.
+
+      *** VERIFICATION ***
+      Both tools self-test in BOTH directions. linmem-differential: 1 ulp -> ULP-CLOSE; a sign flip ->
+      DIVERGENT and it STAYS divergent at an absurd --ulp threshold (otherwise the classification
+      collapses into one bucket); paint vs zero -> masked; paint vs a VALUE -> reported as an omitted
+      store. analyse.py: an injected stale copy is FOUND, a one-variable control where the consumer
+      reads the refreshed value is NOT, a non-distinctive value is reported as SKIPPED rather than as
+      "none found", and the segmentation guard refuses a wrong tick count instead of carrying on.
+      linmem-capture.sh asserts the OFFSET-ALIGNMENT PRECONDITION before reporting anything: the
+      quaternion at 0xac18 must agree bit-for-bit on both sides, which four f32 words would not do by
+      chance if the layouts did not correspond. If it ever fails, the script refuses rather than
+      diffing two unrelated layouts.
+      The traced QEMU run reproduces AFD-125/132's parked words exactly, so it is the same execution
+      the silicon result was measured on, not a different build.
+    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report]
+    fields:
+      detected-by: jess building the memory tracer synth#1436 asked for, then finding a whole-memory diff answered it better, 2026-10-02
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T23:52:14Z
