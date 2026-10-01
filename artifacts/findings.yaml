@@ -7996,3 +7996,109 @@ artifacts:
     links:
       - type: traces-to
         target: DD-028
+
+  - id: AFD-131
+    type: ai-found-defect
+    title: "THE FALCON CASCADE RAN ON THE REAL PIXHAWK 6X-RT: rate->mixer on the actual RT1176 M7, bit-exact against relay's SIL reference AND against Renode including return-area offsets, with an attributive negative control — blocked until VTOR was set, which Renode can never show"
+    status: open
+    description: |-
+      2026-10-01. THE VERIFIED FALCON CASCADE EXECUTED ON THE REAL PIXHAWK 6X-RT. A two-stage
+      rate -> mixer chain ran on the actual i.MX RT1176 Cortex-M7 and reproduced relay's SIL reference
+      BIT-EXACTLY, with its negative control also bit-identical to emulation. This is the campaign's
+      target, and it is the first time any of it has executed on silicon.
+
+      *** THE RESULT ***
+      Load-to-RAM over SWD (MCU-Link, openocd 0.12.0), image = .scratch/invoke/invoke.elf, the SAME ELF
+      TEST-PIX-032 runs in Renode. 84,813 bytes into ITCM at 0x00000000, SP 0x20040000, PC 0x8.
+        halted at PC 0x00000052 -- the `1: b 1b` spin at the end of _reset, i.e. it ran to completion
+        RESULT 0x20011000  00000298  3f800000 3ef1ec81 be168816 3f000000
+        CHAIN  0x20011100  00002510  00000000 00000000 3eb2af18 3f800000  1e55d09e
+      Against the FROZEN baseline in run-oracle.sh -- the one number in this repo that is NOT recomputed
+      from the module under test, derived from relay's SIL reference under falcon v1.134.1:
+        EXP  = 3F800000 3EF1EC81 BE168816 3F000000   -> EXACT MATCH (torque)
+        EXPP = 00000000 00000000 3EB2AF18 3F800000   -> EXACT MATCH (motor pwm)
+        sentinel 0x1E55D09E                          -> EXACT MATCH
+      And against the Renode run from the same session: identical, INCLUDING the return-area offsets
+      0x298 and 0x2510. So the emulated and the real part agree on where the Canonical ABI put the
+      records, not merely on the arithmetic.
+
+      *** THE NEGATIVE CONTROL ALSO RAN ON SILICON, AND IT MOVES ***
+      nc1.elf -- one variable changed, wy perturbed, embedder init fully intact:
+        RESULT 00000298  3f800000 3f214856 be168816 3f000000   ty MOVED (was 3ef1ec81)
+        CHAIN  00002510  00000000 00000000 3d0b35e0 3f800000   m3 MOVED (was 3eb2af18)
+        sentinel 1e55d09e, PC 0x52 -- completed
+      ty = 0x3F214856 is BIT-IDENTICAL to the perturbed value Renode produced earlier the same session.
+      So on real hardware: the baseline matches the reference, the perturbed input produces a different
+      and specific answer, and both agree with emulation. The oracle is attributive on silicon, not just
+      non-zero.
+
+      *** WHAT BLOCKED IT, AND WHY EMULATION COULD NEVER HAVE SHOWN IT ***
+      The first attempt failed with `external reset detected` and PX4 rebooting (PC 0x00223104, MSP
+      0x20241db0 -- both PX4's). The cause was VTOR.
+        PX4 sets VTOR = 0x00210000, its own vector table. jess's image puts its table at 0x00000000 and
+        NEVER WRITES VTOR, because in Renode VTOR defaults to 0 and the image's table is therefore
+        already in use. On the real part any exception vectored into PX4's handlers, which reset the
+        board. Writing `mww 0xE000ED08 0x00000000` before resume fixed it, and the run then worked
+        first time.
+      This is a genuine emulation-vs-silicon divergence IN JESS'S HARNESS, not in the lowered code, and
+      it is invisible in Renode by construction. Worth stating because the campaign has leaned on
+      "the same ELF runs in both": it does, but only once the harness stops relying on a reset-default
+      the real part does not have.
+      TWO HYPOTHESES RULED OUT BY MEASUREMENT rather than argued away:
+        - WATCHDOG. WDOG1 and WDOG2 both read WCR = 0x0030, so WDE (bit 2) is CLEAR -> disabled.
+          RTWDOG3 CS = 0x00002520, so EN (bit 7) is CLEAR -> disabled. RTWDOG4 at 0x4003C000 does not
+          respond at all. No watchdog was running.
+        - MPU. MPU_CTRL (0xE000ED94) read 0x00000000 BEFORE jess touched it -- PX4 had the MPU disabled,
+          so it was never the cause. jess's first hypothesis named the MPU and was wrong.
+
+      *** THE VEHICLE: READ-ONLY WHERE IT COULD BE, RESTORED WHERE IT COULD NOT ***
+      No flash was written. The PX4 APPLICATION lives in FlexSPI flash at 0x30000000 and was never
+      touched; load-to-RAM only overwrote ITCM and DTCM, which the boot ROM repopulates.
+      A CORE-ONLY reset was NOT sufficient to restore it -- openocd warned "Only resetting the Cortex-M
+      core" and afterwards the FMU did not enumerate at all. A HARDWARE reset via nRST (pin 9 of the
+      Pixhawk Debug Full connector, `reset_config srst_only srst_nogate`) brought it back: the board came
+      up first as `PX4 BL FMU v6XRT.x` (the bootloader) and chained to `PX4 FMU v6XRT.x` within ~18 s.
+      Verified healthy and DISARMED afterwards on every occasion.
+      A TRANSIENT, recorded rather than smoothed over: the first load attempt immediately after a board
+      reset produced all-zero parking words with NO sentinel -- i.e. "did not complete", which is not a
+      result. openocd had warned "target was in unknown state when halt was requested". The retry
+      succeeded with identical commands. So the procedure needs a settle after reset before the first
+      halt, and a run WITHOUT the sentinel must never be read as data. That is exactly why the sentinel
+      exists.
+
+      *** A SAFETY GATE WAS BUILT FIRST, AND IT REFUSED ONCE ***
+      tools/bench/preflight-disarmed.py proves the vehicle is DISARMED before anything halts the M7, by
+      checking MAV_MODE_FLAG_SAFETY_ARMED (0x80) across EVERY CRC-valid HEARTBEAT in the window -- not
+      just the last, because a vehicle that arms mid-window must block. FAIL-CLOSED: "could not
+      determine" blocks exactly like "armed".
+      It earned its keep immediately. A first, hand-rolled version walked 0xFE magic bytes WITHOUT
+      checking the CRC and reported "NO HEARTBEAT" while 64,285 bytes were streaming. The gate refused
+      and jess did NOT halt the core on the strength of an unverified parse. Replaced with
+      mav_bench.parse_frames, which computes the MAVLink X.25 CRC with the per-message CRC_EXTRA: same
+      window, 1,989 CRC-valid frames and 8 heartbeats, all with SAFETY_ARMED clear. The AFD-128 lesson
+      one layer up -- do not hand-roll a decoder you already have a validated one for.
+      Every action ran under a `with-device` claim on `pixhawk-6xrt` -- the BOARD, per jess#266.
+
+      *** WHAT THIS DOES AND DOES NOT ESTABLISH ***
+      ESTABLISHED: falcon's rate#tick and mixer#mix, lowered by synth 0.77.0 from the meld-fused v1.139
+      components, EXECUTE on the real RT1176 M7 and reproduce relay's SIL reference bit-exactly, with an
+      attributive negative control, via load-to-RAM over SWD.
+      NOT ESTABLISHED: anything about the OTHER three stages on silicon. In particular AFD-125's
+      estimator divergence was NOT retested here -- that is ekf.elf, a different image, and it is the
+      obvious next run now that the route works. Nothing about the M4. Nothing about flash. Nothing
+      about periodicity or a real control loop: this is one invocation of a two-stage chain, parked and
+      read, exactly as in Renode.
+    tags: [hardware, on-target, rt1176, silicon, load-to-ram, swd, afd-130, afd-092, afd-128, test-pix-032, milestone]
+    fields:
+      detected-by: load-to-RAM over SWD with an MCU-Link on the Pixhawk Debug Full connector, under a with-device claim and a disarmed pre-flight gate, 2026-10-01
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-01T14:24:58Z
+    links:
+      - type: traces-to
+        target: AFD-130
+      - type: traces-to
+        target: TEST-PIX-032
