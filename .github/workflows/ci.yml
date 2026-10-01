@@ -607,6 +607,15 @@ jobs:
       # Wire the oracle in when it passes.
       - name: ekf reference vacuity guards self-test (AFD-125)
         run: python3 tools/cascade-differential/ekf_ref.py --self-test
+      # The observer-seam decoder constants (DD-028). Only --self-test is gated: relay has NOT
+      # published @0.11.0 (nothing tagged; two independent reviews returned DO-NOT-TAG), so the
+      # real check exits 2 = CANNOT RUN rather than passing. The self-test is the part that is
+      # decidable today, and its negative control is jess's OWN wrong layout — which would have
+      # aliased `valid` onto `failed-rotor`, whose 0xFF no-fault sentinel reads as "all fields
+      # valid" on a healthy vehicle and 0x00 as "nothing measured" on a real rotor failure.
+      # Wire the artifact check in when a tag carries the seam.
+      - name: observer-seam decoder offsets — guards self-test (DD-028)
+        run: python3 tools/abi/check-observer-layout.py --self-test
 
   # The COMPONENT-LEVEL oracles, promoted from local evidence to a gate.
   #

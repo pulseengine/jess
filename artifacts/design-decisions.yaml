@@ -1665,7 +1665,47 @@ artifacts:
       SUPERSEDES IN PRACTICE, ONCE IMPLEMENTED: the current single READY-flag handshake at
       0x20400040 (flag written last, polled for acquire), which cannot distinguish "new data" from
       "being overwritten" and which AFD-127 shows emits neither barrier it claims.
-    tags: [inter-core, cache-coherency, seqlock, observer, relay, afd-127, jess-167, unverified]
+      CORRECTION 2026-10-01 — THE LAYOUT ABOVE IS WRONG, AND THE WAY IT IS WRONG IS A SAFETY HAZARD.
+      relay corrected it on jess#167. jess had computed the record from their PROSE description and got
+      two things wrong independently: `valid` was inferred to be a `u8` (the description said "bits
+      0-6", which is 7 bits, so u8 looked implied) when the WIT declares `u32`; and `failed-rotor` was
+      placed AFTER `valid` when it comes BEFORE. jess then presented the result as a computed layout
+      rather than as an inference from prose. That is the repo's own rule — measure every artifact you
+      generalise over — broken by generalising from a description because the artifact was not published.
+
+      THE CORRECT LAYOUT, recomputed independently and AGREEING with relay on both variants:
+        u32 tick (what jess will get, after relay took jess's single-copy-atomicity argument):
+            0   4  tick-head u32      20  12  position        56  12  gyro-bias     76   4  valid u32
+            4  16  attitude           32  12  velocity        68   4  innovation    80   4  tick-tail u32
+                                      44  12  rates           72   1  failed-rotor
+          TOTAL 84 B, align 4, spans 3 cache lines; head line 0, tail (80) line 2.
+        u64 tick (the variant jess was analysing): 96 B, align 8 — failed-rotor 76, valid 80,
+          tick-tail 88. Corroborated mechanically by the component's own observer::_RET_AREA = 0x60 = 96.
+        jess's earlier figure of 88 B was wrong for the u64 variant too.
+
+      WHY IT IS A HAZARD AND NOT AN OFFSET SLIP. The offset jess would read as `valid` ALIASES
+      `failed-rotor`, whose no-fault sentinel is 0xFF. Demonstrated mechanically in
+      tools/abi/check-observer-layout.py --self-test, and it holds for BOTH tick widths because it is a
+      property of the field ORDER, not of one variant's offsets (u32: both at 72; u64: both at 76):
+          healthy vehicle  failed-rotor 0xFF -> read as valid = every bit set -> "all fields valid"
+          rotor 0 failed   failed-rotor 0x00 -> read as valid = 0 -> "nothing measured"
+      The second is the dangerous direction: the reader would report no valid data on the one flight
+      where it matters most. The seqlock tail would also be taken from `valid`, making the coherency
+      check head-vs-bitmask, so the reader would additionally spin.
+
+      WHAT SURVIVES THE CORRECTION, unchanged: the two operative decisions. The record still spans
+      THREE 32-byte cache lines with head in line 0 and tail in line 2, so (1) the retry must
+      re-invalidate the whole range on every attempt or the reader spins on stale lines, and (2) the
+      placement still pads to 96 B — 84 rounds to 96 just as 88 did. Only the numbers were wrong, not
+      the conclusions.
+
+      SO THE OFFSETS ARE NO LONGER WRITTEN DOWN TWICE. tools/abi/check-observer-layout.py now holds
+      jess's decoder constants as the single source and asserts them against the PUBLISHED artifact via
+      `wasm-tools component wit` — relay's explicit request ("assert the offsets rather than compute
+      them, and do it on the fetched artifact, not on this comment"). It REFUSES with exit 2 while
+      nothing is published rather than passing, because "could not run" is not "agreed". Its negative
+      control is jess's own error.
+    tags: [inter-core, cache-coherency, seqlock, observer, relay, afd-127, jess-167, unverified, self-correction]
     fields:
       rationale: "The M7 has an L1 D-cache and the M4 does not, so the reader is the only party that can observe staleness and the only one that can correct it. A seqlock reader that invalidates once and then retries re-reads the same cached lines, so head and tail disagree forever and it spins — re-invalidating per attempt is what makes the protocol terminate. Padding to whole 32-byte lines removes cross-core writeback clobbering by construction rather than making it unlikely. Both are jess's side because 32-byte alignment is not expressible in WIT; it is a property of the lowered struct and its placement, and relay's field order is already correct for it. Recorded UNVERIFIED and unverifiable on the current instrument: the dual-core Renode platform declares no cache on either core (AFD-127), so a wrong implementation and a right one produce the same green."
     provenance:
