@@ -8497,7 +8497,62 @@ artifacts:
       diffing two unrelated layouts.
       The traced QEMU run reproduces AFD-125/132's parked words exactly, so it is the same execution
       the silicon result was measured on, not a different build.
-    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report]
+
+      *** AND THEN THE TERM ITSELF, WHICH IS THE SHARPEST RESULT AND REFRAMES ALL OF THE ABOVE ***
+      The sign pattern was worth one more question: what, quantitatively, IS the translational
+      divergence? Fitting the down-axis velocity against a closed form answers it outright.
+      A strapdown inertial update is v_nav += (R(q)*a_body + g_nav)*dt, where `+ g_nav` is the GRAVITY
+      COMPENSATION — an accelerometer at rest reads specific force, +1 g upward, and the compensation
+      cancels it so a stationary vehicle integrates ~zero velocity. Drop that addend and the vehicle
+      appears to accelerate downward at g forever: vel-d(n) = n*g*dt.
+      MEASURED, per tick, from the memtrace's writes to the return area's vel-d slot (0x2000b048):
+          tick    1  2  3  4  5 ... 12 13 14 15 16
+          ratio vel-d(n) / (n*g*dt):
+                 1.0000 1.0000 1.0000 1.0000 1.0001 ... 1.0002 1.0002 1.0002 1.0002 1.0003
+          wasmtime, same ticks: vel-d(1) = 0, vel-d(16) = -1.867e-08 — cancelled to eight decimals.
+      SIXTEEN CONSECUTIVE TICKS TRACKING n*g*dt TO THREE PARTS IN TEN THOUSAND. That is not a rounding
+      difference, not a stale read and not an emulator artefact; it is ONE MISSING OR ZERO-VALUED
+      ADDEND. The residual drift from 1.0000 to 1.0003 is the attitude moving slightly off identity
+      over the run, which is exactly what should happen.
+      AND IT EXPLAINS THE SIGN PATTERN rather than sitting beside it: with gravity uncancelled the
+      translational sub-vector is dominated by a term of definite sign, while wasmtime's values are the
+      small tilt residuals of the opposite sign. Six of six differing fields disagreeing in sign is
+      what a missing compensation term looks like downstream.
+
+      *** A CORRECTION I MADE MID-MEASUREMENT, RECORDED BECAUSE THE ERROR IS SEDUCTIVE ***
+      My first reading of the tick-1 numbers was that ARM matched the physics and WASMTIME was wrong:
+      with an identity attitude, gravity on body z "should" appear on the down axis, and ARM's vel-d is
+      g*dt to 1 ulp while wasmtime's is 0. I was within a minute of reporting that the divergence ran
+      the other way round than AFD-125 frames it.
+      It is wrong. g*dt is the physics of FREE FALL, not of a compensated inertial update. For a
+      vehicle at rest the correct answer is ~zero, which is wasmtime's. The 1-ulp agreement with the
+      closed form is not ARM being right; it is ARM integrating an UNCOMPENSATED accelerometer, and the
+      closed form it matches is the one for the defect.
+      Kept in the record because "my value matches a closed form to 1 ulp" is the most persuasive
+      possible wrong turn, and the thing that caught it was asking which closed form, not whether.
+
+      *** AND WHAT THIS STILL DOES NOT ESTABLISH ***
+      wasmtime DEFINES the semantics, so wasmtime's behaviour is the module's behaviour and the lowered
+      run deviating from it localises the defect to the LOWERING rather than to relay's components or
+      meld's fusion. But whether the addend is absent, zeroed, or landing on another axis — and which
+      instruction — still needs synth's disassembly. This measures the symptom to three parts in ten
+      thousand; it does not name the instruction.
+
+      *** RE-CHECKABLE FROM COMMITTED EVIDENCE ***
+      tools/cascade-differential/gravity-residual.py, with the sixteen measured words committed as
+      repro/synth-1436/veld-arm-16ticks.txt, so anyone can re-run the fit in a second with no emulator
+      and no 20 MB trace: `gravity-residual.py --arm-words repro/synth-1436/veld-arm-16ticks.txt`.
+      Both paths (committed words, and extraction from the trace) were run and agree.
+      THE CLASSIFIER HAS THREE OUTCOMES, not two: UNCOMPENSATED, COMPENSATED and NEITHER. With only
+      two, anything else would be forced into whichever was the default, and "it tracks neither n*g*dt
+      nor zero" is the interesting third case. Its self-test requires exactly that: a series at half
+      n*g*dt and a quadratic series must BOTH come back NEITHER, which is what stops a classifier that
+      always answers UNCOMPENSATED from passing the positive case.
+      A BUG OF MINE THAT THE GUARDS CAUGHT, worth one line: the first --arm-words reader stripped words
+      beginning with '#' instead of whole comment LINES, so it fed the file's prose into the fit. The
+      length guard refused with "76 word(s) given, expected 16" instead of fitting 76 values against
+      the wrong n and printing a confident ratio.
+    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report, gravity-compensation]
     fields:
       detected-by: jess building the memory tracer synth#1436 asked for, then finding a whole-memory diff answered it better, 2026-10-02
       severity: major

@@ -206,6 +206,27 @@ jobs:
           set -euo pipefail
           tools/cascade-differential/linmem-differential.py --self-test
           hardware/qemu/memtrace/analyse.py --self-test
+          # gravity-residual has THREE outcomes, and its self-test requires the third one to
+          # fire: a series at half n*g*dt and a quadratic series must both come back NEITHER.
+          # Without those, a classifier that always answered UNCOMPENSATED would pass the
+          # positive case, and the AFD-134 headline rests on that classifier.
+          tools/cascade-differential/gravity-residual.py --self-test
+          # The fit itself, re-run from the sixteen COMMITTED words rather than from a 20 MB
+          # trace, so the finding is checked on every run and not only when a bench exists. It
+          # exits 1 by design (a side IS uncompensated), which is the finding, so invert it —
+          # and a 0 or a 2 must both fail, because 2 is "could not determine".
+          # No line continuations here: a backslash-continued line inside a `run: |` block
+          # dedents out of the block scalar and the whole workflow stops parsing. Measured —
+          # the first version of this step did exactly that, and check-workflow.sh refused.
+          WORDS=repro/synth-1436/veld-arm-16ticks.txt
+          rc=0; tools/cascade-differential/gravity-residual.py --arm-words "$WORDS" >/dev/null || rc=$?
+          if [ "$rc" != 1 ]; then
+            echo "gravity-residual on the committed words returned $rc, want 1 (UNCOMPENSATED)."
+            echo "  rc 0 would mean the committed series no longer shows the defect."
+            echo "  rc 2 means it could not be read at all, which is NOT a pass."
+            exit 1
+          fi
+          echo "  gravity-residual: the committed vel-d series still fits n*g*dt (AFD-134)"
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so
