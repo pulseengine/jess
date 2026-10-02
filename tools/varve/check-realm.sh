@@ -77,7 +77,14 @@ classify_varve() { # $1=rc $2=output -> prints a verdict token
 
 operative_check() {
   if ! command -v varve >/dev/null 2>&1; then
-    echo "NOT CHECKED: varve is not on PATH, so whether the pin is OPERATIVE could not be
+    # The word OPERATIVE deliberately does NOT appear in this message. It used to —
+    # "whether the pin is OPERATIVE could not be determined" — and a grep for the bare token
+    # then matched the sentence that says the OPPOSITE of the verdict. My own verification of
+    # this branch reported "WRONG: claims OPERATIVE" because of it, which is the same defect
+    # this repo has hit in an ABI gate whose reader was redirected by a nearby comment. The
+    # verdict tokens OPERATIVE / FAIL / NOT CHECKED now appear only at the start of a verdict
+    # line, so a consumer anchoring on `^` cannot be misled by prose.
+    echo "NOT CHECKED: varve is not on PATH, so whether the pin is usable could not be
    determined. This is 'could not run', not 'the pin works'."
     return 0          # absence of varve is not this gate's failure; it is reported, not hidden
   fi
