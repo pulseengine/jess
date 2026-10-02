@@ -68,9 +68,18 @@ def classify(series, g, dt, tol):
         ratios.append(v / expect if expect else float("inf"))
     if all(abs(r - 1.0) <= tol for r in ratios):
         return UNCOMP, ratios
-    # Compensated means small compared with the gravity term it should have cancelled, judged
-    # against that term rather than against an absolute epsilon, so it scales with g and dt.
-    if all(abs(v) <= tol * g * dt for v in series):
+    # COMPENSATED means small RELATIVE TO THE GRAVITY IT SHOULD HAVE CANCELLED, which is
+    # n*g*dt and therefore grows with n — so the test is on the RATIO, not on an absolute
+    # bound.
+    # THE BUG THIS REPLACES, found by extending the run from 16 ticks to 1024: the bound used
+    # to be `abs(v) <= tol * g * dt`, i.e. one SINGLE tick's gravity, which does not scale.
+    # Over 1024 ticks wasmtime legitimately accumulates vel-d = -7.87e-03 m/s (about 8 mm/s
+    # after a second, from the attitude tilting off identity) — larger than one tick's
+    # 9.81e-05 bound, so the CORRECT side was classified NEITHER. A longer measurement
+    # falsifying the checker rather than the subject is the recurring shape here, and it is
+    # why the third outcome has to exist: had NEITHER not been a real answer, that run would
+    # have been forced into one of the other two.
+    if all(abs(r) <= tol for r in ratios):
         return COMP, ratios
     return NEITHER, ratios
 
@@ -114,6 +123,12 @@ def self_test():
         ("exactly n*g*dt",      [n * g * dt for n in range(1, 17)],          UNCOMP),
         ("n*g*dt +0.03% drift", [n * g * dt * (1 + 0.0003) for n in range(1, 17)], UNCOMP),
         ("cancelled to ~1e-8",  [-1.87e-08] * 16,                            COMP),
+        # THE REGRESSION CASE for the mis-scaled bound above: a compensated run long enough
+        # that its absolute residual EXCEEDS one tick's g*dt (9.81e-05) while staying tiny
+        # relative to the n*g*dt it cancelled. These are wasmtime's own measured endpoints
+        # over 1024 ticks. The old bound called this NEITHER.
+        ("compensated over 1024 ticks",
+         [-2.0e-10 * n for n in range(1, 1025)],                              COMP),
         ("exactly zero",        [0.0] * 16,                                  COMP),
         # THE CONTROL THAT STOPS THE OTHER TWO BEING VACUOUS: a series that is neither must be
         # reported as neither. Without it, a classifier that answered UNCOMPENSATED always would

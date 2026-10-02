@@ -357,7 +357,14 @@ echo "== 5c. build the ESTIMATOR image and its controls (TEST-PIX-036) =="
 # baseline in this suite (EXP/EXPP in run-oracle.sh, from relay's SIL reference under v1.134.1,
 # still bit-exact on v1.139 per AFD-122). Adding a call into that image would advance shared
 # instance state and move the one number here that is not recomputed from the module under test.
-arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot-ekf.S" -o "$OUT/boot_ekf.o" || fail "boot-ekf.S"
+# EKF_N is overridable (EKF_N=1024 build.sh) and the EFFECTIVE value is RECORDED, not left to
+# be re-derived by grepping the source. Same reason `iface.ver` is recorded: a consumer that
+# greps boot-ekf.S reads 16 whatever was actually built, which would silently compare an
+# N-tick run against an M-tick reference. With no override the assembler sees no --defsym and
+# the default inside the .ifndef applies, so the default build's bytes are unchanged.
+printf '%s\n' "${EKF_N:-16}" > "$OUT/ekf.n"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard \
+  ${EKF_N:+-Wa,--defsym,EKF_N=$EKF_N} "$D/boot-ekf.S" -o "$OUT/boot_ekf.o" || fail "boot-ekf.S"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
     -o "$OUT/ekf.elf" || fail "ekf link"
 left="$(arm-none-eabi-nm "$OUT/ekf.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"

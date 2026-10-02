@@ -49,8 +49,16 @@ trap 'rm -rf "$RESCDIR"' EXIT
 # The tick count lives in TWO places (the image and the reference). Derive the image's value
 # from its source and refuse to run if they disagree, rather than silently comparing an
 # N-tick run against an M-tick reference.
-SRC_N="$(grep -oE '^\s*\.equ\s+EKF_N,\s*[0-9]+' "$D/boot-ekf.S" | grep -oE '[0-9]+$')"
-[ -n "$SRC_N" ] || fail "could not read EKF_N from boot-ekf.S"
+# PREFER THE RECORDED VALUE. build.sh writes the EFFECTIVE tick count to ekf.n beside the
+# image, because EKF_N is now overridable and grepping boot-ekf.S would read the DEFAULT
+# whatever was built — comparing an N-tick run against an M-tick reference while looking
+# correct. The source grep remains as the fallback for an image built before ekf.n existed.
+if [ -f "$SCRATCH/invoke/ekf.n" ]; then
+  SRC_N="$(tr -dc '0-9' < "$SCRATCH/invoke/ekf.n")"
+else
+  SRC_N="$(grep -oE '^[[:space:]]*\.equ[[:space:]]+EKF_N,[[:space:]]*[0-9]+' "$D/boot-ekf.S" | grep -oE '[0-9]+$')"
+fi
+[ -n "$SRC_N" ] || fail "could not determine the image's EKF_N (no $SCRATCH/invoke/ekf.n and no readable .equ in boot-ekf.S)"
 [ "$SRC_N" = "$N" ] || fail "EKF_N in boot-ekf.S is $SRC_N but the oracle is checking N=$N"
 
 # FRESHNESS. This oracle reads a prebuilt ELF, so a FAILED build leaves the previous run's
