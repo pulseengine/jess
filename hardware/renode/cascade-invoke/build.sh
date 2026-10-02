@@ -96,9 +96,34 @@ fi
 #   2. The match ignored `platform=`, so a LINUX digest reported ON-PIN on a Darwin host.
 #   3. There was no "neither shasum nor sha256sum" refusal, so on a host with no hasher
 #      EVERY binary reported ON-PIN — including /bin/ls.
-announce_tool() {   # $1 = tool name, $2 = path
-  [ -n "$2" ] || return 0
-  local d line pinplat
+announce_tool() {   # $1 = tool name, $2 = path ("" = the `varve run` fallback)
+  # THE HOLE THIS CLOSES. The first line used to be `[ -n "$2" ] || return 0`, so when MELD or
+  # LOOM was UNSET — the default, and what CI and every plain local build do — this announced
+  # NOTHING and checked nothing, while run_meld/run_loom silently dispatched `varve run`.
+  #
+  # MEASURED 2026-10-02, and the numbers are why this matters:
+  #     artifacts.pins   meld v0.58.3   loom v1.4.0
+  #     varve layer 2026.09.2            meld 0.53.0    loom 1.4.1
+  # Five minor versions of meld, unannounced. That is the mixed-toolchain hazard varve exists
+  # to prevent, arriving through jess's own fallback — and the same shape as AFD-045, where a
+  # defect report cited meld 0.41.3 while 0.52.0 was current because nothing detected drift.
+  #
+  # IT WAS MASKED, which is the part worth remembering. The installed varve was 0.29.0 and
+  # could not parse the realms file at all, so the fallback FAILED LOUDLY and no build ever
+  # took it. Upgrading varve to 0.39.0 fixed that failure and thereby turned a loud stop into
+  # a silent substitution. A fix that unmasks a worse defect is still a fix, but only if the
+  # defect it unmasks is then closed — which is this.
+  local tool="$1" path="$2" d line pinplat
+  if [ -z "$path" ]; then
+    path="$(varve which "$tool" 2>/dev/null | head -1)"
+    if [ -z "$path" ] || [ ! -x "$path" ]; then
+      echo "!! OFF-PIN $tool : no \$$(printf '%s' "$tool" | tr '[:lower:]' '[:upper:]') override and \`varve which $tool\` resolves nothing"
+      [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and $tool cannot be resolved"
+      return 0
+    fi
+    echo "   $tool comes from the varve layer (no override): $path"
+  fi
+  set -- "$tool" "$path"
   if [ ! -x "$2" ]; then
     echo "!! OFF-PIN $1 : $2 is not an executable file"
     [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and $1 is not executable"
@@ -125,7 +150,7 @@ announce_tool() {   # $1 = tool name, $2 = path
     [ "$REQUIRE_ON_PIN" = "1" ] && fail "REQUIRE_ON_PIN is set and $1 matches a foreign-platform pin"
     return 0
   fi
-  echo "   $1 override matches its pin ($("$2" --version 2>&1 | head -1)) — ON-PIN"
+  echo "   $1 matches its pin ($("$2" --version 2>&1 | head -1)) — ON-PIN"
 }
 announce_tool meld "$MELD"
 announce_tool loom "$LOOM"

@@ -49,6 +49,71 @@ verdict() { # $1=root $2=layer  -> prints OK/FAIL reason, returns 0/1
   fi
 }
 
+# ── IS THE PIN OPERATIVE, OR MERELY SELF-CONSISTENT? ────────────────────────────────────────
+# The check above compares the realms file's trust root against the pinned layer with `sed`.
+# That is an INTERNAL-CONSISTENCY check, and it passes whether or not the installed varve can
+# USE the file at all. Measured on 2026-10-02: this gate was green while every `varve run`
+# failed outright —
+#     error: varve-realms.toml: not a valid realms file: TOML parse error at line 21
+#            unknown field `retired-roots`, expected one of `registry`, `trust-root`, ...
+# because the committed realms file is varve's own CURRENT published one (it still ships
+# `retired-roots` in v0.39.0) while the installed binary was v0.29.0, which predates the field.
+# `retired-roots` is documented in that very file as "DIAGNOSTIC ONLY — nothing verifies
+# against these, ever", so an optional diagnostic field makes an older varve refuse EVERY
+# operation.
+#
+# WHY THAT MATTERS BEYOND VARVE: hardware/renode/cascade-invoke/build.sh falls back to
+# `varve run meld` when MELD is unset, so the DEFAULT build path was broken while the gate that
+# exists to protect the toolchain pin reported OK. A gate that checks a file's contents but
+# never asks the tool whether it can read the file is the same vacuity this repo keeps finding
+# in checkers rather than in code.
+classify_varve() { # $1=rc $2=output -> prints a verdict token
+  if [ "$1" = 0 ]; then echo OPERATIVE; return; fi
+  case "$2" in
+    *"not a valid realms file"*|*"unknown field"*) echo REALMS_UNPARSEABLE;;
+    *) echo OTHER_FAILURE;;
+  esac
+}
+
+operative_check() {
+  if ! command -v varve >/dev/null 2>&1; then
+    # The word OPERATIVE deliberately does NOT appear in this message. It used to —
+    # "whether the pin is OPERATIVE could not be determined" — and a grep for the bare token
+    # then matched the sentence that says the OPPOSITE of the verdict. My own verification of
+    # this branch reported "WRONG: claims OPERATIVE" because of it, which is the same defect
+    # this repo has hit in an ABI gate whose reader was redirected by a nearby comment. The
+    # verdict tokens OPERATIVE / FAIL / NOT CHECKED now appear only at the start of a verdict
+    # line, so a consumer anchoring on `^` cannot be misled by prose.
+    echo "NOT CHECKED: varve is not on PATH, so whether the pin is usable could not be
+   determined. This is 'could not run', not 'the pin works'."
+    return 0          # absence of varve is not this gate's failure; it is reported, not hidden
+  fi
+  local out rc v
+  v="$(varve --version 2>&1 | head -1)"
+  out="$(varve which meld 2>&1)"; rc=$?
+  case "$(classify_varve "$rc" "$out")" in
+    OPERATIVE)
+      echo "OPERATIVE: $v can resolve the pin ($(printf '%s' "$out" | head -1))"
+      return 0;;
+    REALMS_UNPARSEABLE)
+      echo "FAIL: $v CANNOT PARSE $REALMS, so the pin is not operative and every
+   \`varve run <tool>\` fails. The realms file is varve's own published one and carries a field
+   this binary predates:
+$(printf '%s' "$out" | sed 's/^/     /' | head -6)
+   This is a VERSION SKEW, not a corrupt file. Either upgrade varve, or pin a realms file this
+   binary understands — but do NOT delete the field to make the parse succeed: it is varve's,
+   and removing it would diverge this repo's realms file from the canonical one, which is the
+   AFD-118 trap in reverse.
+   Note what it breaks beyond varve: build.sh falls back to \`varve run meld\` when MELD is
+   unset, so the default build path is down while this is true."
+      return 1;;
+    *)
+      echo "FAIL: $v could not resolve the pin, for a reason that is not a realms parse error:
+$(printf '%s' "$out" | sed 's/^/     /' | head -6)"
+      return 1;;
+  esac
+}
+
 if [ "${1:-}" = "--self-test" ]; then
   ok=0
   # Every row must be OBSERVED to give its stated verdict — including the two failures.
@@ -66,6 +131,31 @@ EOF
     if [ "$got" = "$want" ]; then printf "  [ok ] %-42s -> %s\n" "$label" "$(echo "$out" | head -1)"
     else ok=1; printf "  [FAIL] %-42s want rc=%s got rc=%s\n" "$label" "$want" "$got"; fi
   done
+  # And the OPERATIVE classifier, exercised on canned varve output so the self-test needs no
+  # varve installed. The failure strings are VERBATIM LINES from the terminal on 2026-10-02 —
+  # a canned string invented by whoever writes the check tends to match the check rather than
+  # reality. One line each rather than the whole multi-line error, because `read` consumes a
+  # single line and a multi-line row silently parsed as an EMPTY label and an empty expectation,
+  # which the self-test caught as `want <blank> got REALMS_UNPARSEABLE`.
+  cls() { # $1=rc $2=output $3=want $4=label
+    local got; got="$(classify_varve "$1" "$2")"
+    if [ "$got" = "$3" ]; then printf "  [ok ] %-42s -> %s\n" "$4" "$got"
+    else ok=1; printf "  [FAIL] %-42s want %s got %s\n" "$4" "$3" "$got"; fi
+  }
+  cls 0 "layer 2026.09.2 (sha256:abc) meld" OPERATIVE "a working resolve"
+  cls 1 "error: /x/varve-realms.toml: not a valid realms file: TOML parse error at line 21" \
+        REALMS_UNPARSEABLE "THE MEASURED SKEW, line 1 verbatim"
+  cls 1 "unknown field \`retired-roots\`, expected one of \`registry\`, \`trust-root\`" \
+        REALMS_UNPARSEABLE "THE MEASURED SKEW, the unknown-field line"
+  cls 1 "error: source has no layer matching sha256:c1e6a418" \
+        OTHER_FAILURE "a real but different failure"
+  cls 1 "error: No valid signatures" \
+        OTHER_FAILURE "a verification failure, NOT a parse error"
+  # The control that stops the two SKEW rows being vacuous: a success must NOT be classified as
+  # a skew however the output reads. Without this, `classify_varve` returning REALMS_UNPARSEABLE
+  # unconditionally would pass both of them.
+  cls 0 "error: not a valid realms file" OPERATIVE \
+        "rc=0 wins over scary text (a pass is a pass)"
   echo "SELF-TEST: $([ $ok = 0 ] && echo PASS || echo FAIL)"; exit $ok
 fi
 
@@ -77,4 +167,13 @@ echo "realm trust-root: $root"
 echo "pinned layer:     $layer"
 out=$(verdict "$root" "$layer"); rc=$?
 echo "$out"
-exit $rc
+
+# The second, independent question: can the installed varve actually USE this file?
+echo
+op=$(operative_check); orc=$?
+echo "$op"
+
+# Either failure fails the gate. They are separate questions and a reader needs to see which
+# one fired, so both verdicts are always printed rather than short-circuiting on the first.
+[ "$rc" = 0 ] && [ "$orc" = 0 ] || exit 1
+exit 0
