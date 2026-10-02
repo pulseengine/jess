@@ -8561,3 +8561,90 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-01T23:52:14Z
+
+  - id: AFD-135
+    type: ai-found-defect
+    title: tools/varve/check-realm.sh was GREEN while every 'varve run' failed — it read the realms file with sed instead of asking varve to parse it; and fixing that unmasked build.sh silently substituting the varve layer's meld 0.53.0 for the pinned 0.58.3, because announce_tool returned early on an empty override
+    status: open
+    description: |-
+      2026-10-02. A GATE THAT CHECKED A FILE'S CONTENTS BUT NEVER ASKED THE TOOL WHETHER IT COULD READ
+      THE FILE — and, behind it, an unannounced toolchain substitution the first defect was masking.
+      Found while rebuilding the cascade with a candidate synth for release-watch.
+
+      *** ONE: `varve run` WAS BROKEN AND tools/varve/check-realm.sh WAS GREEN ***
+          $ varve run meld --version
+          error: varve-realms.toml: not a valid realms file: TOML parse error at line 21, column 1
+                 unknown field `retired-roots`, expected one of `registry`, `trust-root`, ...
+      check-realm.sh compares the realms file's trust root against the pinned layer with `sed`. That is
+      an INTERNAL-CONSISTENCY check and it passes whether or not the installed varve can USE the file.
+      So the gate that exists to protect the toolchain pin reported OK while every `varve run` failed.
+      CAUSE, measured not guessed, with a one-variable control (same file, same command, different
+      binary):
+          varve 0.29.0  ->  rc=1, "not a valid realms file"
+          varve 0.39.0  ->  rc=0, resolves meld from layer 2026.09.2, digest sha256:67d58547...,
+                            which is EXACTLY the digest in varve.toml
+      So the PIN IS CORRECT and the realms file is correct; the installed BINARY was ten minors stale.
+      AND IT IS NOT JESS'S FILE: varve's own v0.39.0 release still ships `retired-roots` in its
+      published varve-realms.toml, and that file documents the field as "DIAGNOSTIC ONLY — nothing
+      verifies against these, ever". An optional diagnostic field makes an older varve refuse EVERY
+      operation, with a message that never says "your varve is too old". Reported upstream.
+      FIXED: check-realm.sh now asks a second, independent question — is the pin OPERATIVE, not merely
+      self-consistent — by resolving a tool through varve and classifying the outcome as OPERATIVE /
+      REALMS_UNPARSEABLE / OTHER_FAILURE. Absence of varve reports "NOT CHECKED", explicitly not a
+      pass. The classifier is exercised on CANNED output so the self-test needs no varve, and the
+      failure strings are VERBATIM LINES from the terminal, because a canned string invented by whoever
+      writes the check tends to match the check rather than reality. Its control: rc=0 must classify as
+      OPERATIVE even when the output contains the scary text, or a classifier that always answered
+      REALMS_UNPARSEABLE would pass both skew rows.
+      A BUG IN MY OWN SELF-TEST, caught by it: the first version fed a MULTI-LINE canned error into an
+      `IFS=| read` row, which consumes one line, so the row parsed as an empty label with an empty
+      expectation and printed `want <blank> got REALMS_UNPARSEABLE`. Replaced with one verbatim line
+      per row.
+
+      *** TWO: FIXING THAT UNMASKED A SILENT TOOLCHAIN SUBSTITUTION, WHICH IS THE WORSE DEFECT ***
+      build.sh does `run_meld() { if [ -n "$MELD" ]; then "$MELD" "$@"; else varve run meld "$@"; fi; }`
+      and announces the tool with `announce_tool meld "$MELD"`, whose FIRST LINE was
+          [ -n "$2" ] || return 0
+      So when MELD or LOOM was UNSET — the default, and what every plain local build does — the build
+      announced NOTHING and checked NOTHING while dispatching through varve. Measured:
+          artifacts.pins          meld v0.58.3    loom v1.4.0
+          varve layer 2026.09.2   meld 0.53.0     loom 1.4.1
+      Five minor versions of meld, unannounced. That is precisely the mixed-toolchain hazard varve
+      exists to prevent, arriving through jess's own fallback, and the same shape as AFD-045 — a defect
+      report citing meld 0.41.3 while 0.52.0 was current, because nothing detected the drift.
+      IT WAS MASKED BY DEFECT ONE. varve 0.29.0 could not parse the realms file, so the fallback FAILED
+      LOUDLY and no build ever took it. Upgrading varve turned a loud stop into a silent substitution.
+      A fix that unmasks a worse defect is still a fix — but only if the defect it unmasks is then
+      closed, which is the rest of this.
+      FIXED: announce_tool now resolves the fallback through `varve which <tool>` and puts it through
+      the SAME digest-against-artifacts.pins check as an explicit override, so the toolchain that
+      produced an artifact is always named. Measured after the fix, on the previously silent path:
+          !! OFF-PIN meld : meld 0.53.0   digest 49a8515d... is not a pinned meld
+          !! OFF-PIN loom : loom 1.4.1    digest 5875ada2... is not a pinned loom
+      REQUIRE_ON_PIN=1 turns those into a refusal, as it already did for an explicit override.
+
+      *** WHAT I AM NOT CLAIMING, BECAUSE THE HONEST VERSION IS WEAKER ***
+      The silent substitution would NOT have produced a wrong artifact from THIS script TODAY: meld
+      0.53.0 predates `--emit-manifest`, so the fuse step fails outright —
+          tip: to pass '--emit-manifest' as a value, use '-- --emit-manifest'
+      That is LUCK, not design. The hazard is a build whose flags the older tool happens to accept, and
+      nothing in the script distinguished the two cases. "It would have silently produced wrong output"
+      is the claim I cannot make and am not making; "nothing would have told anyone which meld ran" is
+      the claim, and it is sufficient.
+
+      *** THE PATTERN, WHICH IS THE REUSABLE PART ***
+      Both defects are the same shape in different costumes: A CHECK THAT READS A FILE INSTEAD OF
+      ASKING THE TOOL. check-realm.sh read the realms file with sed and never asked varve to parse it;
+      announce_tool read `$MELD` and never asked what would run when `$MELD` was empty. In both cases
+      the green was true of what was checked and false of what mattered. The discriminating question in
+      both cases is "what will actually execute?", and it is answerable only by asking the thing that
+      executes.
+    tags: [varve, toolchain-pin, gate-potency, afd-045, afd-118, mixed-toolchain, upstream-report, build-sh]
+    fields:
+      detected-by: jess rebuilding the cascade with a candidate synth for release-watch, when the default meld path failed to start, 2026-10-02
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-02T00:10:45Z
