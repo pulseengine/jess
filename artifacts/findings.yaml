@@ -8587,7 +8587,7 @@ artifacts:
       AND IT IS NOT JESS'S FILE: varve's own v0.39.0 release still ships `retired-roots` in its
       published varve-realms.toml, and that file documents the field as "DIAGNOSTIC ONLY — nothing
       verifies against these, ever". An optional diagnostic field makes an older varve refuse EVERY
-      operation, with a message that never says "your varve is too old". Reported upstream.
+      operation, with a message that never says "your varve is too old". Reported upstream as varve#234 (https://github.com/pulseengine/varve/issues/234), with the one-variable control, the verbatim error, and the argument that the refusal protects nothing: no signature, digest or trust decision depends on `retired-roots`, so refusing on it trades functionality for no safety. Suggested, in preference order: ignore unknown realm fields (or accept-and-warn), else version the file and say THAT rather than naming a field, and either way name the binary version in the parse error.
       FIXED: check-realm.sh now asks a second, independent question — is the pin OPERATIVE, not merely
       self-consistent — by resolving a tool through varve and classifying the outcome as OPERATIVE /
       REALMS_UNPARSEABLE / OTHER_FAILURE. Absence of varve reports "NOT CHECKED", explicitly not a
