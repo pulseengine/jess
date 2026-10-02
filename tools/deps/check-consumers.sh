@@ -40,6 +40,14 @@ for line in open(pins_p):
 DERIVED = {
     'invoke', 'appcompose', 'f100gale', 'f100hal', 'f100init', 'dispatch', 'timerprobe',
     'flightloop', 'xruntime', 'scry', 'renode', 'abi', 'einit', 'kiln', 'sil', 'soak',
+    # linmem/ holds the two 64 KiB dumps linmem-capture.sh writes (AFD-134). Declared even
+    # though the regex below does not currently SEE it — that script builds its paths from
+    # variables, so the reference is invisible to a literal-path matcher. Declaring it now
+    # means the day someone writes `.scratch/linmem/arm-linmem.bin` literally, this gate
+    # accepts it instead of going red for a directory that was always legitimate; and the set
+    # above stays the honest inventory of what lives under .scratch rather than only of what
+    # this regex happens to match.
+    'linmem',
 }
 
 # WHAT THIS CAN AND CANNOT DECIDE, stated so nobody reads more into a green than is there:

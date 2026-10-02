@@ -37,3 +37,9 @@ app/*/*.wasm
 # cost this repo days over, in a file nobody looks at.
 __pycache__/
 *.pyc
+
+# memtrace is compiled against the LOCAL qemu's plugin header (API version must match the
+# emulator that loads it), so the binary is built per machine by hardware/qemu/memtrace/build.sh
+# and never committed.
+hardware/qemu/memtrace/libmemtrace.dylib
+hardware/qemu/memtrace/libmemtrace.so

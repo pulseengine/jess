@@ -1,0 +1,21 @@
+# vel-d, one word per tick (1..16), as the synth-lowered image WROTE it to its return
+# area at ARM 0x2000b048 (= state struct 0x2000b024 + 9*4), read off a memtrace of the
+# QEMU mps2-an500 run of .scratch/invoke/ekf.elf, IMU (0,0,-9.81, 0.30,-0.15,0.07).
+# These fit n*g*dt to 1.0000-1.0003 — uncompensated gravity. See AFD-134, synth#1436.
+# Re-check with:  tools/cascade-differential/gravity-residual.py --arm-words <this file>
+3c20ba20
+3ca0baa8
+3cf118f8
+3d20bc04
+3d48ebed
+3d711c38
+3d8ca672
+3da0bef9
+3db4d7b2
+3dc8f09b
+3ddd09b6
+3df12302
+3e029e40
+3e0cab17
+3e16b807
+3e20c510
