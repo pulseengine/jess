@@ -218,15 +218,23 @@ jobs:
           # No line continuations here: a backslash-continued line inside a `run: |` block
           # dedents out of the block scalar and the whole workflow stops parsing. Measured —
           # the first version of this step did exactly that, and check-workflow.sh refused.
-          WORDS=repro/synth-1436/veld-arm-16ticks.txt
-          rc=0; tools/cascade-differential/gravity-residual.py --arm-words "$WORDS" >/dev/null || rc=$?
-          if [ "$rc" != 1 ]; then
-            echo "gravity-residual on the committed words returned $rc, want 1 (UNCOMPENSATED)."
-            echo "  rc 0 would mean the committed series no longer shows the defect."
-            echo "  rc 2 means it could not be read at all, which is NOT a pass."
-            exit 1
-          fi
-          echo "  gravity-residual: the committed vel-d series still fits n*g*dt (AFD-134)"
+          # BOTH horizons. The 16-tick series is where the defect was first fitted; the
+          # 1024-tick series is what makes it a measurement rather than an extrapolation, and
+          # it is also the one that caught the COMPENSATED bound being mis-scaled to a single
+          # tick's gravity. Checking only the short one would let that regress unseen.
+          for spec in "16:repro/synth-1436/veld-arm-16ticks.txt" \
+                      "1024:repro/synth-1436/veld-arm-1024ticks.txt"; do
+            n="${spec%%:*}"; words="${spec#*:}"
+            rc=0
+            tools/cascade-differential/gravity-residual.py --arm-words "$words" --ticks "$n" >/dev/null || rc=$?
+            if [ "$rc" != 1 ]; then
+              echo "gravity-residual on $words (N=$n) returned $rc, want 1 (UNCOMPENSATED)."
+              echo "  rc 0 would mean the committed series no longer shows the defect."
+              echo "  rc 2 means it could not be read at all, which is NOT a pass."
+              exit 1
+            fi
+            echo "  gravity-residual N=$n: the committed vel-d series still fits n*g*dt (AFD-134)"
+          done
       # FEATURE-012 (compliance report) — publish jess's own traceability/V&V
       # compliance report to the job summary, and GATE on a coverage floor so the
       # right side of the V can't silently regress. jess cuts no binary release, so

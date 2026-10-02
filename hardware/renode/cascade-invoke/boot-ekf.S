@@ -24,7 +24,16 @@
     .equ LINMEM,  0x20000000        @ fp  (r11) — linear memory base
     .equ LINSIZE, 0x00010000        @ sl  (r10) — linear memory size
     .equ GLOBALS, 0x20010100        @ r9        — globals table base
-    .equ EKF_N,   16                @ tick count; the oracle passes the SAME N to the reference
+    @ Tick count. The oracle passes the SAME N to the reference, and build.sh records the
+    @ EFFECTIVE value to $OUT/ekf.n so a consumer reads what was BUILT rather than re-deriving
+    @ it from this line — the `iface.ver` pattern, adopted here for the same reason: a value
+    @ grepped out of a source file is a value that goes stale the moment anything overrides it.
+    @ Overridable so a longer run needs no source edit: EKF_N=1024 build.sh. Measuring the
+    @ estimator's divergence over 1024 ticks (AFD-134) required hand-editing this constant,
+    @ which meant the measurement could not be reproduced from the repo as it stood.
+    .ifndef EKF_N
+    .equ EKF_N,   16
+    .endif
 
     .section .vectors, "a"
     .word _stack_top

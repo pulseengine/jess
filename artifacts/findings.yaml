@@ -8552,7 +8552,86 @@ artifacts:
       beginning with '#' instead of whole comment LINES, so it fed the file's prose into the fit. The
       length guard refused with "76 word(s) given, expected 16" instead of fitting 76 values against
       the wrong n and printing a confident ratio.
-    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report, gravity-compensation]
+
+      *** MEASURED OUT TO 1024 TICKS, AND IT IS A REALISATION OF H-003 (CATASTROPHIC) ***
+      The 16-tick fit above invited an extrapolation, and an extrapolation is not a measurement — so
+      the run was extended rather than the line. EKF_N is now overridable, and `EKF_N=1024 build.sh`
+      with the memtrace plugin windowed to the single vel-d word gives 1024 writes from ONE pc
+      (0x3f16), one per tick, in a 2 KB trace.
+          vel-d(n)/(n*g*dt)  =  1.0000 at n=1  ->  1.0086 at n=1024
+      So the linear accumulation holds over the WHOLE 1.024 s, not just the first 16 ms. The full state
+      at tick 1024, against wasmtime over the same 1024 ticks and the same IMU:
+          qw qx qy qz   BIT-IDENTICAL   3f7fc3c9 3cadb32b bc24825d 3d12e95a
+          pos-n   arm +8.0572e-02   wasmtime -2.5403e-02
+          pos-e   arm +1.7060e-01   wasmtime -5.5713e-02
+          pos-d   arm +5.1795e+00   wasmtime -4.9451e-03
+          vel-n   arm +1.8179e-01   wasmtime -1.0123e-04
+          vel-e   arm +3.9351e-01   wasmtime -2.2539e-04
+          vel-d   arm +1.0132e+01   wasmtime -7.8686e-03
+          wx wy wz      BIT-IDENTICAL (the gyro passthrough)
+      THE ATTITUDE IS STILL BIT-EXACT AFTER A FULL SECOND, which is a stronger version of the
+      refutation at the top: a lagged or stale attitude could not survive 1024 ticks of agreement. And
+      the sign pattern holds at 64x the horizon — six of six, every ARM value positive and every
+      wasmtime value negative.
+      PLAIN LANGUAGE, because the hex hides it: AFTER 1.024 s WITH THE VEHICLE AT REST, THE LOWERED
+      ESTIMATOR BELIEVES IT IS DESCENDING AT 10.1 m/s AND HAS FALLEN 5.2 m. The reference says 8 mm/s
+      and 5 mm. pos-d = 5.18 m is within 1% of the free-fall integral 0.5*g*t^2 = 5.14 m, which is
+      what "gravity was never subtracted" predicts.
+
+      *** WHY THAT IS A SAFETY FINDING AND NOT A NUMERIC CURIOSITY ***
+      This is a measured realisation of H-003, "State estimate (IEKF) diverges or goes NaN", severity
+      CATASTROPHIC, leading to L-001 and L-004. H-003 is claimed to be prevented by SC-003, "State
+      estimate shall remain bounded, numerically valid, and monitored ... divergence shall be detected
+      and handled so the controller never acts on an invalid estimate." Both clauses are implicated:
+        BOUNDED is violated, measured. vel-d grows linearly in n and pos-d quadratically, with no
+          bound in sight at 1024 ticks. It is not NaN and not Inf, which is exactly why a NaN check
+          would not catch it — the numbers stay perfectly finite and perfectly wrong.
+        DETECTED is unimplemented on jess's side. This image RAN ON THE REAL PIXHAWK 6X-RT (AFD-131,
+          AFD-132) and nothing flagged it. It was found by building a memory tracer, not by a monitor.
+          A divergence that only a bespoke instrument can see is not "detected and handled".
+      WHAT DID NOT HAPPEN, stated so this is not read as worse than it is: no hazard materialised. Every
+      run was a bench run — a RAM-loaded test image, motors not involved, the vehicle disarmed and
+      gated by tools/bench/preflight-disarmed.py. Nothing flew. The finding is about what this lowering
+      WOULD do if flown, and about a prevention claim that does not currently hold, not about an event.
+      Linked to H-003 with `traces-to`, which CLOSES TWO coverage warnings — so the schema's own rules
+      wanted this edge, and the link is not decoration.
+      THE STABLE FACT IS THE DELTA OF TWO, not an absolute count, and that distinction cost three
+      measurements to get right. `rivet validate`'s total is reproducible (three identical runs) but it
+      MOVES AS THIS DESCRIPTION ITSELF GROWS, so an absolute pair is only true of the tree it was taken
+      on: a first probe read 591 -> 590, a later one 597 -> 595, and the one-variable measurement on the
+      committed tree reads 598 -> 596. All three agree on the delta once it is measured by adding and
+      removing ONLY the link; none of them agree on the absolutes. Citing an absolute would have been a
+      number no reader could reproduce — AFD-045's lesson in miniature, and the reason this paragraph
+      says "two" rather than a pair of totals.
+
+      *** EKF_N IS PARAMETERISED, BECAUSE THE MEASUREMENT HAD TO BE REPRODUCIBLE ***
+      Getting the 1024-tick number first required hand-editing `.equ EKF_N, 16` in boot-ekf.S, which
+      means the measurement could not be reproduced from the repo as it stood — the same standard the
+      16-tick evidence file was held to. Now `.ifndef EKF_N` guards the default and `EKF_N=1024
+      build.sh` passes `--defsym`, and build.sh RECORDS the effective value to $OUT/ekf.n so
+      run-ekf-oracle.sh reads what was BUILT instead of grepping the default out of the source. That is
+      the `iface.ver` pattern applied to the same class of staleness.
+      TWO CONTROLS ON THAT CHANGE, both run:
+        the DEFAULT build is BYTE-IDENTICAL to before (ekf.elf e1155c0c...), so parameterising it
+          changed nothing for every existing consumer;
+        the override DOES take effect — and the override build's ELF differs from the hand-edited
+          one, which needed explaining rather than waving away: `.text` is BYTE-IDENTICAL
+          (f8d9dd42...), both carry EKF_N = 0x400, and both runs produce the identical final vel-d
+          41221afe. The difference is symbol-table only. Checking semantics rather than digests was
+          the right move; a digest mismatch alone would have looked like a failed port.
+
+      *** AND A BUG IN THIS FINDING'S OWN CLASSIFIER, FOUND BY THE LONGER RUN ***
+      gravity-residual's COMPENSATED test was `abs(v) <= tol * g * dt` — ONE tick's gravity, a bound
+      that does not scale with n. Over 1024 ticks wasmtime legitimately reaches vel-d = -7.87e-03 m/s
+      (about 8 mm/s after a second, from the attitude tilting off identity), which exceeds that 9.81e-05
+      bound, so THE CORRECT SIDE WAS CLASSIFIED `NEITHER`. Fixed to test the RATIO, which is what
+      "small relative to the gravity it cancelled" actually means. A regression case pins it, built from
+      wasmtime's own measured endpoints.
+      This is the third time in this finding that extending a measurement falsified the CHECKER rather
+      than the subject, and it is the argument for the third outcome existing at all: had NEITHER not
+      been a real answer, that 1024-tick wasmtime run would have been forced into UNCOMPENSATED or
+      COMPENSATED and one of them would have been reported.
+    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report, gravity-compensation, h-003, safety-consequence]
     fields:
       detected-by: jess building the memory tracer synth#1436 asked for, then finding a whole-memory diff answered it better, 2026-10-02
       severity: major
@@ -8561,6 +8640,9 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-01T23:52:14Z
+    links:
+      - type: traces-to
+        target: H-003
 
   - id: AFD-135
     type: ai-found-defect
