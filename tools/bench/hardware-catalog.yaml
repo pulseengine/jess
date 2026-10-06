@@ -358,6 +358,25 @@ boards:
         a VID:PID selector picks between the two nondeterministically.
     measured-by: [AFD-123]
 
+  nordic-dfu:
+    what: >
+      A Nordic Semiconductor device sitting in its Open DFU Bootloader (1915:521f), serial
+      E5669E3CB6C9, on wohl.local. A BOARD, not a probe — which board is NOT ESTABLISHED.
+    usb: { vid: 0x1915, pid: 0x521f }
+    serial: E5669E3CB6C9
+    role: unassigned — present on the bench, no jess work depends on it yet.
+    caveats:
+      - >
+        THE PART IS UNKNOWN, so this entry deliberately names no `parts:`. In DFU mode the device
+        advertises the bootloader, not the target, so the SoC cannot be read off USB. Naming a
+        plausible nRF part here would be an inference presented as an inventory fact — the AFD-127
+        shape. It gets a name so a claim can exist before the identification does, which is the
+        same reason `mcu-link` was registered before it was confirmed.
+      - >
+        A device in DFU mode is ONE FLASH WRITE AWAY from being reprogrammed by anything that
+        opens it. It is registered so that write needs a claim, not so that it is safe.
+    measured-by: [AFD-136]
+
   nucleo-g031k8:
     what: ST NUCLEO-G031K8 — STM32G031 target with an onboard ST-LINK/V2-1
     parts: [stm32g031, stlink-v2-1]
@@ -373,6 +392,53 @@ boards:
 # `selftest-device` is in the registry rather than pattern-matched in with-device: a bypass in a
 # check is the hole that later gets used for something real. One rule, no exceptions — every name
 # a registry may use appears in this catalogue.
+# A device that IS the claimable thing: no target MCU of its own, and identified by SERIAL rather
+# than by model. The naming rule at the head of `boards:` says a device name is a BOARD, never a
+# probe MODEL — because a model name is one lock for every board carrying that model. This section
+# is the other case, and the distinction is the SERIAL: `stlink-v2-1` is a model two boards on
+# wohl.local both carry, while the MCU-Link below is one physical object with one serial and
+# nothing else like it on the bench.
+# SO EVERY ENTRY HERE MUST CARRY A `serial:`, and check-catalog.sh refuses one that does not —
+# without it the entry is indistinguishable from a model name and the rule has a hole exactly the
+# shape of the thing it forbids.
+standalone:
+  mcu-link:
+    what: NXP MCU-LINK r0FF debug probe, CMSIS-DAP V0.078 (1fc9:0143), on fourpi.local
+    usb: { vid: 0x1fc9, pid: 0x0143 }
+    serial: ARMCR0OKTRM5Q
+    role: >
+      The SWD path to the Pixhawk 6X-RT's i.MX RT1176. CONFIRMED, not presumed: the M7 was halted
+      and the falcon cascade loaded to RAM and run through this probe (AFD-130, AFD-131).
+    caveats:
+      - >
+        IT IS A SEPARATE RESOURCE FROM `pixhawk-6xrt`, AND THAT IS DELIBERATE — the board's USB
+        serial and its SWD port are two channels, and a reader of one does not race a user of the
+        other. But they are the SAME SILICON: halting the M7 through this probe stops the firmware
+        that produces the USB console, so a sequence touching both NEEDS BOTH CLAIMS. jess's own
+        `on-target-run.sh` asserted only `pixhawk-6xrt` while driving openocd through this probe
+        (AFD-136); it now requires both.
+      - >
+        A standalone probe can be MOVED. If it is ever wired to something else, this entry's
+        `role` becomes false and must change with it — the AFD-129 discipline: a catalogue
+        describes what was measured, not what was once arranged.
+    measured-by: [AFD-130, AFD-131, AFD-136]
+
+  ft231x:
+    what: FTDI FT231X USB-UART bridge (0403:6015), on fourpi.local
+    usb: { vid: 0x0403, pid: 0x6015 }
+    serial: D30K1YZS
+    role: >
+      A serial bridge on the vehicle host. NOT a debug probe and NOT a target: it carries a UART,
+      so a claim on it is rule 2 of the claim policy (a device whose data is CONSUMED BY THE
+      READER), not rule 1.
+    caveats:
+      - >
+        WHAT IT IS WIRED TO IS NOT ESTABLISHED. `lsusb` reports an FT2232H-class product string
+        while the device's own descriptor says FT231X USB UART. It is present with that serial;
+        what it bridges has not been measured, and recording a plausible purpose as an
+        `attached-to` would be the AFD-129 shape.
+    measured-by: [AFD-136]
+
 synthetic:
   selftest-device:
     what: SYNTHETIC — not hardware. Used only by `with-device --self-test`.

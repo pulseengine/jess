@@ -8730,3 +8730,170 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-02T00:10:45Z
+
+  - id: AFD-136
+    type: ai-found-defect
+    title: on-target-run.sh drove TWO channels and asserted ONE claim, leaving the vehicle's SWD path unprotected for every on-target run; and the board-not-probe-model rule agreed on jess#266 was unenforceable because check-catalog.sh unioned parts into the name space and never ran against the host registries holding all three violations
+    status: open
+    description: |-
+      2026-10-02. on-target-run.sh DRIVES TWO CHANNELS AND ASSERTED ONE CLAIM, so the vehicle's SWD path
+      was unprotected for the whole of every on-target run. Plus: the board-not-probe-model rule agreed
+      with gale on jess#266 was PROSE, and the gate meant to enforce it unioned `parts:` into the
+      acceptable name space, so three live violations sat on the bench for a month. Found while answering
+      jess#266.
+
+      *** THE DEFECT: ONE ASSERTION FOR TWO RESOURCES, ON THE VEHICLE ***
+      tools/bench/on-target-run.sh halts the M7, loads to RAM and reads results. To do that it
+        * runs `openocd` twice — the SWD path, which on fourpi.local is the device named `mcu-link`
+          (MCU-LINK r0FF, 1fc9:0143, serial ARMCR0OKTRM5Q); and
+        * reads the board's USB tty through preflight-disarmed.py — the device named `pixhawk-6xrt`.
+      It asserted `with-device --require-claim pixhawk-6xrt`. One of the two.
+      THE REGISTRY ON THAT HOST STATES THE RULE IT BROKE, in its own words, written before this was
+      found: "Distinct from mcu-link, which is the SWD path to the same silicon — holding one does not
+      imply the other, and a flash-then-observe sequence needs both." on-target-run.sh IS a
+      flash-then-observe sequence. An agent holding only `mcu-link` satisfied no assertion in that script
+      and was free to attach openocd while a load was in flight; an agent running the script held nothing
+      covering the probe. That is gale#397's shape — unpinned openocd reaching the wrong board twice while
+      a claim on another was held — aimed at the vehicle instead of a nucleo.
+      FIXED: `DEVS="${DEVS:-pixhawk-6xrt mcu-link}"`, each required INDIVIDUALLY so the refusal names the
+      missing one (a single combined check would say "not under a claim" to an operator holding one of the
+      two, which is the confusing half of the bug). `DEV=` still works for a single device.
+      VERIFIED ON fourpi, three cases, nothing touching hardware — TTY pointed at a nonexistent node so
+      the pre-flight gate refuses, which happens AFTER the interlock and BEFORE any openocd:
+          under pixhawk-6xrt alone -> REFUSED, "NOT UNDER A CLAIM for mcu-link"
+          under mcu-link alone     -> REFUSED, "NOT UNDER A CLAIM for pixhawk-6xrt"
+          under BOTH               -> "claims asserted: pixhawk-6xrt mcu-link", proceeds past the
+                                      interlock and stops fail-closed at the pre-flight gate
+      Both halves refuse and the conjunction passes, which is what makes it a measurement rather than a
+      green light.
+
+      *** A FRAMING OF MINE THAT WAS WRONG, AND I NEARLY "FIXED" A SOUND DESIGN ***
+      My first reading was that `mcu-link` and `pixhawk-6xrt` being separate locks WAS the defect — two
+      names for one physical attachment, AFD-082's vacuous lock — and the fix was to make `mcu-link` an
+      alias so they share one lock. I had the rename drafted.
+      THAT WAS WRONG. The separation is deliberate, documented in the registry with its rationale, and
+      CORRECT: the board's USB console and its SWD port are different resources, and a console reader does
+      not race a probe user. Collapsing them would over-lock the bench — a telemetry capture would block
+      unrelated probe work on the same board.
+      What the two names DO create is a coupling the design already named and the code then ignored:
+      halting the M7 through the probe stops the firmware producing the console, so anything touching
+      both needs both claims. The defect was never the two locks; it was ONE SCRIPT ASSERTING ONE OF THEM.
+      Recorded because the wrong fix was the plausible one, and what stopped it was reading the registry's
+      own stated reasoning instead of treating my first reading as the finding.
+
+      *** AND THE jess#266 RULE WAS UNENFORCEABLE BY CONSTRUCTION ***
+      The naming rule at the head of `boards:` in tools/bench/hardware-catalog.yaml, agreed with gale on
+      jess#266: "EVERY DEVICE NAME IS A BOARD, NEVER A PROBE MODEL" — because two boards on wohl.local
+      carry the same ST-LINK/V2-1 (0483:374b) and a model name is one lock for both.
+      check-catalog.sh resolved device names with
+          names = set(cat['parts']) | set(cat['boards']) | set(cat['synthetic'])
+      which UNIONS `parts` into the acceptable set. A probe-MODEL name therefore PASSED the very gate that
+      exists to enforce the rule. Written down, agreed, cited in a comment, mechanically unchecked.
+      MEASURED across all three hosts' registries — THREE live violations, every one a probe model used as
+      a device name:
+          gale.local   stlink-v1   -> renamed stm32vldiscovery
+          gale.local   stlink-v3   -> renamed nucleo-g474re
+          wohl.local   stlink-v3   -> renamed nucleo-wl55jc1
+      and `stlink-v3` meant a DIFFERENT board on each of those two hosts, which is exactly the ambiguity
+      the rule was agreed to prevent, live, for a month.
+      THREE MORE names resolved to nothing at all: `mcu-link` and `ft231x` on fourpi, `nordic-dfu` on
+      wohl. Assertion 1 would have refused those — it never ran on these files.
+      RENAMED WITH ALIASES, and the alias behaviour verified per host: a claim under the old name reports
+      the canonical name ("'stlink-v3' is an alias for 'nucleo-g474re' — claiming 'nucleo-g474re'"), and
+      the old name is REFUSED exit 3 while the new one is held. One lock, two spellings — which is what
+      the alias mechanism was built for on jess#266, so a rename cannot split a lock mid-flight. The
+      renames were done only after confirming nothing was claimed, because a rename MOVES the lock file.
+
+      *** WHY NONE OF IT WAS CAUGHT: THE GATE CANNOT REACH THE FILES THAT VIOLATE IT ***
+      check-catalog.sh defaults to REG=tools/bench/devices.yaml, the COMMITTED registry, which describes
+      the Mac and names two devices, both already compliant. Every host-local registry lives at
+      ~/.config/pulseengine/bench-devices.yaml on its own Pi and is NOT in the repo — deliberately, since
+      a registry must describe what is PRESENT on its host (AFD-129). So the gate has been green on the
+      one file that was never the risk while the four-to-six-device files that actually guard the hardware
+      went unchecked.
+      NOT fixed by committing the host registries: that re-creates the absent-device hazard AFD-129
+      removed. Fixed by making the check runnable against any registry (REG= already did; CAT= now does
+      too) and by RUNNING it against all three, with the output recorded. CI still cannot do this, and
+      that boundary is stated rather than papered over.
+
+      *** FIXED IN THE GATE ***
+        assertion 1b  a device name must resolve to `boards:`, `standalone:` or `synthetic:` and NEVER to
+                      `parts:` — and the same for an ALIAS, otherwise the prescribed rename could be done
+                      by making the board an alias of the part, which fixes nothing.
+        assertion 1c  every `standalone:` entry MUST carry a `serial:`. That section exists for a device
+                      that IS the claimable thing with no target behind it, and the ONLY thing separating
+                      it from a probe MODEL is that there is exactly one of it, identified by serial.
+                      Without that, `stlink-v2-1` would be legal as a `standalone:` name and 1b's hole
+                      reopens inside the section built to avoid it.
+        new sections  `standalone:` holds `mcu-link` (role CONFIRMED, not presumed: AFD-130/131 halted the
+                      M7 and ran the cascade through it) and `ft231x` (what it bridges NOT established,
+                      recorded as presence). `nordic-dfu` goes under `boards:` with its part deliberately
+                      UNNAMED — in DFU mode the device advertises the bootloader, not the SoC, so naming a
+                      plausible nRF part would be an inference presented as inventory (the AFD-127 shape).
+        NC5..NC8      a device named after a part is refused; an alias named after a part is refused; a
+                      standalone entry without a serial is refused; AND NC7, the control that stops the
+                      others being vacuous — a device named after a BOARD must still be ACCEPTED, or a
+                      gate refusing everything would pass all three.
+
+      *** TWO CONTROLS OF MINE THAT WERE THE WRONG MODEL, BOTH CAUGHT BY THEIR OWN OUTPUT ***
+      1. The first demonstration of the claim gap NESTED the claims: `with-device mcu-link -- sh -c
+         'with-device pixhawk-6xrt -- ...'`. The inner claim succeeded and I nearly reported it as two
+         agents holding the vehicle. The output refuted it — WITH_DEVICE_CLAIM came back as
+         `mcu-link,pixhawk-6xrt`, i.e. the inner process INHERITED the outer claim and appended. That is a
+         nested claim in one process tree, expected behaviour, and proof of nothing about exclusion. The
+         real demonstration needs independent processes and `env -u WITH_DEVICE_CLAIM`.
+      2. The first negative control for assertion 1c set `CAT=` to a modified copy — but CAT was NOT
+         overridable (only REG was), so it silently tested the REAL catalogue and reported CATALOG OK. A
+         control that cannot perturb its subject proves nothing. CAT is now overridable like REG, and the
+         NC builds its fixture by DELETING a serial from the real catalogue so it cannot drift from the
+         section it guards.
+      Both tells were in the output rather than in a failure, which is the third time this session a
+      first-draft control was the wrong MODEL rather than wrong code (AFD-133 sealed the lockdir instead
+      of the lock file).
+
+      *** AND A THIRD CORRECTION: MY ALIAS RULE WAS TOO STRICT AND THE GATE SAID SO ***
+      Assertion 1b's first form banned a PART NAME as an alias outright, by symmetry with device names.
+      Applied to the live registries it refused the backward-compatibility aliases THIS GATE'S OWN
+      PRESCRIBED RENAME had just created — and worse, FIVE COMMITTED SCRIPTS pass `stlink-v1` as a
+      with-device device name:
+          hardware/silicon/f100/run-on-silicon.sh        hardware/silicon/f100/negative-control.sh
+          hardware/silicon/f100-init/run-on-silicon.sh   hardware/silicon/f100-gale-nano/run-on-silicon.sh
+          hardware/silicon/f100-gust-hal/run-on-silicon.sh
+      So the flat rule made the gate demand a breaking change across the F100 silicon suite for no
+      measurable safety gain. I found this by running the gate against the registries rather than
+      reasoning about it, which is the only reason it did not ship.
+      WHAT THE RULE SHOULD SAY, and now does: the hazard is ONE NAME REACHING TWO BOARDS. gale#397
+      happened because `stlink-v2-1` could mean either board on wohl.local carrying that probe. A name
+      reaching exactly ONE board on its host is not that hazard, whatever it is named after. So an alias
+      that is a part name is judged by AMBIGUITY, measured per registry against the catalogue's
+      `parts:` lists:
+          carried by >1 registered device  -> REFUSED (gale#397's actual shape)
+          carried by exactly 1, its own    -> ACCEPTED (the transition alias, legitimately)
+          carried by exactly 1, ANOTHER's  -> REFUSED (the name would take one board's lock while
+                                              naming another's hardware)
+          carried by none                  -> REFUSED (a lock standing for nothing on this host)
+      Ambiguity is per-HOST because it is a property of that host's hardware: `stlink-v3` is unambiguous
+      on gale.local, which has one V3, and would be ambiguous on a host carrying two.
+      NC6 uses the REAL ambiguous case — `stlink-v2-1`, carried by nucleo-g031k8 AND nucleo-wb55rg in the
+      committed catalogue — so the control is the hazard rather than a model of it. NC6b is the one that
+      matters most: an UNAMBIGUOUS part alias must be ACCEPTED, or the rule silently becomes the flat ban
+      again and the five scripts break on the next edit. Ten controls now, and the accept-cases (NC6b,
+      NC7) exist precisely because a gate that refuses everything passes every refusal control.
+      THE DEVICE-NAME half of 1b stays absolute: a device NAME is the canonical identity and must be a
+      board. Only an ALIAS — an explicitly secondary spelling — gets the ambiguity test.
+
+      *** STATE OF THE BENCH AFTER THIS ***
+      All three host registries pass the gate, measured: fourpi CATALOG OK, gale CATALOG OK, wohl
+      CATALOG OK. Before: fourpi failed on two unresolved names, gale on two part-named devices, wohl on
+      one. The five F100 scripts keep working through the `stlink-v1` -> `stm32vldiscovery` alias, which
+      is now legitimate rather than merely tolerated, and AFD-113's F100 re-run on gale.local is
+      unblocked by it.
+    tags: [bench-interlock, with-device, hardware-catalog, jess-266, gale-397, afd-082, afd-129, gate-potency, vehicle]
+    fields:
+      detected-by: jess answering jess#266's naming question and measuring every device name against the catalogue's sections, 2026-10-02
+      severity: critical
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-02T04:59:39Z

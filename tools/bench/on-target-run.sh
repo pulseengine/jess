@@ -41,11 +41,23 @@
 # near it.
 #
 # Usage, ON THE HOST THAT HAS THE PROBE, inside a claim:
-#   with-device pixhawk-6xrt --purpose '...' -- on-target-run.sh <image.elf> [--restore]
+#   with-device pixhawk-6xrt mcu-link --purpose '...' -- on-target-run.sh <image.elf> [--restore]
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 WD="${WD:-$D/with-device}"
-DEV="${DEV:-pixhawk-6xrt}"
+# BOTH CHANNELS, because this script drives both (AFD-136). It asserted only `pixhawk-6xrt` while
+# running openocd through the MCU-Link and reading the board's tty for the pre-flight gate. The
+# registry on fourpi.local states the rule this violated, in its own words: "Distinct from
+# mcu-link, which is the SWD path to the same silicon — holding one does not imply the other, and
+# a flash-then-observe sequence needs both." This IS a flash-then-observe sequence.
+# The separation of the two names is DELIBERATE and stays: the USB console and the SWD port are
+# different resources, and a console reader does not race a probe user. But they are the same
+# silicon — halting the M7 stops the firmware that produces the console — so anything touching
+# both needs both. An agent holding only `mcu-link` satisfied no assertion here and was free to
+# attach openocd mid-load; that is gale#397's shape aimed at the vehicle.
+DEVS="${DEVS:-pixhawk-6xrt mcu-link}"
+DEV="${DEV:-}"            # back-compat: DEV=x is honoured as a single-device DEVS
+[ -n "$DEV" ] && DEVS="$DEV"
 TTY="${TTY:-/dev/ttyACM0}"
 OOCD_CFG="${OOCD_CFG:-/tmp/rt1176-dapread.cfg}"
 SRST_CFG="${SRST_CFG:-/tmp/rt1176-srst.cfg}"
@@ -64,12 +76,20 @@ RESTORE=0; for a in "$@"; do [ "$a" = "--restore" ] && RESTORE=1; done
 # impossible rather than unlikely.
 [ -x "$WD" ] || fail "with-device not found at $WD — refusing to touch hardware without the
    interlock. Set WD=<path>."
-"$WD" --require-claim "$DEV" \
-  || fail "NOT RUNNING UNDER A '$DEV' CLAIM. Re-run as:
-     $WD $DEV --purpose '<why>' -- $0 $ELF $*
+# EVERY device in DEVS, checked individually so the message names the one that is missing. A
+# single combined check would say "not under a claim" when the operator holds one of the two,
+# which is the confusing half of this defect.
+for d in $DEVS; do
+  "$WD" --require-claim "$d" \
+    || fail "NOT RUNNING UNDER A '$d' CLAIM. This script needs ALL of: $DEVS
+     $WD $DEVS --purpose '<why>' -- $0 $ELF $*
    Refusing: two agents on one board each capture a silent subset, which is
-   indistinguishable from a flaky link (gale#356, measured on this Pixhawk)."
-echo "   claim asserted: ${WITH_DEVICE_CLAIM:-<unset>}"
+   indistinguishable from a flaky link (gale#356, measured on this Pixhawk). And the SWD
+   path is a SEPARATE claim from the USB console — holding one does not cover the other
+   (AFD-136), while halting the M7 through the probe stops the firmware the console comes
+   from, so this sequence needs both."
+done
+echo "   claims asserted: $DEVS (held: ${WITH_DEVICE_CLAIM:-<unset>})"
 
 # ── (2) THE SAFETY GATE ───────────────────────────────────────────────────────────────────────
 # Halting the M7 stops the flight controller. On a quadrotor that is catastrophic if armed, so
