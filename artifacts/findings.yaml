@@ -8972,7 +8972,7 @@ artifacts:
 
   - id: AFD-137
     type: ai-found-defect
-    title: meld and loom were PINNED, FETCHED and DIGEST-VERIFIED and then never used — build.sh defaulted them to the varve layer while SYNTH defaulted to the pinned path, so the default build fused with meld 0.53.0 against a 0.62.0 pin; plus meld 0.58.3 -> 0.62.0 adopted with all +403 bytes attributed to a literal
+    title: meld and loom were PINNED, FETCHED, DIGEST-VERIFIED and never used in the default build path; bumping the pin then created a ci.yml-vs-pins drift that five ci.yml comments claimed check-drift.sh would block — and nothing ever invoked it
     status: open
     description: |-
       2026-10-15. TWO FINDINGS, and the second is the one that matters: meld and loom were PINNED,
@@ -8992,8 +8992,14 @@ artifacts:
           !! OFF-PIN meld : meld 0.53.0  (~/.varve/realms/.../bin/meld)
           !! OFF-PIN loom : loom 1.4.1   (same layer)
           FAIL: meld
-      against pins of meld 0.62.0 and loom 1.4.0. Nine minor versions of meld adrift from the pin, in
-      the DEFAULT path that CI and every plain local build take.
+      against pins of meld 0.62.0 and loom 1.4.0. Nine minor versions of meld adrift from the pin — in the DEFAULT
+      path, which is what a plain local build takes.
+      CORRECTION, MEASURED BEFORE THIS SHIPPED: my first draft of this finding said "the DEFAULT path
+      that CI AND every plain local build take". THAT IS WRONG ABOUT CI. ci.yml invokes build.sh as
+      `REQUIRE_ON_PIN=1 MELD=.scratch/meld/meld LOOM=.scratch/loom/loom`, explicitly, and has a comment
+      saying why ("varve is not on the runner"). So CI was ALWAYS on-pin and was never exposed; the gap
+      was local-only. I caught it by checking whether CI passed the override before asserting that it
+      did not — the claim was one grep from being false in a safety artifact and in a PR body.
       WHAT MADE IT VISIBLE WAS A FAILURE, NOT A CHECK: the layer's meld 0.53.0 predates
       `--emit-manifest`, so the fuse step died outright. A build whose flags the older tool happened to
       accept would have fused with the wrong meld and said nothing. AFD-135 added the OFF-PIN
@@ -9044,7 +9050,37 @@ artifacts:
       bytes on synth#1436 and verified those digests in #1487; regenerating them would invalidate an
       upstream investigation in flight. The README there already states meld 0.58.3, so it stays
       accurate.
-    tags: [toolchain-pin, meld, release-watch, afd-120, afd-127, afd-135, gate-potency, build-sh]
+
+      *** THREE: AND THE GATE THAT WAS SUPPOSED TO CATCH THIS WAS NEVER INVOKED ***
+      Bumping the meld pin created a SECOND, real drift: ci.yml carries `MELD_VERSION` as an
+      independent copy of the meld version, used by the scry job to download meld directly. The pin
+      went to 0.62.0 and ci.yml still said v0.58.3 — two committed files disagreeing about which meld
+      qualifies this project.
+      ci.yml ANTICIPATED EXACTLY THIS, in five separate comments citing tools/varve/check-drift.sh as
+      the thing that keeps them in lockstep. One says, in these words: "check-drift.sh reports a
+      ci-vs-pin disagreement as BLOCKING, so these two moving apart is a red board, not a silent
+      drift."
+      THAT SENTENCE WAS FALSE. `grep -rn check-drift` finds five mentions, ALL OF THEM COMMENTS, and no
+      invocation anywhere in the repo. Nothing ran it. So drift was precisely a silent drift, and this
+      bump demonstrated it by going green with the two files disagreeing.
+      AND THE SCRIPT ITSELF COULD NOT HAVE RUN IN CI ANYWAY, for a reason worth separating: it refuses
+      with rc=2 ("CANNOT RESOLVE THE VARVE LAYER") when varve is absent, which is correct fail-closed
+      behaviour and NOT vacuity — but it means the one assertion that needs NO varve was gated behind
+      one that does. ci.yml-versus-artifacts.pins is a comparison between two COMMITTED FILES; it needs
+      no layer, no network and no varve. It sat behind the layer gate, so on every CI runner the whole
+      script refused and the comparison never ran.
+      FIXED: `check-drift.sh --committed-only` performs just that comparison, derives its tool list FROM
+      artifacts.pins (so a newly pinned tool is covered without editing the script), REFUSES with rc=2
+      if it compared nothing — the vacuity guard, since a pass over an empty set is a verdict about
+      nothing — and is wired into the rivet-validate job. Verified with varve absent from PATH, i.e.
+      CI's actual condition: it reported `meld pin 0.62.0 ci.yml 0.58.3 DRIFT-BLOCKING` rc=1 on the
+      drift, and rc=0 after MELD_VERSION was bumped in the same commit.
+      THE PATTERN, THIRD INSTANCE THIS SESSION: a rule written down and mechanically unenforced.
+      AFD-135 was check-realm.sh green while every `varve run` failed; AFD-136 was the board-not-probe
+      rule in prose while the gate unioned past it; this is a gate that exists, is POTENT — it caught a
+      real drift the moment it was pointed at one — and was never invoked. The common tell is a comment
+      in the imperative present ("reports", "refuses", "asserts") describing something no step runs.
+    tags: [toolchain-pin, meld, release-watch, afd-120, afd-127, afd-135, gate-potency, build-sh, afd-045]
     fields:
       detected-by: jess adopting meld 0.62.0; the on-pin rebuild announced OFF-PIN meld 0.53.0 and failed, 2026-10-15
       severity: major

@@ -38,6 +38,63 @@ campaign_pin() { # tool -> version named by artifacts.pins, or empty
     "$ROOT/tools/deps/artifacts.pins" 2>/dev/null | head -1
 }
 
+# ── --committed-only: THE ONE ASSERTION THAT NEEDS NO VARVE ──────────────────────────────────
+# ci.yml-versus-artifacts.pins is a comparison between TWO COMMITTED FILES. It needs no layer,
+# no network and no varve. But it used to sit BEHIND the varve gate below, so on any machine
+# without varve — which is every CI runner, as ci.yml's own comments state — the whole script
+# refused with rc=2 and the comparison never ran.
+#
+# AND ci.yml CLAIMED IT RAN. Five comments there cite this script as the thing keeping
+# MELD_VERSION in lockstep with the pin, one of them in these words: "check-drift.sh reports a
+# ci-vs-pin disagreement as BLOCKING, so these two moving apart is a red board, not a silent
+# drift." That sentence was FALSE: nothing invoked this script anywhere, so drift was exactly a
+# silent drift. Measured 2026-10-15 by creating one — bumping the meld pin to 0.62.0 while
+# ci.yml still said v0.58.3 — and watching a PR go green.
+#
+# So the committed-file comparison is now separable and is wired into CI. The varve-layer
+# columns stay behind the refusal below, because a verdict about a layer this script could not
+# read would be the vacuity the refusal exists to prevent. Two questions, two reachabilities.
+if [ "${1:-}" = "--committed-only" ]; then
+  echo "== ci.yml vs tools/deps/artifacts.pins (committed files only, no varve needed) =="
+  cmp_n=0; bad=0
+  # Every tool artifacts.pins names by a release ref. Derived from the file, not a hand-kept
+  # list, so a newly pinned tool is covered without editing this script.
+  tools="$(sed -n 's|.*release:pulseengine/\([a-z][a-z0-9-]*\)@.*|\1|p' \
+            "$ROOT/tools/deps/artifacts.pins" 2>/dev/null | sort -u)"
+  for t in $tools; do
+    cp_="$(campaign_pin "$t")"; cip="$(ci_pin "$t")"
+    [ -n "$cp_" ] || continue
+    if [ -z "$cip" ]; then
+      printf '  %-8s pin %-10s ci.yml <no %s_VERSION>  not compared\n' \
+        "$t" "$cp_" "$(printf '%s' "$t" | tr '[:lower:]' '[:upper:]')"
+      continue
+    fi
+    cmp_n=$((cmp_n+1))
+    if [ "$cp_" = "$cip" ]; then
+      printf '  %-8s pin %-10s ci.yml %-10s AGREE\n' "$t" "$cp_" "$cip"
+    else
+      printf '  %-8s pin %-10s ci.yml %-10s DRIFT-BLOCKING\n' "$t" "$cp_" "$cip"
+      bad=$((bad+1))
+    fi
+  done
+  if [ "$cmp_n" -eq 0 ]; then
+    echo "  REFUSING: compared NOTHING — no tool is named in both files, so a pass here would"
+    echo "  be a verdict about an empty set. Either artifacts.pins names no release refs or the"
+    echo "  <TOOL>_VERSION convention changed."
+    exit 2
+  fi
+  if [ "$bad" -ne 0 ]; then
+    echo
+    echo "DRIFT-BLOCKING: ci.yml and the campaign pin disagree for $bad of $cmp_n tool(s)."
+    echo "  Both sources are COMMITTED, so this is not an environment problem — fix one of them."
+    echo "  CI would otherwise qualify this project against a toolchain no committed file claims"
+    echo "  (AFD-045, AFD-137)."
+    exit 1
+  fi
+  echo "  $cmp_n tool(s) compared, all agree."
+  exit 0
+fi
+
 # REFUSE if varve cannot resolve the layer at all.
 #
 # The 2026.09.2 migration made this concrete: the new varve-realms.toml carries `retired-roots`,

@@ -94,7 +94,12 @@ env:
   # to make CI match the pin, not to jump ahead of it and recreate the divergence.
   # Kept in lockstep with tools/deps/artifacts.pins — check-drift.sh reports a ci-vs-pin
   # disagreement as BLOCKING, so these two moving apart is a red board, not a silent drift.
-  MELD_VERSION: v0.58.3
+  # BUMPED v0.58.3 -> v0.62.0 with tools/deps/artifacts.pins, in the same commit, because
+  # these two moving apart is the AFD-045 class. The lockstep is now ENFORCED rather than
+  # asserted: `check-drift.sh --committed-only` runs in rivet-validate below. It was cited in
+  # five comments in this file as the thing keeping them in step and was never invoked — and
+  # this very bump proved it, by going green with the two files disagreeing (AFD-137).
+  MELD_VERSION: v0.62.0
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
@@ -149,6 +154,11 @@ jobs:
         run: |
           tools/varve/check-realm.sh --self-test
           tools/varve/check-realm.sh
+          # ci.yml vs artifacts.pins — a comparison between two COMMITTED files, so it needs
+          # no varve and RUNS HERE, unlike the full drift check which refuses without a
+          # resolvable layer. This is the assertion five comments above already claimed was
+          # enforced; it was not invoked anywhere until AFD-137.
+          tools/varve/check-drift.sh --committed-only
       - name: rivet sync + validate
         working-directory: jess
         run: |
