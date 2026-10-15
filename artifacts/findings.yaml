@@ -8969,3 +8969,87 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-02T04:59:39Z
+
+  - id: AFD-137
+    type: ai-found-defect
+    title: meld and loom were PINNED, FETCHED and DIGEST-VERIFIED and then never used — build.sh defaulted them to the varve layer while SYNTH defaulted to the pinned path, so the default build fused with meld 0.53.0 against a 0.62.0 pin; plus meld 0.58.3 -> 0.62.0 adopted with all +403 bytes attributed to a literal
+    status: open
+    description: |-
+      2026-10-15. TWO FINDINGS, and the second is the one that matters: meld and loom were PINNED,
+      FETCHED, DIGEST-VERIFIED — AND THEN NEVER USED. Found while adopting meld 0.62.0, by the adoption
+      failing.
+
+      *** ONE: THE meld PIN WAS DECORATIVE FOR TWO OF THE THREE TRANSFORM TOOLS ***
+      build.sh set
+          SYNTH="${SYNTH:-$SCRATCH/synthpin/synth}"     <- the PINNED path
+          MELD="${MELD:-}"                              <- EMPTY
+          LOOM="${LOOM:-}"                              <- EMPTY
+      and run_meld/run_loom fall back to `varve run` when the variable is empty. So artifacts.pins
+      pinned meld and loom, fetch.sh fetched them to .scratch/{meld,loom}/, check.sh verified their
+      digests — and the build dispatched to the varve LAYER instead, every time, unless a caller passed
+      MELD= by hand. Three tools pinned, one actually used.
+      MEASURED, on a build with no overrides:
+          !! OFF-PIN meld : meld 0.53.0  (~/.varve/realms/.../bin/meld)
+          !! OFF-PIN loom : loom 1.4.1   (same layer)
+          FAIL: meld
+      against pins of meld 0.62.0 and loom 1.4.0. Nine minor versions of meld adrift from the pin, in
+      the DEFAULT path that CI and every plain local build take.
+      WHAT MADE IT VISIBLE WAS A FAILURE, NOT A CHECK: the layer's meld 0.53.0 predates
+      `--emit-manifest`, so the fuse step died outright. A build whose flags the older tool happened to
+      accept would have fused with the wrong meld and said nothing. AFD-135 added the OFF-PIN
+      announcement that surfaced the substitution — it did not change WHICH BINARY RUNS, and I recorded
+      it then as "nothing would have told anyone which meld ran". Something does now, and it still ran
+      the wrong one.
+      FIXED: MELD and LOOM default to the pinned binary when it is present, exactly as SYNTH already
+      did; varve remains the FALLBACK so a tree without fetched pins still builds, and announce_tool
+      reports that case as OFF-PIN — which is how this was found. Verified: a build with no overrides
+      now announces `meld matches its pin (meld 0.62.0) — ON-PIN` and `loom matches its pin (loom
+      1.4.0) — ON-PIN`.
+
+      *** TWO: meld 0.58.3 -> 0.62.0 ADOPTED, attributed at the BYTE rather than the symbol ***
+      THE LOWERED OBJECT IS BYTE-IDENTICAL. cascade.o (ccc34bdc5e88eff5), ekf.elf (e1155c0c666a74c5) and
+      soak.elf (a13bf82ecbcb2df9) are unchanged across the bump, so it carries ZERO on-target risk — the
+      image that ran on the real Pixhawk is the same image.
+      The fused module grows +403 B (c.wasm 68252 -> 68655, c.loom.wasm likewise), and every one of
+      those bytes is accounted for:
+          section meld.signature-manifest   3934 -> 4337   +403
+          every other section               IDENTICAL, including code (16862 B) and data (43100 B)
+          31 occurrences of `,"type":"f32"` added, 13 B each = 403 B exactly
+          strip that literal from both manifests and they are BYTE-IDENTICAL
+      STEP 2(a) requires attributing every added byte before adopting. AFD-120 attributed meld's +408 B
+      to a SYMBOL (cabi_realloc); this attributes +403 B to a LITERAL and proves the remainder identical
+      by subtraction, which is a stronger form of the same check.
+      ADOPTED FOR A REASON, NOT FOR CURRENCY. The new per-field annotation is
+      `return_area.layout[].type` — and that is the data whose ABSENCE caused AFD-127: jess computed the
+      observer layout from relay's prose, inferred `valid` as a u8 when the WIT declares u32, and relay
+      had to correct it. check-observer-layout.py exists only because of that. With meld 0.62.0 the
+      manifest states each field's type, so tools/abi/ can ASSERT types instead of inferring them. That
+      is a gate getting stronger, not a version getting newer.
+
+      *** VERIFICATION ***
+      fetch through the pin resolves: `fetch meld/meld <- pulseengine/meld@v0.62.0 :: ... :: meld`,
+      digest d088e668… matches, and check.sh reports all 11 pinned artifacts present and matching.
+      NOTE THE TARBALL LAYOUT CHANGED: 0.62.0 puts the binary inside `meld-v0.62.0-<triple>/` rather
+      than at the archive root. fetch.sh resolves it because it uses `find -type f -name "$member"`,
+      which is recursive. Recorded because a naive extractor would silently find nothing — my own first
+      extraction did exactly that, and announce_tool caught it as "is not an executable file" rather
+      than proceeding.
+      THE DIFFERENTIAL STILL RUNS END TO END after the bump and reproduces IDENTICAL values — pos-d
+      3aa49caf, vel-d 3e20c510, six fields differing with all six disagreeing in sign, the standing
+      AFD-125/134 result unchanged. linmem-capture.sh's offset-alignment precondition (the quaternion at
+      0xac18 must agree bit-for-bit) passed, which is the guard that makes pairing the committed
+      0.58.3-era module against a freshly built ELF safe.
+      repro/synth-1436/'s committed c.wasm and c.loom.wasm are DELIBERATELY LEFT ON THE 0.58.3 FUSION
+      (d854e5bb…, 791ab6b5…, both still `shasum -c` clean). synth is actively disassembling those exact
+      bytes on synth#1436 and verified those digests in #1487; regenerating them would invalidate an
+      upstream investigation in flight. The README there already states meld 0.58.3, so it stays
+      accurate.
+    tags: [toolchain-pin, meld, release-watch, afd-120, afd-127, afd-135, gate-potency, build-sh]
+    fields:
+      detected-by: jess adopting meld 0.62.0; the on-pin rebuild announced OFF-PIN meld 0.53.0 and failed, 2026-10-15
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-15T10:04:19Z
