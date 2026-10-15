@@ -154,11 +154,20 @@ jobs:
         run: |
           tools/varve/check-realm.sh --self-test
           tools/varve/check-realm.sh
-          # ci.yml vs artifacts.pins — a comparison between two COMMITTED files, so it needs
-          # no varve and RUNS HERE, unlike the full drift check which refuses without a
-          # resolvable layer. This is the assertion five comments above already claimed was
-          # enforced; it was not invoked anywhere until AFD-137.
-          tools/varve/check-drift.sh --committed-only
+      # ITS OWN STEP, deliberately. Folded into the step above, its execution could only be
+      # INFERRED — the step succeeded, GitHub's default shell is `bash -e`, therefore the
+      # command exited 0 — and when I went to confirm it had run, the log fetch came back
+      # empty and inference was all I had. That is a thin position for a gate whose whole
+      # subject is gates that do not run (AFD-137). A named step appears in the job's step
+      # list, so "did it run" is answerable by looking rather than by reasoning.
+      #
+      # ci.yml vs artifacts.pins is a comparison between two COMMITTED files, so it needs no
+      # varve and runs HERE, unlike the full drift check which refuses without a resolvable
+      # layer. This is the assertion five comments in this file already claimed was enforced;
+      # nothing invoked it until AFD-137.
+      - name: ci.yml and artifacts.pins agree on every tool version (AFD-045, AFD-137)
+        working-directory: jess
+        run: tools/varve/check-drift.sh --committed-only
       - name: rivet sync + validate
         working-directory: jess
         run: |
