@@ -136,8 +136,22 @@ synthpin/synth               ed3fd70a93caca4c67ee422506df8aa824bd4f25ee75f2fe3ae
 # What the earlier 0.52.0 -> 0.55.1 bump changed: 5 input files were attested as 10
 # components under 0.52.0 and are attested as 5 under 0.55.1, with the console line agreeing.
 # The attestation is the half that travels with the artifact and that an auditor reads.
-meld/meld                    e11e1b8cf50c77acd21ab6ec7bf09dc8d95d53112aec14ee4e04205b2e8c0232  release:pulseengine/meld@v0.58.3!meld-v0.58.3-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
-meld/meld                    41400de67737f4f52bc6d757dc48a7d77311e94810d449eb2acb161817647e5c  release:pulseengine/meld@v0.58.3!meld-v0.58.3-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
+# BUMPED 0.58.3 -> 0.62.0 (AFD-137), and the attribution is at the BYTE, not the symbol.
+# The LOWERED OBJECT IS BYTE-IDENTICAL — cascade.o, ekf.elf and soak.elf all cmp-clean — so this
+# carries zero on-target risk. The fused module grows +403 B, and every one of those bytes is
+# accounted for: 31 occurrences of `,"type":"f32"` at 13 B each, added to each
+# `return_area.layout` entry in the meld.signature-manifest section. Strip that literal from both
+# manifests and they are BYTE-IDENTICAL; the `code` (16,862 B) and `data` (43,100 B) sections are
+# unchanged. AFD-120 attributed meld's +408 B to a symbol; this attributes +403 B to a literal and
+# proves the remainder identical by subtraction.
+# ADOPTED FOR A REASON, not for currency: the new per-field `type` is the data whose absence caused
+# AFD-127 — jess inferred `valid` as a u8 from relay's prose when the WIT declares u32, and relay
+# had to correct it. tools/abi/ can now ASSERT field types instead of assuming them.
+# NOTE the tarball layout changed: the binary is inside `meld-v0.62.0-<triple>/` rather than at the
+# archive root. fetch.sh resolves it because it uses `find -type f -name "$member"`, which is
+# recursive — worth recording, since a naive extractor would silently find nothing.
+meld/meld                    d088e668be4026c1264434aa565c1921b0aa94e08c152cc7f5a102660971f516  release:pulseengine/meld@v0.62.0!meld-v0.62.0-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
+meld/meld                    8c05a305b904b956519088a4ab60a3cb7a20de5c2801111b41a44e8e106a7931  release:pulseengine/meld@v0.62.0!meld-v0.62.0-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
 loom/loom                    9583f530baa0d6f0a0c140b5247ac618d9d56bcbf8d42e0c8a1ba5a2a20af6f6  release:pulseengine/loom@v1.4.0!loom-v1.4.0-aarch64-apple-darwin.tar.gz!loom      platform=aarch64-apple-darwin
 loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc6fb5df15c5380  release:pulseengine/loom@v1.4.0!loom-v1.4.0-x86_64-unknown-linux-gnu.tar.gz!loom  platform=x86_64-unknown-linux-gnu
 

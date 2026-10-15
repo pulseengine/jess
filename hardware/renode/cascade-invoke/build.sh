@@ -36,8 +36,21 @@ HOST_PLATFORM="${HOST_PLATFORM_OVERRIDE:-$HOST_PLATFORM}"
 # keeps finding. Local release-watch deliberately leaves it unset, because testing a
 # CANDIDATE toolchain is exactly what off-pin mode is for.
 REQUIRE_ON_PIN="${REQUIRE_ON_PIN:-0}"
-MELD="${MELD:-}"
-LOOM="${LOOM:-}"
+# DEFAULT TO THE PINNED BINARY, exactly as SYNTH does one line above. These used to default to
+# EMPTY, which sent run_meld/run_loom to `varve run` — so meld and loom were pinned in
+# artifacts.pins, fetched by fetch.sh, digest-verified by check.sh, AND THEN NEVER USED. The
+# pin was decorative for two of the three transform tools.
+# Measured 2026-10-15 while adopting meld 0.62.0: a build with no overrides announced
+#   !! OFF-PIN meld : meld 0.53.0  (.../varve/realms/.../bin/meld)
+#   !! OFF-PIN loom : loom 1.4.1
+# and then FAILED, because the layer's meld 0.53.0 predates `--emit-manifest`. The failure is
+# what made it visible; a build whose flags the older tool happened to accept would have
+# silently fused with the wrong meld. AFD-135 added the OFF-PIN announcement that surfaced this;
+# it did not change which binary runs. This does.
+# varve remains the FALLBACK, so a tree without fetched pins still builds — and announce_tool
+# reports it as OFF-PIN when it is used, which is how this was found.
+MELD="${MELD:-$([ -x "$SCRATCH/meld/meld" ] && printf '%s' "$SCRATCH/meld/meld")}"
+LOOM="${LOOM:-$([ -x "$SCRATCH/loom/loom" ] && printf '%s' "$SCRATCH/loom/loom")}"
 run_meld() { if [ -n "$MELD" ]; then "$MELD" "$@"; else varve run meld "$@"; fi; }
 run_loom() { if [ -n "$LOOM" ]; then "$LOOM" "$@"; else varve run loom "$@"; fi; }
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
