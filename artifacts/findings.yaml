@@ -8396,9 +8396,81 @@ artifacts:
 
   - id: AFD-134
     type: ai-found-defect
-    title: "synth#1436: the persistent quaternion is BIT-IDENTICAL between wasmtime and the lowered run, which RETIRES the lagged-attitude hypothesis jess proposed; a whole-linear-memory differential instead shows all six differing state fields disagree in SIGN over exactly the translational sub-vector"
+    title: "RETRACTED MECHANISM: the gravity compensation is PRESENT, exact and consumed — synth#1487 named six PCs it could not measure, jess measured them (48/48 exact), so AFD-134's 'missing or zero-valued addend' is refuted while every measurement in it stands"
     status: open
     description: |-
+      *** RETRACTED 2026-10-15: THE MECHANISM BELOW IS REFUTED BY MEASUREMENT. READ THIS FIRST. ***
+      This finding proposed that the ekf divergence was "ONE MISSING OR ZERO-VALUED ADDEND" — the
+      gravity-compensation term contributing nothing. THAT IS WRONG, and it was jess's own reading, not
+      an upstream one.
+      synth#1487 (v0.82.0) named six PCs: three gravity blocks, each with an addend and a multiplicand
+      load, and said plainly that it could NOT obtain the runtime values — no qemu on the release
+      machine, jess's repo not cloned there, and a request naming the six PCs "drafted and not sent".
+      jess measured them.
+        THE MAPPING, proven not assumed: synth's PCs are object-relative (cascade.o .text at VMA 0); the
+        delta to jess's linked image is 0x2e4, identical across all 25 shared func_* symbols. Verified by
+        disassembling at the mapped addresses and matching ALL SIX [sp,#N] offsets against synth's table
+        — 200, 152, 216, 232, 192, 208, six for six. Each block also materialises 0x411CF5C3 = 9.81f
+        inline via MOVW/MOVT, three times in the object.
+        THE VALUES, 16 ticks, IMU (0,0,-9.81,0.30,-0.15,0.07), each word sampled AT ITS OWN LOAD PC
+        (which is what synth said three slot names could not give, since [sp,#152] is a reused spill home
+        referenced 130 times):
+            blk1/blk2 addends  EXACTLY 00000000 every tick   (= ax, ay, both zero in the input)
+            blk3 addend        EXACTLY c11cf5c3 = -9.810000 every tick   (= az)
+            blk3 stored result -9.54e-07 at tick 1, -3.72e-05 by tick 16
+        THE ARITHMETIC: every block computes `addend + multiplicand * 9.81`, checked rather than
+        eyeballed — 48 of 48 exact across 16 ticks x 3 blocks in f32.
+        AND THE RESULTS ARE CONSUMED, checked because "computed then discarded" would have been the tidy
+        answer: all three slots (0x20001358/135c/1360) are read 240 times each, all from one consumer at
+        ELF pc 0x33c0, 15 reads per slot per tick.
+      So on the down axis the lowered code takes az = -9.81, multiplies the rotation factor (~1.0) by
+      9.81, adds, and gets ~0. THAT IS GRAVITY COMPENSATION WORKING, to f32 rounding. The constant is in
+      the code, the operands are correct, the sum is exact, the result is used.
+
+      *** WHAT SURVIVES THE RETRACTION, AND WHAT DOES NOT ***
+      SURVIVES — every measurement in this finding:
+        the persistent quaternion is BIT-IDENTICAL between wasmtime and the lowered run at ticks 1, 2, 3,
+          15, 16 and 1024;
+        six returned fields differ and all six disagree in SIGN, over exactly the translational
+          sub-vector;
+        744 masked / 11 ULP-close / 217 divergent / ZERO omitted stores over the whole 64 KiB;
+        vel-d(n)/(n*g*dt) = 1.0000 -> 1.0086 across 1024 ticks, reaching +10.13 m/s for a vehicle AT
+          REST while wasmtime gives -7.87e-03;
+        the H-003 consequence, which depends on the symptom and not on the mechanism.
+      DOES NOT SURVIVE — the mechanism:
+        "one missing or zero-valued addend" is REFUTED.
+        The phrase "the gravity-compensation addend contributed nothing" is REFUTED.
+        gravity-residual.py's VERDICT NAME `UNCOMPENSATED` is now a misnomer: the fit it measures is real
+          and reproducible, but "uncompensated" names a cause the measurement does not establish. It
+          describes a SYMPTOM — vel-d tracking n*g*dt — and should be read that way until the cause is
+          named. The tool is not wrong; its label over-claims.
+      WHAT THIS LEAVES OPEN, narrowed: gravity is compensated at these three blocks and RE-ENTERS
+      somewhere between 0x33c0's consumer and the state write, or the velocity integration reads the raw
+      accelerometer rather than the compensated value. Of the three options this finding originally left
+      open — "absent, zeroed, or landing on another axis" — the first two are now CLOSED BY MEASUREMENT,
+      and they were the two the mechanism leant on.
+
+      *** WHY THE ERROR WAS AVAILABLE, WHICH IS THE REUSABLE PART ***
+      The fit was real: vel-d = n*g*dt to three parts in ten thousand over 1024 ticks. From a closed form
+      that good it felt safe to name the cause, and I named it in a title. But A CLOSED FORM IDENTIFIES A
+      SYMPTOM, NOT A MECHANISM — "the output equals what you would get with no compensation" and "there is
+      no compensation" are different claims, and only the first was measured. The second needed the
+      instruction stream, which is exactly what this finding said it lacked and then quietly assumed.
+      This is the same error as the one already recorded one section below, where ARM's g*dt looked like
+      it matched the physics until I asked WHICH closed form. I asked that question once and did not ask
+      it again one level up.
+
+      *** RELEASE-WATCH, since it bears on whether any of this is current ***
+      synth 0.77.0 -> 0.86.0 lowers this module to BYTE-IDENTICAL output: nine releases, and c.wasm,
+      c.loom.wasm, cascade.o, ekf.elf, soak.elf and both negative controls are all cmp-clean. The control
+      is that the two binaries genuinely differ and self-report 0.77.0 and 0.86.0. So synth#1487's
+      disassembly describes the current object and nothing between those versions touched this path.
+      AN INSTRUMENT ERROR THAT NEARLY BECAME A FALSE REPORT: the first 0.86.0 comparison printed
+      `ekf.elf DIFFERS`. It had not changed — the scratch venv had lost its wasmtime module over the eight
+      days since the previous run, the build aborted at embedder-init, and ekf.elf was simply ABSENT. A
+      MISSING FILE COMPARED AS A DIFFERENCE. One step from reporting a synth regression that was jess's
+      own broken tooling; what caught it was checking the file existed before believing the digest.
+
       2026-10-02. synth#1436 asked jess for one measurement — "the QEMU run, watching which addresses
       the rotation's quaternion loads actually resolve to against the ones the attitude update stores"
       — and said why it could not be read statically: "all 236 r11 accesses are register-offset, none
@@ -8631,7 +8703,7 @@ artifacts:
       than the subject, and it is the argument for the third outcome existing at all: had NEITHER not
       been a real answer, that 1024-tick wasmtime run would have been forced into UNCOMPENSATED or
       COMPENSATED and one of them would have been reported.
-    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report, gravity-compensation, h-003, safety-consequence]
+    tags: [synth-1436, afd-125, afd-132, lowering, qemu, memtrace, linmem-differential, retraction, gate-potency, upstream-report, gravity-compensation, h-003, safety-consequence, retraction-of-own-mechanism, synth-1487]
     fields:
       detected-by: jess building the memory tracer synth#1436 asked for, then finding a whole-memory diff answered it better, 2026-10-02
       severity: major

@@ -48,7 +48,17 @@ import struct
 import sys
 
 CANNOT = 2
-UNCOMP, COMP, NEITHER = "UNCOMPENSATED", "COMPENSATED", "NEITHER"
+# THE VERDICT NAMES DESCRIBE THE SYMPTOM, NOT A CAUSE — renamed 2026-10-15 after the cause they
+# implied was REFUTED. They used to read UNCOMPENSATED / COMPENSATED, and that over-claimed: the
+# fit is real (vel-d tracks n*g*dt to three parts in ten thousand over 1024 ticks) but
+# "uncompensated" asserts a MECHANISM the fit cannot establish. synth#1487 named the three gravity
+# blocks' load PCs and jess measured them: each computes `addend + multiplicand * 9.81`, 48 of 48
+# exact, the down axis takes az = -9.81 and stores ~1e-6, and the results are read 240 times each.
+# The compensation is PRESENT, exact and consumed. See AFD-134's retraction.
+# "The output equals what you would get with no compensation" and "there is no compensation" are
+# different claims, and only the first is measured here.
+TRACKS_NGDT, CANCELLED, NEITHER = "TRACKS_n*g*dt", "CANCELLED", "NEITHER"
+UNCOMP, COMP = TRACKS_NGDT, CANCELLED          # retained so callers keep working
 
 
 def f32(bits):
@@ -216,12 +226,10 @@ def main() -> int:
                 print("     ...")
 
     if UNCOMP in (v for v, _, _ in verdicts.values()):
-        print("\n  A side whose vel-d tracks n*g*dt over every tick is integrating gravity")
-        print("  WITHOUT the compensation term. That is one missing or zero-valued addend, not a")
-        print("  rounding difference and not a stale read.")
+    
         return 1
     if all(v == COMP for v, _, _ in verdicts.values()):
-        print("\n  Both sides cancel gravity. Whatever AFD-125 is about, it is not this term.")
+        print("\n  Both sides cancel gravity in the returned state. Whatever AFD-125 is about, it is not this.")
         return 0
     print("\n  At least one side is NEITHER — it does not track n*g*dt and is not cancelled")
     print("  either. Do not fold that into 'the gravity term is missing'; it is a third thing.")
