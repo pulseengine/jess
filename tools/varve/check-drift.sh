@@ -77,6 +77,31 @@ if [ "${1:-}" = "--committed-only" ]; then
       bad=$((bad+1))
     fi
   done
+  # COVERAGE IS REPORTED, NOT IMPLIED. The loop above derives its tool list from
+  # artifacts.pins, so a tool ci.yml pins that artifacts.pins does NOT name is never compared —
+  # and the old summary said "N tool(s) compared, all agree", which reads as completeness.
+  # MEASURED within an hour of shipping this gate: ci.yml pins RIVET_VERSION v0.35.0 and
+  # SPAR_VERSION v0.40.0, neither is in artifacts.pins, so the gate compared 1 of 3 and
+  # reported "all agree". That is the same shape as the three findings this gate came FROM
+  # (AFD-135/136/137): a check whose green is true of what it looked at and silent about the
+  # rest. Not blocking — artifacts.pins is for build-chain artifacts and CI legitimately pins
+  # tools outside it — but it must be SAID.
+  uncovered=""
+  for v in $(grep -oE '^[[:space:]]*[A-Z0-9_]+_VERSION:' "$CI" | tr -d ' :' | sed 's/_VERSION//' | sort -u); do
+    lt="$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')"
+    [ -n "$(campaign_pin "$lt")" ] && continue
+    cv="$(ci_pin "$lt")"
+    [ -n "$cv" ] || continue
+    uncovered="$uncovered $lt=$cv"
+  done
+  if [ -n "$uncovered" ]; then
+    echo "  NOT COVERED by this check (ci.yml pins them, artifacts.pins does not name them):"
+    for u in $uncovered; do
+      printf '    %-18s no campaign pin to compare against\n' "$u"
+    done
+    echo "    Legitimate — artifacts.pins is for build-chain artifacts — but this check says"
+    echo "    NOTHING about these versions, and the count below is of what it DID compare."
+  fi
   if [ "$cmp_n" -eq 0 ]; then
     echo "  REFUSING: compared NOTHING — no tool is named in both files, so a pass here would"
     echo "  be a verdict about an empty set. Either artifacts.pins names no release refs or the"
@@ -91,7 +116,8 @@ if [ "${1:-}" = "--committed-only" ]; then
     echo "  (AFD-045, AFD-137)."
     exit 1
   fi
-  echo "  $cmp_n tool(s) compared, all agree."
+  nunc=$(printf '%s' "$uncovered" | wc -w | tr -d ' ')
+  echo "  $cmp_n tool(s) compared, all agree; $nunc ci.yml-pinned tool(s) NOT COVERED (above)."
   exit 0
 fi
 
