@@ -9135,3 +9135,130 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-21T06:54:03Z
+
+  - id: AFD-139
+    type: ai-found-defect
+    title: "gate-potency audit: the 'gale-nano lowers 0 skips' gate asserted the ABSENCE OF A WORD — blind to synth's own 'declining'/'refusing' phrasings AND a clean pass over an empty log; the identical defect found a second time in the F100 silicon script by sweeping for the pattern"
+    status: open
+    description: |-
+      2026-10-21. A DELIBERATE GATE-POTENCY AUDIT, run because four instances of the same class had been
+      found by ACCIDENT (AFD-135/136/137/138) and finding the fifth by tripping over it was not a plan.
+      Method: the gate-potency skill — negative control paired with a positive control, plus the six
+      mechanical audits. Result: one gate partially INERT, the same defect found a SECOND time in another
+      file by looking rather than by tripping, and both fixed.
+
+      *** THE FINDING: A GATE THAT ASSERTED THE ABSENCE OF A WORD ***
+      ci.yml's step "gale-nano lowers 0 skips on all 3 cores" asserted its claim as
+          n=$(grep -ci 'skip' /tmp/gn.$core.log || true); [ "$n" = "0" ] || exit 1
+      This repo's own CLI conventions already name the mechanism: "Grep-scraping human output is how
+      gates go vacuous."
+      NEGATIVE-CONTROLLED, four cases differing in EXACTLY ONE variable each:
+          the REAL log                      old PASS      new PASS (21/21 lowered)
+          decline worded "declining"        old PASS      new FAIL (20 of 21)      <- BLIND
+          decline worded "skipping"         old FAIL n=1  new FAIL (20 of 21)
+          an EMPTY log                      old PASS      new CANNOT DETERMINE     <- BLIND
+      The two blind phrasings are not invented. `loud-declining (#851)`, `loud-declining (#1072)` and
+      `refusing rather than emitting` are LITERALS IN THE PINNED SYNTH BINARY, alongside its own sentence
+      "Declining a non-exported internal helper ... never fails the build either way; that skip is
+      routine and stays a warning". So synth says both words, and the gate saw one of them.
+      THE SECOND HOLE WAS NOT PREDICTED AND IS WORSE: `grep -ci` over an EMPTY or truncated log returns
+      0, so the gate reported "0 skips" having read no evidence at all. That is audit 6 verbatim —
+      missing evidence defaulting to a clean count — and it is the shape AFD-133/137/138 keep producing.
+      WHAT SAVED IT FROM BEING FULLY VACUOUS, stated so the severity is not overstated: synth exits
+      NONZERO when it declines an EXPORT (#952; `--allow-skipped-exports` restores exit 0), and the step
+      runs under `set -euo pipefail` with no `||`, so an export-level decline kills the step whatever it
+      is called. The hole is the routine/non-export decline path — which is precisely what `n=0` claimed
+      to cover and the exit code does not.
+
+      *** FIXED BY ASSERTING THE DENOMINATOR ***
+      synth states its own counts: "Found 21 exported functions" and "Compiled 21 functions". A declined
+      function makes Compiled < Found WHATEVER IT IS CALLED, so the assertion no longer depends on
+      another tool's prose vocabulary. Missing either number is CANNOT DETERMINE and fails loudly rather
+      than passing quietly.
+      VERIFIED against the real pinned synth on all three cores: cortex-m3, cortex-m4f and cortex-m7dp
+      each report 21/21 exported functions lowered, and `read32` is still in the cortex-m3 residual (the
+      step's other assertion, which was already sound).
+
+      *** AND THE SAME DEFECT A SECOND TIME, FOUND BY LOOKING ***
+      The sweep for the pattern — assertions of an ABSENCE via `grep -c ... || true` — found
+      hardware/silicon/f100-gale-nano/build.sh:53 doing the identical thing, with `fail "$n skip line(s)
+      — the image is incomplete"`. It is NOT a CI gate: that script is operator-run for the F100 silicon
+      rung, which makes it MORE load-bearing rather than less, because its green feeds an on-silicon
+      claim and nothing else re-checks it.
+      THE DETAIL WORTH KEEPING: three lines below it, the seam check in the SAME FILE already reads
+      "EXACT set, not membership. The previous check asserted these three ARE undefined ... but never
+      that they are the ONLY ones". The denominator discipline had already been learned and applied to
+      the adjacent assertion, and not to this one. A lesson can be present in a file and absent from the
+      line next to it.
+      Fixed the same way, with the hole-(b) note that matters more there: the synth invocation above it
+      already fails closed on a nonzero exit, so the case that REACHES that line is exit-0-with-a-log —
+      exactly where a truncated log hides.
+
+      *** THE OTHER CHECKS: VERDICTS, INCLUDING THE HONEST ONES ***
+      Mechanical audits over all 9 required checks:
+          audit 5, skipped != passed   CLEAN. No `paths:`/`paths-ignore:` filters and no
+                                       `continue-on-error` anywhere in ci.yml, so GitHub's
+                                       skipped-satisfies-required hazard does not apply. The three `if:`
+                                       conditions are two platform guards on the coverage step
+                                       (documented: the number does not differ by platform) and one
+                                       `if: always()` on a step explicitly labelled "Non-gating
+                                       visibility".
+          audit 6, absence-assertions  TWO found, both above, both fixed. No others in ci.yml.
+                                       tools/bench/chain-measure.sh uses the same `grep -c` shape against
+                                       synth's stderr, but it REPORTS counts rather than asserting zero,
+                                       and it is operator-run — a measurement, not a gate. Its patterns
+                                       are nonetheless the old vocabulary and would under-count the same
+                                       way; recorded, not changed.
+          audit 4, defined => enforced CLEAN as of AFD-137's fix: every check-*.sh now has at least one
+                                       invocation, and nothing ci.yml MENTIONS is comment-only. 15
+                                       scripts have no invocation at all and all 15 are operator tools
+                                       (on-target-run.sh, the h1 ISP tools, chain-measure, run-ekf-qemu),
+                                       which is correct.
+          audits 1/2/3                 UNPROVEN for the remaining 8 checks. Not audited to the standard
+                                       this skill sets: no negative control was injected into them this
+                                       pass. "Unproven" is the honest verdict and is recorded as such —
+                                       potent WITHOUT a negative control is not a verdict.
+      COUNTS: 1 check partially inert and fixed; 1 non-CI gate with the identical defect, fixed; 3
+      mechanical audits clean; 8 checks UNPROVEN pending their own negative controls.
+
+      *** WHAT SHIPPED BEHIND IT, which the skill insists be asked ***
+      The gale-nano 0-skips claim appears in the H3 burn-down and the gust:hal rung. The claim is
+      RE-ESTABLISHED rather than merely repaired: the new assertion passes on all three cores against the
+      pinned synth, 21/21, so the published claim is true — it was simply not being CHECKED for two of
+      synth's three ways of saying no. No artifact needs retracting; the evidence needed re-measuring,
+      and was re-measured.
+
+      *** AN INSTRUMENT ERROR OF MINE INSIDE THIS AUDIT ***
+      My first denominator extractor used `sed -n 's/.*Found \([0-9]\+\)...'` and returned CANNOT
+      DETERMINE on all four control cases — BSD sed has no `\+`, the same portability trap that bit this
+      session twice already. It failed CLOSED rather than confidently, which is why it was obvious within
+      one run instead of producing a plausible wrong number. The replacement uses `grep -oE`.
+
+      *** AND A THIRD RESULT FROM THE SAME AUDIT: ABI-MANIFEST PASSED OVER 3 OF 5 ***
+      Audit 3 (scope covers the repo) on tools/abi/check-manifest.py — the gate the loop prompt calls
+      "THE GATE THAT EXISTS FOR THIS", which cross-checks harness.c's ABI ASSUMES against what meld's
+      signature manifest says it EMITTED. It reads FIVE exports and prints `ABI-MANIFEST: PASS`, and the
+      shape assertions cover THREE: rate#tick, mixer#mix, ekf#estimate. `attitude` and `position` get the
+      interface-version check (that one genuinely covers all five) and NO shape assertions whatever.
+      THE COVERAGE IS LEGITIMATE AND WAS UNDECLARED. harness.c states the reason in its own comment:
+      "ekf, attitude and position sit in the fused image and are never called". With nothing invoked on
+      the harness side there is no ASSUMES to cross-check, so there is correctly nothing to assert. This
+      is NOT a vacuous gate and nothing was passing that should have failed.
+      What was wrong is that `PASS` read as five of five. Under AFD-138's rule — a check must report its
+      denominator — the gate now prints "ABI shape asserted for 3 of 5 export(s); interface version for
+      all 5", names attitude and position, says why they are unchecked, and says what to do if the
+      harness ever calls one.
+      THE SHAPE REPEATS WITHIN THIS FINDING, THREE TIMES NOW: the fact was in the repo and absent from
+      the place that needed it. harness.c knew why attitude and position are uncalled; the gate's output
+      did not. The F100 script's seam check knew to assert an EXACT set; the line above it did not. And
+      ci.yml's five comments knew check-drift.sh enforced the lockstep; no step ran it (AFD-137). The
+      knowledge is never missing — it is in the wrong artifact to be mechanical.
+    tags: [gate-potency, afd-135, afd-136, afd-137, afd-138, synth, gale-nano, f100, denominator, negative-control]
+    fields:
+      detected-by: a deliberate gate-potency audit, run because four instances of this class had been found by accident, 2026-10-21
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-21T09:20:10Z

@@ -635,7 +635,7 @@ jobs:
       # The gale-nano lowering claim, verified against the PINNED artifact rather than the
       # brief. NOTE the embedder-init flags: without them synth correctly refuses (#1041,
       # 11 active data segments) and the result reads as "gale-nano does not lower".
-      - name: gust:hal — gale-nano lowers 0 skips on all 3 cores, residual by symbol
+      - name: gust:hal — gale-nano lowers ALL exported functions on all 3 cores (counts, not a word-grep), residual by symbol
         run: |
           set -euo pipefail
           G=.scratch/galenano/gale-nano.wasm
@@ -643,9 +643,34 @@ jobs:
           for core in cortex-m3 cortex-m4f cortex-m7dp; do
             .scratch/synthpin/synth compile "$G" -t $core --cortex-m --relocatable --all-exports \
               --embedder-data-init --embedder-global-init -o /tmp/gn.$core.o > /tmp/gn.$core.log 2>&1
-            n=$(grep -ci 'skip' /tmp/gn.$core.log || true)
-            [ "$n" = "0" ] || { echo "$core: $n skip line(s)"; cat /tmp/gn.$core.log; exit 1; }
-            echo "$core: exit 0, 0 skips, $(stat -c%s /tmp/gn.$core.o) B"
+            # ASSERT THE DENOMINATOR, not the absence of a word. This used to be
+            #     n=$(grep -ci 'skip' log || true); [ "$n" = 0 ] || exit 1
+            # which grep-scraped synth's PROSE — and this repo's own CLI conventions say why
+            # that is wrong: "Grep-scraping human output is how gates go vacuous."
+            # NEGATIVE-CONTROLLED 2026-10-21 (AFD-139), four cases, one variable each:
+            #   real log                      old PASS   new PASS (21/21 lowered)
+            #   decline worded "declining"    old PASS   new FAIL (20 of 21)   <- BLIND
+            #   decline worded "skipping"     old FAIL   new FAIL (20 of 21)
+            #   EMPTY log                     old PASS   new CANNOT DETERMINE  <- BLIND
+            # Both blind phrasings are literals in the PINNED synth binary — `loud-declining
+            # (#851)`, `loud-declining (#1072)`, `refusing rather than emitting` — so the old
+            # gate was potent for one wording of a decline and silent for synth's own others.
+            # The empty-log case is worse and was not predicted: a truncated or absent log gave
+            # a CLEAN PASS over no evidence at all.
+            # synth states its own denominator — "Found N exported functions" and "Compiled N
+            # functions" — so a declined function makes Compiled < Found whatever it is CALLED.
+            # Missing either number is CANNOT DETERMINE and fails, never a quiet zero.
+            f=$(grep -oE 'Found [0-9]+ exported functions' /tmp/gn.$core.log | grep -oE '[0-9]+' | head -1)
+            c=$(grep -oE '^Compiled [0-9]+ functions' /tmp/gn.$core.log | grep -oE '[0-9]+' | head -1)
+            if [ -z "$f" ] || [ -z "$c" ]; then
+              echo "$core: CANNOT DETERMINE — synth's log states no function counts"
+              echo "  found='$f' compiled='$c'. That is 'could not read the evidence', NOT"
+              echo "  '0 skips'. If synth changed its summary wording, FIX THIS GATE rather"
+              echo "  than letting it pass over a log it can no longer parse."
+              cat /tmp/gn.$core.log; exit 1
+            fi
+            [ "$f" = "$c" ] || { echo "$core: lowered $c of $f exported functions"; cat /tmp/gn.$core.log; exit 1; }
+            echo "$core: exit 0, $c/$f exported functions lowered, $(stat -c%s /tmp/gn.$core.o) B"
           done
           u=$(arm-none-eabi-nm /tmp/gn.cortex-m3.o | awk '$1=="U"||$2=="U"{print $NF}' | sort -u | tr '\n' ' ')
           echo "gale-nano native residual: $u"
