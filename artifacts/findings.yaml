@@ -9233,6 +9233,26 @@ artifacts:
       DETERMINE on all four control cases — BSD sed has no `\+`, the same portability trap that bit this
       session twice already. It failed CLOSED rather than confidently, which is why it was obvious within
       one run instead of producing a plausible wrong number. The replacement uses `grep -oE`.
+
+      *** AND A THIRD RESULT FROM THE SAME AUDIT: ABI-MANIFEST PASSED OVER 3 OF 5 ***
+      Audit 3 (scope covers the repo) on tools/abi/check-manifest.py — the gate the loop prompt calls
+      "THE GATE THAT EXISTS FOR THIS", which cross-checks harness.c's ABI ASSUMES against what meld's
+      signature manifest says it EMITTED. It reads FIVE exports and prints `ABI-MANIFEST: PASS`, and the
+      shape assertions cover THREE: rate#tick, mixer#mix, ekf#estimate. `attitude` and `position` get the
+      interface-version check (that one genuinely covers all five) and NO shape assertions whatever.
+      THE COVERAGE IS LEGITIMATE AND WAS UNDECLARED. harness.c states the reason in its own comment:
+      "ekf, attitude and position sit in the fused image and are never called". With nothing invoked on
+      the harness side there is no ASSUMES to cross-check, so there is correctly nothing to assert. This
+      is NOT a vacuous gate and nothing was passing that should have failed.
+      What was wrong is that `PASS` read as five of five. Under AFD-138's rule — a check must report its
+      denominator — the gate now prints "ABI shape asserted for 3 of 5 export(s); interface version for
+      all 5", names attitude and position, says why they are unchecked, and says what to do if the
+      harness ever calls one.
+      THE SHAPE REPEATS WITHIN THIS FINDING, THREE TIMES NOW: the fact was in the repo and absent from
+      the place that needed it. harness.c knew why attitude and position are uncalled; the gate's output
+      did not. The F100 script's seam check knew to assert an EXACT set; the line above it did not. And
+      ci.yml's five comments knew check-drift.sh enforced the lockstep; no step ran it (AFD-137). The
+      knowledge is never missing — it is in the wrong artifact to be mechanical.
     tags: [gate-potency, afd-135, afd-136, afd-137, afd-138, synth, gale-nano, f100, denominator, negative-control]
     fields:
       detected-by: a deliberate gate-potency audit, run because four instances of this class had been found by accident, 2026-10-21

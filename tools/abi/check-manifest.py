@@ -136,6 +136,28 @@ def main():
     tag = "ok " if good else "FAIL"; ok &= good
     print(f"  [{tag}] ekf#estimate return area: {era.get('size')} B / {en} field(s); harness folds 14 words")
 
+    # DECLARE THE DENOMINATOR. This gate reads FIVE exports and cross-checks the ABI shape of
+    # THREE — rate#tick, mixer#mix and ekf#estimate. `attitude` and `position` get the
+    # interface-version check (that one does cover all five) and no shape assertions at all,
+    # because harness.c never invokes them: "ekf, attitude and position sit in the fused image
+    # and are never called". With nothing on the harness side to compare against, there is no
+    # ASSUMES to cross-check — the coverage is legitimate.
+    # But it was SILENT, and "ABI-MANIFEST: PASS" reads as five of five. Found by the
+    # gate-potency audit in AFD-139, under the rule AFD-138 earned: a check must report its
+    # denominator, because "all agree" is only honest beside "and these were not compared".
+    # Note where the knowledge already lived — harness.c states the reason in a comment. The
+    # fact was in the repo and absent from the gate's own output, which is the same shape as the
+    # F100 script whose neighbour line already knew to assert an EXACT set.
+    shaped = ['rate#tick', 'mixer#mix', 'ekf#estimate']
+    allnames = sorted({e['export'].split('/')[-1].split('@')[0] for e in man['exports']})
+    unshaped = [n for n in allnames if not any(sp.startswith(n) for sp in shaped)]
+    print(f"  coverage: ABI shape asserted for {len(shaped)} of {len(man['exports'])} export(s); "
+          f"interface version for all {len(man['exports'])}")
+    if unshaped:
+        print(f"    NOT shape-checked: {', '.join(unshaped)} — they are in the fused image and")
+        print( "    harness.c never invokes them, so there is no harness ASSUMES to compare")
+        print( "    against. If the harness ever calls one, ADD ITS ASSERTIONS HERE: this line")
+        print( "    is the only thing saying they are unchecked rather than checked and fine.")
     print("ABI-MANIFEST:", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
