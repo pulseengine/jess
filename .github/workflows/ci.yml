@@ -783,6 +783,24 @@ jobs:
       # MELD/LOOM are supplied because varve is not on the runner; appcompose derives its
       # fused core from the pinned stage components rather than depending on an unreproducible
       # file (AFD-075).
+      # The baked interface version must agree with what the PINNED artifacts export.
+      #
+      # AFD-141. AFD-121's rule — do not hardcode the falcon interface version — was enforced
+      # in ONE leg only: ifacever.find_export resolves it agnostically for the Python/synth
+      # path. WIT imports and WAC plug expressions name the version LITERALLY and have no
+      # agnostic form, so that leg had no mechanism and nothing said so. The v1.139 -> v1.140
+      # pin bump left 18 literal sites across 10 files on 0.10.0; 8 of 9 checks went green and
+      # `wac compose` failed with "the instance has no export named …/rate@0.10.0", which also
+      # SKIPPED three further oracles in this job — unverified, not fine.
+      #
+      # Runs AFTER the fetch (it derives the expected version from the artifact, never from a
+      # constant here) and BEFORE the compose, so the message names the cause instead of
+      # surfacing as a wac resolution error. --self-test carries 1 positive and 3 negative
+      # controls, including the per-line-vs-per-match blindness NC2 caught before this shipped.
+      - name: baked interface version agrees with the pinned artifacts (AFD-141)
+        run: |
+          tools/abi/check-iface-version.sh
+          tools/abi/check-iface-version.sh --self-test
       - name: the full wasm stack composes and RUNS (AFD-044)
         run: |
           set -euo pipefail
