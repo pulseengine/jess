@@ -38,25 +38,61 @@
 # verifying that tarball against the release's own signed SHA256SUMS.txt — so the chain is
 # release signature -> tarball -> extracted binary, not a digest someone typed in.
 
-[falcon-v1.139.0]
-# BUMPED v1.134.1 -> v1.139.0. relay fixed an estimator bug that had invalidated 18 of their
-# closed-loop tests (the core fused the accelerometer as gravity every tick), so this is a
-# behaviour-CHANGING bump by design — it is Phase C and was done ALONE, after the toolchain.
+[falcon-v1.140.0]
+# BUMPED v1.139.0 -> v1.140.0. This is an INTERFACE MIGRATION, 0.10.0 -> 0.11.0 on all five
+# stages, and it is the first falcon bump that carries a DISCRIMINATION HAZARD rather than
+# just new bytes.
 #
-# The interface went 0.7.0 -> 0.10.0, but MEASURED, that is a version string for jess's path:
-# all five stage interfaces survive (rate/mixer/attitude/position/ekf), every stage signature
-# is byte-identical, and the record shapes are unchanged. tools/abi/check-manifest.py passes on
-# BOTH interfaces with the same numbers (rate#tick flat 18, mixer#mix flat 4, return areas
-# unchanged). `falcon-cascade` at 0.10.0 is an ADDITIONAL composed component exporting a single
-# `controller`, not a replacement for the five.
+# THE HAZARD, measured: the v1.140 bundle ships TWO components exporting the IDENTICAL string
+# `pulseengine:falcon-cascade/ekf@0.11.0` --
+#     falcon-iekf  role=flight-core-stage  23,053 B  invariant EKF, Kani harnesses in CI
+#     falcon-ekf   role=legacy-stage       14,750 B  LEGACY Mahony attitude filter on SO(3)
+# relay's own manifest.json says of the latter: "not the estimator the falcon flight core
+# uses". `wasm-tools component wit` prints the same export line for both -- so
+# ifacever.find_export, which matches a version-AGNOSTIC suffix by design (AFD-121), CANNOT
+# tell them apart. Pin the wrong one and every oracle downstream keeps passing, against a
+# Mahony filter, silently. The pin is the last place the two are distinguishable, so the
+# discriminator lives there: tools/deps/check-estimator-identity.sh, 5 controls (1 positive,
+# 4 negative), wired into CI.
 #
-# Directory renamed v1341/ -> falcon/: a version in a path is the hazard AFD-114 fixed for synth
-# (fg60 -> synthpin) and it had reappeared here.
-falcon/rate.wasm              f0cb7154c543452c761443c9e50334e691a694cbd5de32f646a79bad8aa0bdd1  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-rate-v1.139.wasm
-falcon/mixer.wasm             7df930b0e10d52033378b6fe85d24cccc924df651d925abb80390210e73105e7  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-mixer-v1.139.wasm
-falcon/attitude.wasm          d9320de9cda532906362cbc71ea291efa5a6a46889d98a76d3bdf9e57ffbad01  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-attitude-v1.139.wasm
-falcon/position.wasm          379894ec05081022a32240100d88bd2bde3a0c7dc6f35f2c14165bd30e5dde13  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-position-v1.139.wasm
-falcon/iekf.wasm              cf9c57385d1a4ad3e32956088b8317e2a07e372bd58a5d432772d54789cbdd65  release:pulseengine/relay@falcon-v1.139.0!falcon-components-v1.139.tar.gz!falcon-iekf-v1.139.wasm
+# THE MIGRATION IS A VERSION STRING, MEASURED ON ALL FIVE STAGES, not generalised from one
+# (AFD-107/AFD-121): `wasm-tools component wit` output with @0.10.0/@0.11.0 normalised is
+# BYTE-IDENTICAL for rate (46 lines), mixer (29), attitude (47), position (47), iekf (41) --
+# 5 of 5. The comparison is not vacuous: perturbing one field type, and perturbing the
+# version the normaliser rewrites, are both detected.
+#
+# Digests verified through the bundle's OWN signed SHA256SUMS (6/6 OK), and the iekf digest
+# cross-checked against manifest.json's falcon-iekf entry -- two independent sources in the
+# release agree, rather than a digest typed in from one listing.
+#
+# NOT BYTE-NEUTRAL IN THE LOWERED OBJECT, so every byte is attributed (the AFD-120 rule):
+#   cascade.o .text 40,746 -> 40,462 (-284). Symbol set IDENTICAL, 25 distinct functions both
+#   sides once the 10 aliased addresses are collapsed (each export shares an address and size
+#   with a func_*, so counting both double-counts). 8 functions changed:
+#     ekf#estimate/func_2    15,300 -> 15,196  -104
+#     position#tick/func_13  10,774 -> 10,708   -66
+#     attitude#tick/func_20   2,730 ->  2,692   -38
+#     rate#tick/func_28       2,610 ->  2,582   -28
+#     mixer#mix/func_25       1,188 ->  1,168   -20
+#     func_3                  2,394 ->  2,374   -20
+#     func_8                    686 ->    680    -6
+#     func_15                   880 ->    882    +2
+#   sum -280, residual -4 = alignment padding. -280 + -4 = -284, the measured delta. Nothing
+#   added, nothing dropped; the five exports are RENAMED @0.10.0 -> @0.11.0, not replaced.
+#
+# BEHAVIOUR-NEUTRAL WHERE IT COULD BE MEASURED. 8 functions changing size is a codegen change,
+# so "it lowers" is not "it works": the estimator fold over 16 ticks is BIT-IDENTICAL under
+# wasmtime, 1858379312, all 14 fields at tick 1 and tick 16, IMU (0,0,-9.81,0.30,-0.15,0.07).
+# The comparison is not vacuous -- perturbing gz by 1e-7 is detected. NOT COVERED locally:
+# TEST-PIX-032/033 need Renode, which is not installed on this host; they run in CI.
+#
+# Directory stays falcon/, NOT v1140/: a version in a path is the hazard AFD-114 fixed for
+# synth (fg60 -> synthpin) and it had already reappeared here once as v1341/.
+falcon/rate.wasm              ea0d3a3852f2559e2407cb44689d538cb28f84a06341553a96ba5d784652f54a  release:pulseengine/relay@falcon-v1.140.0!falcon-components-v1.140.tar.gz!falcon-rate-v1.140.wasm
+falcon/mixer.wasm             3416c0f288f7314ee02bddb0b4b463379a04388f5287eceb579a0cf593b3313c  release:pulseengine/relay@falcon-v1.140.0!falcon-components-v1.140.tar.gz!falcon-mixer-v1.140.wasm
+falcon/attitude.wasm          ad1aea6f0ea7c05527c415f43da947f6f5ca070a543fb2b3312db9db63542096  release:pulseengine/relay@falcon-v1.140.0!falcon-components-v1.140.tar.gz!falcon-attitude-v1.140.wasm
+falcon/position.wasm          55873ab0fb79ea121646f73325e9823508af7c3edba3285e572f7839f202ce9c  release:pulseengine/relay@falcon-v1.140.0!falcon-components-v1.140.tar.gz!falcon-position-v1.140.wasm
+falcon/iekf.wasm              6c789664f71398937f6056736778151455aa306be62eab2285d2189607ee6163  release:pulseengine/relay@falcon-v1.140.0!falcon-components-v1.140.tar.gz!falcon-iekf-v1.140.wasm
 
 [gale-nano]
 galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc955ec6fce271fdc  oci:ghcr.io/pulseengine/gale-nano:0.9.0!fused-gustos.component.wasm

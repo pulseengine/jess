@@ -30,7 +30,13 @@
 # returned pointer). Filed upstream; until then this check is deliberately labelled down.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
-KILND="${KILND:-kilnd}"
+# The binary was RENAMED kilnd -> kiln upstream (jess#287). Resolve BOTH and prefer `kiln`,
+# rather than switching outright: jess has to work across v0.6.0 (kilnd) and whatever ships
+# the rename, without a flag day. An explicit KILND= still wins.
+if [ -n "${KILND:-}" ]; then :
+elif command -v kiln  >/dev/null 2>&1; then KILND=kiln
+elif command -v kilnd >/dev/null 2>&1; then KILND=kilnd
+else KILND=kilnd; fi   # keep the old name in the error message when neither resolves
 MOD="${MOD:-$ROOT/.scratch/invoke/c.loom.wasm}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
@@ -59,13 +65,17 @@ invoke_wasmtime() { local e="$1"; shift; wasmtime run --invoke "$e" "$MOD" "$@" 
 [ -f "$MOD" ] || fail "fused core not found: $MOD"
 command -v wasmtime >/dev/null || fail "wasmtime not on PATH"
 command -v "$KILND" >/dev/null || [ -x "$KILND" ] \
-  || fail "kilnd not found at '$KILND' — that is 'could not run the check', NOT 'the check failed'"
+  || fail "neither 'kiln' nor 'kilnd' found (tried '$KILND') — that is 'could not run the check', NOT 'the check failed'"
 
 # kilnd must be >= 0.5.0: earlier builds have no --invoke and cannot reach a fused core at all.
 kv="$("$KILND" --version 2>&1 | head -1)"
+# Accepts BOTH names. The mechanism is right and bites CLOSED (a pre-0.5.0 build prints a
+# banner, has no --invoke, and must refuse rather than report "inconclusive") — but it was
+# applied to a STALE FACT: after the upstream rename it would refuse a perfectly good
+# `kiln 0.7.0` for a reason that no longer exists. A correct check on an outdated premise.
 case "$kv" in
-  "kilnd "*) : ;;
-  *) fail "kilnd does not report a version ('$kv'). Pre-0.5.0 builds print a banner instead and
+  "kiln "*|"kilnd "*) : ;;
+  *) fail "$KILND does not report a version ('$kv'). Pre-0.5.0 builds print a banner instead and
    have no --invoke, so this check cannot run against them — refusing rather than reporting
    'inconclusive', which is how the previous version hid a permanent failure." ;;
 esac

@@ -9262,3 +9262,33 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-21T09:20:10Z
+
+  - id: AFD-140
+    type: ai-found-defect
+    title: Two components export the same ekf interface string, and nothing downstream can tell them apart
+    status: resolved
+    description: "falcon v1.140.0 ships falcon-iekf (role=flight-core-stage, 23,053 B, invariant EKF, Kani harnesses in CI) and falcon-ekf (role=legacy-stage, 14,750 B, a LEGACY Mahony complementary attitude filter on SO(3)). MEASURED: wasm-tools component wit prints the IDENTICAL export line pulseengine:falcon-cascade/ekf@0.11.0 for both. relay manifest.json on the legacy one: \"not the estimator the falcon flight core uses\". jess resolves exports via tools/cascade-differential/ifacever.py, which strips the interface version and matches the suffix ekf#estimate - correct for a version bump (AFD-121) and precisely why it cannot discriminate here. Pin the legacy component and every jess oracle keeps passing against a Mahony filter, silently: the fused image builds, the ABI manifest agrees (same 6 flat params, same 56-byte 14-field return area), and no downstream check can see it. The pin is the LAST place the two are distinguishable, by upstream member name and by digest, so the discriminator must live there and nowhere else. tools/deps/check-estimator-identity.sh asserts it with 5 controls (1 positive, 4 negative: legacy locator, unknown locator, pin removed, legacy added alongside a correct pin) and is wired into CI as a named step. The v1.139 to v1.140 migration itself is behaviour-neutral: WIT identical after normalising the version on 5 of 5 stages, estimator fold 1858379312 bit-identical under wasmtime over 16 ticks (control: a 1e-7 gz perturbation is detected), and the lowered .text shrinks 40,746 to 40,462 B with all 284 bytes attributed (8 distinct functions summing -280, residual -4 alignment padding, identical 25-symbol set)."
+    fields:
+      detected-by: jess release-watch, falcon v1.139.0 -> v1.140.0 interface migration (0.10.0 -> 0.11.0); hazard found by listing the bundle members before bumping, not by a failing test
+      discovered-at: 2026-10-21
+      severity: major
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-21T14:52:45Z
+
+  - id: AFD-141
+    type: ai-found-defect
+    title: The do-not-hardcode-the-interface-version rule was enforced in one leg; the other leg had 18 baked sites and no mechanism
+    status: resolved
+    description: "AFD-121 established: do not hardcode the falcon interface version, it moves without the signatures moving. tools/cascade-differential/ifacever.py implements that for the Python/synth leg by stripping the version and matching the export suffix. The component-model leg CANNOT use that mechanism - WIT imports and WAC plug expressions name the version literally and there is no agnostic form - so it had no mechanism at all, and nothing in the repo said so. MEASURED COST: bumping the pin 0.10.0 -> 0.11.0 left 18 literal sites across 10 files (4 vendored WIT packages, 3 world.wit, 2 .wac, 1 .sh) pointing at 0.10.0. CI went green on 8 of 9 checks; component-oracles failed inside `wac compose` with \"the instance has no export named pulseengine:falcon-cascade/rate@0.10.0\", and because that step failed, steps 10/11/12 of the same job were SKIPPED - three further oracles unverified, which is not the same as passing. The pin file, the Python leg, the ABI manifest check and every ARM lowering were all correct and silent. FIX: tools/abi/check-iface-version.sh derives the expected version from the PINNED artifact (never from a constant in the script, which would be the same defect one level up), enumerates the literal sites mechanically, and compares PER MATCH rather than per line. The per-line form was written first and was blind: a WAC plug names the interface twice on one line, so a line carrying one stale and one correct version contains the wanted string and survives a line-level filter. Its own NC2 control caught that before it shipped. Reports its denominator (19 lines, 23 occurrences) and names the *.py leg as NOT CHECKED with the reason. Wired into ci.yml before the compose step, with --self-test (1 positive, 3 negative controls)."
+    fields:
+      detected-by: the falcon v1.139.0 -> v1.140.0 pin bump failing `component oracles` in CI at wac compose, after 8 of 9 checks had gone green
+      discovered-at: 2026-10-21
+      severity: major
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-21T15:05:31Z

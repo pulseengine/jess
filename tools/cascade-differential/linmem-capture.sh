@@ -25,7 +25,7 @@ LINBASE="${LINBASE:-0x20000000}"
 LINSIZE="${LINSIZE:-0x10000}"
 SETTLE="${SETTLE:-14}"
 OUT="${OUT:-$ROOT/.scratch/linmem}"
-EKF_EXPORT="pulseengine:falcon-cascade/ekf@0.10.0#estimate"
+EKF_EXPORT="pulseengine:falcon-cascade/ekf@0.11.0#estimate"
 PY="${PY:-python3}"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
