@@ -168,6 +168,22 @@ jobs:
       - name: ci.yml and artifacts.pins agree on every tool version (AFD-045, AFD-137)
         working-directory: jess
         run: tools/varve/check-drift.sh --committed-only
+      # The falcon ESTIMATOR pin names the real estimator, not the legacy Mahony filter.
+      #
+      # From falcon v1.140.0 the bundle ships TWO components exporting the IDENTICAL string
+      # `pulseengine:falcon-cascade/ekf@0.11.0` — falcon-iekf (role=flight-core-stage, the
+      # invariant EKF, Kani-harnessed) and falcon-ekf (role=legacy-stage, a Mahony attitude
+      # filter that relay's own manifest.json calls "not the estimator the falcon flight core
+      # uses"). ifacever.find_export matches a version-AGNOSTIC suffix by design (AFD-121), so
+      # it cannot discriminate: pin the wrong one and every oracle downstream stays green
+      # against the wrong filter. The pin is the LAST place the two differ, so the assertion
+      # lives there. Static — two committed files, no network, no artifacts — so it runs here.
+      # --self-test carries 1 positive and 4 negative controls; it is run, not just defined.
+      - name: the falcon ekf pin names falcon-iekf, not the legacy filter (AFD-140)
+        working-directory: jess
+        run: |
+          tools/deps/check-estimator-identity.sh
+          tools/deps/check-estimator-identity.sh --self-test
       - name: rivet sync + validate
         working-directory: jess
         run: |

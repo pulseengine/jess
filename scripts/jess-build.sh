@@ -33,16 +33,19 @@ note() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 fail() { printf '\033[31mFAIL: %s\033[0m\n' "$*" >&2; exit 1; }
 
 # Resolve a sibling CLI, building it (release) if no binary exists.
-cli() { # $1 = crate/dir name, $2 = binary name
-  local d="$SIB/$1" b
-  b="$d/target/release/$2"; [ -x "$b" ] && { echo "$b"; return; }
-  b="$d/target/debug/$2";   [ -x "$b" ] && { echo "$b"; return; }
+cli() { # $1 = crate/dir name, $2 = binary name, $3 = optional alternate binary name
+  local d="$SIB/$1" b n
+  for n in "$2" ${3:+"$3"}; do
+    b="$d/target/release/$n"; [ -x "$b" ] && { echo "$b"; return; }
+    b="$d/target/debug/$n";   [ -x "$b" ] && { echo "$b"; return; }
+  done
+  set -- "$1" "$2"
   echo "building $1..." >&2; ( cd "$d" && cargo build --release -q ) >&2
   echo "$d/target/release/$2"
 }
 
 note "0.1.0 forward chain for $VERSION (asset $WASM_NAME)"
-LOOM="$(cli loom loom)"; MELD="$(cli meld meld)"; SYNTH="$(cli synth synth)"; KILND="$(cli kiln kilnd)"
+LOOM="$(cli loom loom)"; MELD="$(cli meld meld)"; SYNTH="$(cli synth synth)"; KILND="$(cli kiln kiln kilnd)"
 
 # --- acquire the component (source build | local | released asset) -------
 note "acquire component ($MODE)"
