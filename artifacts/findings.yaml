@@ -9089,3 +9089,49 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-15T10:04:19Z
+
+  - id: AFD-138
+    type: ai-found-defect
+    title: "the gate written to catch unenforced rules had the same defect: 'ci.yml pins three tool versions, artifacts.pins names one' — it compared 1 of 3 and reported 'all agree', because a check that does not report its denominator cannot be read"
+    status: open
+    description: |-
+      2026-10-21. THE GATE I SHIPPED TO CATCH UNENFORCED RULES HAD THE SAME DEFECT, AND I FOUND IT BY
+      USING IT. AFD-137 added `check-drift.sh --committed-only` to compare ci.yml's tool versions
+      against tools/deps/artifacts.pins, and wired it into CI as a named step. First real use, one tick
+      later:
+          1 tool(s) compared, all agree.
+      MEASURED: ci.yml pins THREE tool versions — MELD_VERSION 0.62.0, RIVET_VERSION 0.35.0,
+      SPAR_VERSION 0.40.0 — and artifacts.pins names only meld. The loop derives its tool list FROM
+      artifacts.pins, so rivet and spar were never compared against anything, and the summary line
+      "1 tool(s) compared, all agree" reads as completeness.
+      IT IS THE SAME SHAPE AS THE THREE FINDINGS IT CAME FROM. AFD-135: check-realm.sh green while
+      every `varve run` failed. AFD-136: the board-not-probe rule in prose while the gate unioned past
+      it. AFD-137: check-drift.sh cited in five comments and invoked nowhere. All four are a check whose
+      green is TRUE of what it looked at and SILENT about the rest — and the fourth is mine, written to
+      fix the third, broken within an hour of shipping.
+      NOT A DRIFT, AND NOT FIXED BY MAKING IT ONE. artifacts.pins is the campaign's pin file for
+      BUILD-CHAIN artifacts; CI legitimately pins tools outside it (rivet for the artifact spine, spar
+      for the AADL->WIT regen). Demanding a campaign pin for every ci.yml tool would be wrong. The
+      defect is the SILENCE, not the absence.
+      FIXED: the gate now enumerates every <TOOL>_VERSION in ci.yml, and any that artifacts.pins does
+      not name is listed under "NOT COVERED by this check ... this check says NOTHING about these
+      versions", with the summary reading "1 tool(s) compared, all agree; 2 ci.yml-pinned tool(s) NOT
+      COVERED". Advisory, not blocking — but no longer invisible.
+      THE RULE THIS YIELDS, which is the reusable part: A CHECK MUST REPORT ITS DENOMINATOR. "N compared,
+      all agree" is only honest beside "and M were not compared". Every one of these four findings would
+      have been visible a tick earlier if the check had said what it did not look at.
+      AND A SECOND THING THE SAME MEASUREMENT SURFACED, recorded because it is now visible rather than
+      because it is fixed: rivet is at THREE versions at once — ci.yml pins v0.35.0, this machine runs
+      0.38.0, and v0.41.0 is released. AFD-045 is exactly this class (a defect filed against meld 0.41.3
+      while 0.52.0 was current). Not touched in this change, because the fix is a rivet bump that
+      deserves its own one-variable test, and because jess#290's migration is blocked on rivet#1094
+      which is still OPEN.
+    tags: [toolchain-pin, gate-potency, afd-045, afd-135, afd-136, afd-137, self-inflicted, coverage]
+    fields:
+      detected-by: jess running its own one-tick-old drift gate for the first time on real input, 2026-10-21
+      severity: major
+      triage-status: confirmed
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-21T06:54:03Z
