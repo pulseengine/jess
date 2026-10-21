@@ -50,8 +50,36 @@ done
 mv "$OUT/gale.aliased.o" "$OUT/gale.o"
 echo "sched imports aliased to gale-nano's own exports (3)"
 
-n=$(grep -ci 'skip' "$OUT/lower.log" || true)
-[ "$n" = "0" ] || { cat "$OUT/lower.log"; fail "$n skip line(s) — the image is incomplete"; }
+# ASSERT THE DENOMINATOR, not the absence of a word — the same fix as ci.yml's gale-nano
+# step, and found in the same audit (AFD-139). This was
+#     n=$(grep -ci 'skip' "$OUT/lower.log" || true)
+#     [ "$n" = "0" ] || fail "$n skip line(s) — the image is incomplete"
+# with two holes, both negative-controlled:
+#   (a) BLIND TO SYNTH'S OWN OTHER WORDINGS. `loud-declining (#851)`,
+#       `loud-declining (#1072)` and `refusing rather than emitting` are literals in the
+#       pinned synth binary; a decline phrased any of those ways contains no "skip" and this
+#       assertion passed. Measured: a log line "declining function func_26 (#719/#369)" ->
+#       old PASS, new FAIL.
+#   (b) A CLEAN PASS OVER NO EVIDENCE. `grep -ci` on an EMPTY or truncated lower.log returns
+#       0, so the gate reported "0 skips" having read nothing. Measured: empty log ->
+#       old PASS, new CANNOT DETERMINE.
+# Hole (b) matters more here than in CI: this script guards an ON-SILICON claim, and the
+# synth invocation above already fails closed on a nonzero exit — so the case that reaches
+# this line is exit-0-with-a-log, which is exactly where a truncated log hides.
+# The irony worth keeping: the seam check immediately below ALREADY says "EXACT set, not
+# membership ... never that they are the ONLY ones". The denominator discipline was applied
+# to the neighbour and not to this line.
+f=$(grep -oE 'Found [0-9]+ exported functions' "$OUT/lower.log" | grep -oE '[0-9]+' | head -1)
+c=$(grep -oE '^Compiled [0-9]+ functions' "$OUT/lower.log" | grep -oE '[0-9]+' | head -1)
+if [ -z "$f" ] || [ -z "$c" ]; then
+  cat "$OUT/lower.log"
+  fail "CANNOT DETERMINE how many functions lowered: found='$f' compiled='$c'.
+   synth's log states no function counts, so this is 'could not read the evidence', NOT
+   '0 skips'. If synth changed its summary wording, FIX THIS CHECK rather than letting it
+   pass over a log it can no longer parse."
+fi
+[ "$f" = "$c" ] || { cat "$OUT/lower.log"; fail "lowered $c of $f exported functions — the image is incomplete"; }
+echo "gale-nano lowered $c/$f exported functions for cortex-m3"
 
 # The gust:os seam must BE a seam. If these stopped being undefined, gale-nano would be
 # calling something other than jess's harness and the differential would measure nothing.
