@@ -98,7 +98,40 @@ falcon/iekf.wasm              6c789664f71398937f6056736778151455aa306be62eab2285
 galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc955ec6fce271fdc  oci:ghcr.io/pulseengine/gale-nano:0.9.0!fused-gustos.component.wasm
 
 [synth]
-# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.87.0.
+# NOT varve-pinned: the varve layer carries synth 0.61.0 while the campaign runs 0.88.0.
+#
+# BUMPED 0.87.0 -> 0.88.0. THIS IS THE ONE THAT CLOSES AFD-125 / synth#1436, the estimator
+# divergence this campaign has chased since 2026-09-30. The 0.87.0 bump was adopted as a
+# measured no-op precisely so that THIS diff would be the fix alone, and it is:
+#   fused c.wasm and c.loom.wasm are BYTE-IDENTICAL (meld and loom unchanged)
+#   cascade.o .text 42,314 -> 42,294 (-20), and the attribution is a SINGLE FUNCTION:
+#       func_2 == ekf#estimate   15,196 -> 15,174   (-22), residual +2 alignment padding
+#   symbol set IDENTICAL, 25 distinct functions both sides. Nothing else moved - which is
+#   what a targeted fix to one function's register allocation should look like.
+#
+# THE ACCEPTANCE TEST WAS PRE-REGISTERED (see the 0.87.0 note this replaces) AND IT PASSES.
+# Criterion, written down before the answer was known: run-ekf-oracle.sh must go from 10 of 14
+# state words to 14 of 14. Measured on QEMU mps2-an500 / cortex-m7, against the wasmtime
+# reference over the SAME fused module, IMU (0,0,-9.81,0.30,-0.15,0.07):
+#
+#     synth 0.87.0   tick 1: 10/14   tick 16:  8/14   fold 684578d1   <- the CONTROL
+#     synth 0.88.0   tick 1: 14/14   tick 16: 14/14   fold 6ec49e30   == wasmtime's fold
+#
+# THE CONTROL IS THE POINT. 0.87.0 reproduces AFD-125's historical reading EXACTLY - "ten of
+# the fourteen state words are bit-exact" at tick 1 - with the four mismatches being pos-d,
+# vel-n, vel-e, vel-d, the translational sub-vector. So the failing case is OBSERVABLE by this
+# instrument and 14/14 is a result, not a vacuous pass.
+#
+# WHY QEMU AND NOT RENODE: Renode is not installed on this host. QEMU is not a weaker substitute
+# here - hardware/qemu/run-ekf-qemu.sh exists because jess already MEASURED (2026-09-30) that
+# all 31 parked words are bit-identical between Renode 1.16.1 on the RT1176 model and QEMU
+# 11.1.1 on mps2-an500 for this exact image, which is what exonerated Renode. The Renode rung
+# runs in CI on this PR; real silicon is a separate re-run and is NOT claimed here.
+#
+# synth's own account (synth#1436, closed as COMPLETED with 0.88.0): a float `local.tee` could
+# overwrite a local's home register while an earlier copy of that local was still on the operand
+# stack. It also vindicates the AFD-134 retraction - "your gravity compensation was correct all
+# along; synth was feeding it a clobbered value."
 #
 # BUMPED 0.77.0 -> 0.87.0, TEN releases, and it is a MEASURED NO-OP: the lowered artifacts are
 # BYTE-IDENTICAL -- cascade.o (42,314 B), ekf.elf (91,176 B), soak.elf (91,204 B), the fused
@@ -165,8 +198,8 @@ galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc9
 # differential is NOT vacuous: a module carrying the #1189 shape DOES differ (504 -> 510 B).
 # So jess was never exposed, and the pin now excludes a silent wrong-answer class.
 # That divergence is real and is why this is pinned by digest here (AFD-053 S5).
-synthpin/synth               550874a88c110c359b85e817fbdd96b55a10b87dc0438fb06c6ca0e4b38da4df  release:pulseengine/synth@v0.87.0!synth-v0.87.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
-synthpin/synth               b6770d21a953d27682a22ab84cad43964eb99083b1dea43f823668e4a9afcd8c  release:pulseengine/synth@v0.87.0!synth-v0.87.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
+synthpin/synth               c86b790984286efa6a653b1779bac624ae12a81b99ac8376f3ab954138b8a177  release:pulseengine/synth@v0.88.0!synth-v0.88.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
+synthpin/synth               7d2844ce671daded0bc5c9dd9bee554ad34b194122469c467209f354cda1adc3  release:pulseengine/synth@v0.88.0!synth-v0.88.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
 
 [toolchain]
 # The lowering toolchain, pinned per platform so a CI runner can reconstruct the SAME BYTES
