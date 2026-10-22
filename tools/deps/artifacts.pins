@@ -98,7 +98,35 @@ falcon/iekf.wasm              6c789664f71398937f6056736778151455aa306be62eab2285
 galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc955ec6fce271fdc  oci:ghcr.io/pulseengine/gale-nano:0.9.0!fused-gustos.component.wasm
 
 [synth]
-# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.77.0.
+# NOT varve-pinned: the varve layer carries synth 0.58.0 while the campaign runs 0.87.0.
+#
+# BUMPED 0.77.0 -> 0.87.0, TEN releases, and it is a MEASURED NO-OP: the lowered artifacts are
+# BYTE-IDENTICAL -- cascade.o (42,314 B), ekf.elf (91,176 B), soak.elf (91,204 B), the fused
+# c.wasm (68,406 B) and c.loom.wasm (65,352 B) all cmp-clean against the 0.77.0 build on the
+# same falcon v1.140.0 inputs. Everything else held at pin; synth was the only variable.
+#
+# THE COMPARISON IS NOT VACUOUS, and this is the part that makes the no-op worth recording.
+# "byte-identical" from a harness that cannot see a difference is the AFD-138 shape. Negative
+# control, one variable: the same build with synth 0.64.0 produces cascade.o at 42,458 B, not
+# 42,314 -- so the harness DOES detect a synth-induced change, and the identity above is a
+# result rather than an inert comparison.
+#
+# ADOPTED TO ISOLATE THE NEXT BUMP, not for currency. synth#1436 -- the ekf divergence this
+# campaign has been chasing since AFD-125 -- is FIXED, merged as synth#1564, and ships in
+# 0.88.0 (synth, 2026-10-21: "The divergence is a synth lowering bug, and the fix is merged").
+# Because 0.77.0 -> 0.87.0 changes nothing in jess's bytes, the 0.87.0 -> 0.88.0 diff will be
+# PURELY THAT FIX. Adopting the no-op first is what makes the next measurement one-variable.
+#
+# THE ACCEPTANCE TEST FOR 0.88.0 IS PRE-REGISTERED, and it already exists rather than being
+# written after seeing the result: hardware/renode/cascade-invoke/run-ekf-oracle.sh, which
+# FAILS today with 10 of 14 state words bit-exact and four divergent (AFD-125). On 0.88.0 it
+# must PASS -- all 14 -- and then it gets WIRED INTO ci.yml, which is the thing ci.yml's own
+# comment says to do and which no step does today. synth's stated cause is a float `local.tee`
+# overwriting a local's home register while an earlier copy was still on the operand stack,
+# with the first wrong write 28 stores into tick 1. NOTE: the `f32.store offset=1448` synth
+# names is an instruction IMMEDIATE, not an absolute linear-memory address -- the effective
+# address is base+1448 -- so confirming that specific slot needs the ARM/QEMU side and is NOT
+# claimed here. Renode is not installed on this host; the ARM rungs run in CI.
 #
 # BUMPED 0.64.0 -> 0.77.0 (AFD-126), thirteen releases, for a reason and not for currency: the
 # first question about any lowering defect is whether a newer compiler already fixes it, and
@@ -137,8 +165,8 @@ galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc9
 # differential is NOT vacuous: a module carrying the #1189 shape DOES differ (504 -> 510 B).
 # So jess was never exposed, and the pin now excludes a silent wrong-answer class.
 # That divergence is real and is why this is pinned by digest here (AFD-053 S5).
-synthpin/synth               4b29826f1726386c72c166f536e097fcfa26d0c54e798339c866c569819f34ab  release:pulseengine/synth@v0.77.0!synth-v0.77.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
-synthpin/synth               ed3fd70a93caca4c67ee422506df8aa824bd4f25ee75f2fe3ae439343f319dad  release:pulseengine/synth@v0.77.0!synth-v0.77.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
+synthpin/synth               550874a88c110c359b85e817fbdd96b55a10b87dc0438fb06c6ca0e4b38da4df  release:pulseengine/synth@v0.87.0!synth-v0.87.0-aarch64-apple-darwin.tar.gz!synth      platform=aarch64-apple-darwin
+synthpin/synth               b6770d21a953d27682a22ab84cad43964eb99083b1dea43f823668e4a9afcd8c  release:pulseengine/synth@v0.87.0!synth-v0.87.0-x86_64-unknown-linux-gnu.tar.gz!synth  platform=x86_64-unknown-linux-gnu
 
 [toolchain]
 # The lowering toolchain, pinned per platform so a CI runner can reconstruct the SAME BYTES
