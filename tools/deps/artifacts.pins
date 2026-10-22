@@ -216,6 +216,31 @@ synthpin/synth               b6770d21a953d27682a22ab84cad43964eb99083b1dea43f823
 # recursive — worth recording, since a naive extractor would silently find nothing.
 meld/meld                    d088e668be4026c1264434aa565c1921b0aa94e08c152cc7f5a102660971f516  release:pulseengine/meld@v0.62.0!meld-v0.62.0-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
 meld/meld                    8c05a305b904b956519088a4ab60a3cb7a20de5c2801111b41a44e8e106a7931  release:pulseengine/meld@v0.62.0!meld-v0.62.0-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
+# loom STAYS AT 1.4.0 DELIBERATELY, and this is the one pin that is BEHIND the varve layer
+# (both 2026.09.2 and 2026.10.23 carry 1.4.1), so a layer migration would adopt 1.4.1 by
+# accident unless this line keeps saying no. check-drift.sh reports the gap as
+# "CAMPAIGN PIN BEHIND THE VARVE LAYER ... the direction that silently misses an upstream
+# fix" — correct to flag, and here is the answer to it (AFD-142, upstream loom#448).
+#
+# 1.4.1 COSTS 104 B FOR NO MEASURED GAIN, every byte attributed: cascade.o .text
+# 40,462 -> 40,566 = +80 across 9 grown functions, +16 for four NEW 4-byte functions,
+# +8 alignment padding. The four new functions are `push {r4,lr}; pop {r4,pc}` — EMPTY — and
+# each is called exactly once, so 1.4.1 executes four calls that do nothing where 1.4.0
+# eliminated both the stubs and the calls. Behaviour identical: ekf#estimate byte-identical
+# at 15,196 B, estimator fold 1858379312 unchanged under wasmtime over 16 ticks.
+#
+# CAUSE, named by the tool and not inferred (LOOM_VERBOSE_REVERTS=1, same fused module):
+#   1.4.1  "inline_functions: reverting function: 4 array-modelled memory operations
+#           exceeds the limit of 2 (#347) - optimization rejected (unproven)"   x96
+#   1.4.0  the same situation reads `<pass>/z3-size-skipped`, 1 function each               x0
+# The guard flipped from SKIP THE PROOF AND KEEP THE TRANSFORM to REJECT THE TRANSFORM, over
+# six passes (inline_functions 30, canonicalize 11, eliminate_dead_code 11, merge_blocks 11,
+# precompute 11, simplify_branches 11). A rejected inline leaves the caller's call in place
+# and the empty callee in the module — exactly the symptom.
+#
+# RE-TEST BEFORE ADOPTING: the fix is upstream's to make. When loom ships a release whose
+# memory-op guard no longer rejects, re-run the one-variable test and require the four empty
+# stubs to be GONE, not merely the size to be smaller.
 loom/loom                    9583f530baa0d6f0a0c140b5247ac618d9d56bcbf8d42e0c8a1ba5a2a20af6f6  release:pulseengine/loom@v1.4.0!loom-v1.4.0-aarch64-apple-darwin.tar.gz!loom      platform=aarch64-apple-darwin
 loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc6fb5df15c5380  release:pulseengine/loom@v1.4.0!loom-v1.4.0-x86_64-unknown-linux-gnu.tar.gz!loom  platform=x86_64-unknown-linux-gnu
 

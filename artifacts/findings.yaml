@@ -9293,3 +9293,18 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-21T15:05:31Z
+
+  - id: AFD-142
+    type: ai-found-defect
+    title: loom 1.4.1's memory-op guard flipped from skip-the-proof-keep-the-transform to reject-the-transform, across six passes
+    status: resolved
+    description: "Reported upstream as loom#448. SYMPTOM, measured first: lowering the fused cascade with loom 1.4.1 instead of 1.4.0 grows cascade.o .text 40,462 -> 40,566 (+104 B), fully attributed as +80 across 9 grown functions, +16 for four NEW 4-byte functions, +8 alignment padding. The four new functions are push {r4,lr}; pop {r4,pc} - empty bodies - and each is called exactly once (R_ARM_THM_CALL, 1 relocation and 1 bl apiece), so 1.4.1 executes four calls that do nothing where 1.4.0 eliminated both the stubs and the calls. Behaviour is identical: ekf#estimate byte-identical at 15,196 B, estimator fold 1858379312 unchanged under wasmtime over 16 ticks. CAUSE, named by the tool rather than inferred: LOOM_VERBOSE_REVERTS=1 on the same fused module prints \"inline_functions: reverting function: N array-modelled memory operations exceeds the limit of 2 (#347) - optimization rejected (unproven)\" 96 times under 1.4.1 and ZERO times under 1.4.0. The Verification Reverts summary changes label as well as count: 1.4.0 reports every pass as <pass>/z3-size-skipped with 1 function each, while 1.4.1 reports <pass>/memory-ops-over-threshold with inline_functions 30, canonicalize 11, eliminate_dead_code 11, merge_blocks 11, precompute 11, simplify_branches 11. So the guard flipped from SKIP THE PROOF AND KEEP THE TRANSFORM to REJECT THE TRANSFORM, across six passes. A rejected inline leaves the caller call in place and the empty callee in the module, which is exactly the observed symptom. THIS CONTRADICTS THE UPSTREAM TRIAGE, which stated \"past the bound, the transform is kept (recorded as kept-without-proof), not reverted. That means more optimization, not less, so it can not retain calls\" - the tool says \"optimization rejected (unproven)\". WHY THE MAINTAINER SIX SYNTHETIC VARIANTS SHOWED 0 CALLS RETAINED ON BOTH VERSIONS: the limit is 2 array-modelled memory operations and the counts cited on the real module are 4 (56x), 7 (8x), 9 (8x), 11 (8x) and 18 (16x). A minimal module whose callee is empty or nop has 0-1 memory operations, so it sits BELOW the threshold and the guard is never consulted; those variants exercised the elimination logic, not the guard that now rejects it. A reproducer needs a caller with at least 3 array-modelled memory ops around the call site. CONSEQUENCE FOR jess: the loom campaign pin STAYS at 1.4.0 - +104 B for zero measured behavioural gain, and the varve layer 2026.09.2 and 2026.10.23 both carry 1.4.1, so a layer migration would adopt it implicitly. Scope measured: host-side loom optimize only, both release binaries, aarch64-apple-darwin; jess on-target rungs have NOT been run against 1.4.1."
+    fields:
+      detected-by: jess release-watch of loom 1.4.0 -> 1.4.1, one variable, on the digest-pinned fused falcon v1.140.0 cascade; root-caused with LOOM_VERBOSE_REVERTS=1 after the maintainer could not reproduce it synthetically
+      discovered-at: 2026-10-22
+      severity: minor
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-10-22T06:45:47Z
