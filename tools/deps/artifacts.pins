@@ -241,6 +241,38 @@ meld/meld                    8c05a305b904b956519088a4ab60a3cb7a20de5c2801111b41a
 # RE-TEST BEFORE ADOPTING: the fix is upstream's to make. When loom ships a release whose
 # memory-op guard no longer rejects, re-run the one-variable test and require the four empty
 # stubs to be GONE, not merely the size to be smaller.
+#
+# 2026-10-22 — THAT CONDITION IS ALREADY SATISFIABLE, BY AN ENV VAR, AND jess DECLINES IT.
+# Upstream root-caused it with jess's input (loom#448), found the refused transforms are
+# PROVABLE, and offered `LOOM_Z3_MAX_MEMORY_OPS=20`. Measured here, one variable — the same
+# 1.4.1 binary, only the env var differing:
+#
+#   artifact        1.4.0      1.4.1 default   1.4.1 + bound 20
+#   c.loom.wasm     65,352 B   65,448 B        65,352 B   BYTE-IDENTICAL to 1.4.0
+#   cascade.o       42,314 B   42,546 B        42,314 B   BYTE-IDENTICAL
+#   ekf.elf         91,176 B   -               91,176 B   BYTE-IDENTICAL
+#   soak.elf        91,204 B   -               91,204 B   BYTE-IDENTICAL
+#   (#347) rejects  0          96              0
+#   Proven          -          252/382 66.0%   292/308 94.8%
+#
+# The stub condition above was checked DIRECTLY, not inferred from size — 4-byte functions in
+# the lowered object: 1.4.0 = 0, 1.4.1 default = 4, 1.4.1 + bound 20 = 0.
+#
+# DECLINED ANYWAY, and the reason is this campaign's own recurring finding. jess gains NOTHING
+# byte-wise (1.4.0 already produces those exact bytes), while the env var would become a
+# correctness-relevant input that, unset in a fresh shell or on a runner, silently restores the
+# four stubs and +104 B at EXIT 0. That is the "passes while blind" shape this repo keeps
+# finding, taken on for zero gain. If it were ever adopted it would need a MECHANICAL assertion
+# (loom --stats `Rejected: 0`, with CANNOT-DETERMINE kept distinct from zero), not a documented
+# variable.
+#
+# SO THE ADOPTABLE FIX IS UPSTREAM'S: the routing change (slice 4 attempts memory obligations
+# before the bound applies) or a raised DEFAULT — neither needs a per-consumer env var. Said so
+# on loom#448.
+#
+# NOT RE-RUN: the Renode rungs. ekf.elf and soak.elf under bound 20 are byte-identical to the
+# images TEST-PIX-032/033 already pass on, so that result transfers by construction. No new
+# on-target claim is made here.
 loom/loom                    9583f530baa0d6f0a0c140b5247ac618d9d56bcbf8d42e0c8a1ba5a2a20af6f6  release:pulseengine/loom@v1.4.0!loom-v1.4.0-aarch64-apple-darwin.tar.gz!loom      platform=aarch64-apple-darwin
 loom/loom                    5d22f8ffe1aedfb33476698978a22d93372b9214198dac33cbc6fb5df15c5380  release:pulseengine/loom@v1.4.0!loom-v1.4.0-x86_64-unknown-linux-gnu.tar.gz!loom  platform=x86_64-unknown-linux-gnu
 
