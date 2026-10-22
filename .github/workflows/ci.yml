@@ -701,15 +701,26 @@ jobs:
         run: hardware/renode/cascade-invoke/run-soak-oracle.sh
         env:
           RENODE: /tmp/renode/renode
-      # TEST-PIX-035 (the ESTIMATOR rung) is NOT gated here, deliberately. run-ekf-oracle.sh
-      # currently FAILS: the estimator executes on emulated RT1176 with 10 of 14 state words
-      # bit-exact, but the accelerometer-rotation path diverges from wasmtime and no single
-      # input vector explains it (AFD-125). A red gate would make main red, and an
-      # "expected-fail" gate is a vacuous gate — it goes green the moment the divergence
-      # changes shape. What IS gated: the ekf image and its two controls are BUILT by build.sh
-      # above (with the VFP-argument assertion), the three new ekf ABI assertions run in the
-      # ABI-MANIFEST gate, and the reference's own vacuity guards are self-tested below.
-      # Wire the oracle in when it passes.
+      # TEST-PIX-035 — the ESTIMATOR rung, NOW GATED. This comment used to end "Wire the
+      # oracle in when it passes", and it passes on synth 0.88.0, so it is wired.
+      #
+      # It was deliberately UNGATED from 2026-09-30 until now because it FAILED: the estimator
+      # executed on emulated RT1176 with only 10 of 14 state words bit-exact (AFD-125). An
+      # "expected-fail" gate would have been a vacuous gate — green the moment the divergence
+      # changed shape rather than when it was fixed — so it stayed out and said so.
+      #
+      # synth 0.88.0 fixes the lowering defect (synth#1436, closed COMPLETED: a float
+      # `local.tee` could overwrite a local's home register while an earlier copy was still on
+      # the operand stack). Measured before this step was added, with the criterion registered
+      # in advance: 0.87.0 gives 10/14 at tick 1 and 8/14 at tick 16; 0.88.0 gives 14/14 at
+      # BOTH horizons and reproduces wasmtime's fold 6ec49e30 exactly.
+      #
+      # So this gate is potent by construction: the pinned-synth-minus-one case is a measured
+      # RED, which is the negative control the gate-potency rule asks for.
+      - name: TEST-PIX-035 — the ESTIMATOR matches wasmtime on emulated RT1176 (AFD-125 closed)
+        run: hardware/renode/cascade-invoke/run-ekf-oracle.sh
+        env:
+          RENODE: /tmp/renode/renode
       - name: ekf reference vacuity guards self-test (AFD-125)
         run: python3 tools/cascade-differential/ekf_ref.py --self-test
       # The observer-seam decoder constants (DD-028). Only --self-test is gated: relay has NOT
