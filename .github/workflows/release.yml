@@ -91,9 +91,32 @@ jobs:
           path: /tmp/with-device-*.tar.gz
           if-no-files-found: error
 
+  # ── Did the Renode model BOOT on this commit? (jess#299) ──────────────────────────────
+  # Read-only. Booting the model needs third-party code (Renode, renode-test's pip deps); it does
+  # NOT run anywhere in this workflow. A run's artifact store is shared by every job in the run
+  # regardless of `permissions:`, so a job executing third-party code here could upload an
+  # artifact the signing job would sweep up and sign (security review, 2026-10-27). ci.yml packs
+  # and boots the model on every commit to main, in its OWN run; this job asks GitHub whether that
+  # step succeeded on EXACTLY the tagged commit, and the release does not proceed otherwise.
+  model-gate:
+    name: Renode model booted on this commit (from ci.yml's run)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: require ci.yml's model step to have succeeded on this exact sha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: tools/renode-model/ci-gate.sh "$REPO" "$(git rev-parse HEAD)"
+
   publish:
     name: sign + publish
-    needs: build
+    needs: [build, model-gate]
     runs-on: ubuntu-latest
     permissions:
       # Release-asset upload needs contents: write. Keyless cosign signing and the SLSA
@@ -108,13 +131,44 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
       - uses: actions/download-artifact@v8
         with:
+          pattern: pkg-*
           path: artifacts
       - name: Flatten release assets
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          find artifacts -type f -name "*.tar.gz" -exec cp {} release-assets/ \;
+          # EXACT SET, not a wildcard sweep: exactly the four with-device packages the build
+          # matrix produces, and nothing else. A stray or injected .tar.gz in the artifact store
+          # fails the release here instead of being signed.
+          VER=$(grep -m1 '^version' tools/bench/with-device/Cargo.toml | cut -d'"' -f2)
+          want=""
+          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
+            want="$want with-device-${VER}-${t}.tar.gz"
+          done
+          got=$(find artifacts -type f -name '*.tar.gz' -exec basename {} \; | sort)
+          exp=$(printf '%s\n' $want | sort)
+          if [ "$got" != "$exp" ]; then
+            echo "::error::artifact set is not exactly the four with-device packages"
+            diff <(printf '%s\n' "$exp") <(printf '%s\n' "$got") || true
+            exit 1
+          fi
+          for f in $want; do cp "$(find artifacts -type f -name "$f")" release-assets/; done
           ls -la release-assets/
+
+      # ── The Renode model (jess#299): built HERE, with no third-party code ───────────────
+      # Python stdlib + git only. Its boot was proven by ci.yml on this exact commit (model-gate),
+      # and the pack is reproducible — tested on every PR by packing twice and comparing — so
+      # these are the same bytes ci.yml booted, without importing anything from that run.
+      - name: Pack the Renode model (stdlib only, reproducible)
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct HEAD)"
+          python3 tools/renode-model/pack.py --version "${VERSION#v}" \
+            --commit "$(git rev-parse HEAD)" --out release-assets
+
 
       # ── SBOM ───────────────────────────────────────────────────────────────────────────
       # Generated BEFORE the checksums so its digest is captured in SHA256SUMS.txt and the
@@ -184,11 +238,24 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
-          # Idempotent: re-running for an existing release uploads/overwrites rather than
-          # failing.
+          # A DRAFT may be re-uploaded freely: nobody has consumed it. A PUBLISHED release must
+          # never have an asset silently REPLACED — consumers pin these digests, and
+          # `--clobber` would make the same tag point at different bytes (jess#299 item 5).
+          # So on a published tag, upload WITHOUT --clobber: new assets are added, and any
+          # attempt to replace an existing one fails the job loudly instead.
           if gh release view "$VERSION" >/dev/null 2>&1; then
-            echo "::notice::Release $VERSION exists; uploading assets"
-            gh release upload "$VERSION" --clobber release-assets/*
+            if [ "$(gh release view "$VERSION" --json isDraft -q .isDraft)" = "true" ]; then
+              echo "::notice::Release $VERSION exists as a DRAFT; replacing its assets"
+              gh release upload "$VERSION" --clobber release-assets/*
+            else
+              echo "::notice::Release $VERSION is PUBLISHED; adding assets WITHOUT --clobber"
+              gh release upload "$VERSION" release-assets/* || {
+                echo "::error::Refusing to replace an asset on PUBLISHED release $VERSION."
+                echo "  A published tag must not change bytes under consumers who pinned them."
+                echo "  Cut a new tag, or move the release back to draft deliberately."
+                exit 1
+              }
+            fi
           else
             echo "::notice::Creating Release $VERSION with assets"
             gh release create "$VERSION" --title "jess $VERSION" --generate-notes release-assets/*
@@ -236,16 +303,21 @@ jobs:
           # dropped asset fails here rather than passing quietly.
           sha256sum -c SHA256SUMS.txt
 
-          echo "── 3. the manifest actually covers all four targets + the SBOM ──"
+          echo "── 3. the manifest covers all four targets, the SBOM and the Renode model ──"
           for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
                    aarch64-apple-darwin x86_64-apple-darwin; do
             grep -q "with-device-.*-${t}\.tar\.gz\$" SHA256SUMS.txt \
               || { echo "manifest does not cover $t"; exit 1; }
           done
           grep -q '\.cdx\.json$' SHA256SUMS.txt || { echo "SBOM not in the manifest"; exit 1; }
+          grep -q 'jess-renode-rt1176-.*\.tar\.gz$' SHA256SUMS.txt \
+            || { echo "the Renode model archive (jess#299) is not in the manifest"; exit 1; }
 
           echo "── 4. SLSA build provenance verifies for every archive ──"
-          for f in with-device-*.tar.gz; do
+          # The Renode model is attested too (release-assets/*.tar.gz), so verify it here; its
+          # boot was proven on these exact bytes before upload, and step 2 proves the published
+          # bytes are those bytes, so that result transfers by byte-identity.
+          for f in with-device-*.tar.gz jess-renode-rt1176-*.tar.gz; do
             gh attestation verify "$f" --repo "$REPO"
           done
 

@@ -1,0 +1,28 @@
+# The files that make up the redistributable jess Renode model of the Pixhawk 6X-RT (i.MX RT1176).
+#
+# This list IS the archive. tools/renode-model/pack.py packs exactly these, and
+# tools/renode-model/verify.sh asserts the unpacked archive holds EXACTLY these plus the two
+# files the packer adds — an exact set, not membership, so nothing leaks in and nothing drops out.
+#
+# Paths are relative to hardware/renode/, and the archive mirrors that directory, so the
+# `$ORIGIN`-relative paths in rt1176-smoke.resc resolve inside an unpacked archive from any cwd.
+#
+# Added by the packer, not listed here:
+#   LICENSE              the repository's Apache-2.0 text; a redistributable archive carries it
+#   renode-model.toml    generated: version, source commit, tested Renode, fidelity note
+#
+# Scope (maintainer decision, 2026-10-27, jess#299): the stable core only. Experiment
+# directories, bulkmem, the PX4 bring-up extras and the tooling stay out; the PX4 parts follow
+# later as their own version.
+
+# platform
+pixhawk6xrt.repl
+vehicle/rt1176-dualcore.repl
+vehicle/README.md
+
+# smoke: the script, the robot suite, and the firmware with the source it was built from
+rt1176-smoke.resc
+rt1176-smoke.robot
+smoke/rt1176-smoke.elf
+smoke/boot.S
+smoke/link.ld
