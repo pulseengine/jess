@@ -56,8 +56,8 @@ cat = yaml.safe_load(open(cat_p))
 # unpinned openocd reached the wrong board twice while a claim on another was held (gale#397).
 # But this line used to union `parts` into the acceptable set, so a registry naming a PROBE MODEL
 # passed the very gate that exists to enforce the rule. Measured 2026-10-02: three live
-# violations, all of them in host-local registries — `stlink-v3` and `stlink-v1` on gale.local,
-# `stlink-v3` on wohl.local. A probe-model name is ONE LOCK FOR EVERY BOARD CARRYING THAT MODEL,
+# violations, all of them in host-local registries — `stlink-v3` and `stlink-v1` on bench-host-B,
+# `stlink-v3` on bench-host-A. A probe-model name is ONE LOCK FOR EVERY BOARD CARRYING THAT MODEL,
 # which is AFD-082's vacuous lock by construction rather than by typo.
 # `parts` stays loadable so `boards[].parts` can still be cross-checked; it is just not a
 # namespace a device may be named from.
@@ -122,7 +122,7 @@ for dev, e in (reg.get('devices') or {}).items():
 # difference is the whole point.
 #
 # WHAT 1b ACTUALLY PROTECTS AGAINST is ONE NAME REACHING TWO BOARDS. gale#397 happened because
-# `stlink-v2-1` could mean either of the two boards on wohl.local carrying that probe. A name
+# `stlink-v2-1` could mean either of the two boards on bench-host-A carrying that probe. A name
 # that reaches exactly ONE board on its host is not that hazard, whatever it is named after.
 #
 # A FLAT BAN WAS MY FIRST ATTEMPT AND IT WAS WRONG: it refused the backward-compatibility
@@ -132,7 +132,7 @@ for dev, e in (reg.get('devices') or {}).items():
 # test is AMBIGUITY, measured against the catalogue, not the shape of the name.
 #
 # Resolved per registry, because ambiguity is a property of ONE HOST's hardware: `stlink-v3` is
-# unambiguous on gale.local (one V3 there) and would be ambiguous on a host carrying two.
+# unambiguous on bench-host-B (one V3 there) and would be ambiguous on a host carrying two.
 cat_parts = {}
 for sect in ('boards', 'standalone'):
     for k, v in (cat.get(sect) or {}).items():

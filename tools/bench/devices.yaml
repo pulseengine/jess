@@ -23,7 +23,7 @@
 # reading a log someone already captured to disk. Not live streams.
 devices:
   # REMOVED 2026-10-01 (AFD-129): `nucleo-g474re` (probe serial 003B001A3235511337333439) is NOT
-  # on this Mac. It is on gale.local, confirmed by that same serial. Measured: this Mac has NO
+  # on this Mac. It is on bench-host-B, confirmed by that same serial. Measured: this Mac has NO
   # ST-LINK at all — both ioreg and system_profiler return nothing for one.
   #
   # It is REMOVED rather than annotated because a comment does not stop `with-device` granting a
@@ -33,7 +33,7 @@ devices:
   # one name for no board. The BOARD stays in hardware-catalog.yaml, which is "what we support";
   # that is the split working as designed.
   #
-  # Its host-local entry belongs in gale.local's own registry
+  # Its host-local entry belongs in bench-host-B's own registry
   # (~/.config/pulseengine/bench-devices.yaml), which exists there. Note the alias `stlink-v3` from
   # jess#266 moves with it, not with this file.
   #
