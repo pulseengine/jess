@@ -184,6 +184,17 @@ jobs:
         run: |
           tools/deps/check-estimator-identity.sh
           tools/deps/check-estimator-identity.sh --self-test
+      # The repository's license claims, enforced rather than stated. README.md says jess is
+      # Apache-2.0 and that every Rust crate declares it; that sentence is true when written and
+      # silently false the day a crate lands without a `license` field — the prose-beside-nothing
+      # shape this campaign keeps finding. Static (committed files only), so it runs here.
+      # Pins LICENSE to the canonical apache.org text by digest and derives the manifest set from
+      # `git ls-files`. --self-test carries 1 positive and 5 negative controls.
+      - name: LICENSE is canonical Apache-2.0 and every crate declares it
+        working-directory: jess
+        run: |
+          tools/license/check-license.sh
+          tools/license/check-license.sh --self-test
       - name: rivet sync + validate
         working-directory: jess
         run: |

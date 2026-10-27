@@ -2,6 +2,7 @@
 name = "scry-run"
 version = "0.0.0"
 edition = "2021"
+license = "Apache-2.0"
 publish = false
 description = "jess scry sound-analysis gate driver (REQ-PIX-018 leg b): run scry-sai-core on the meld-fused falcon core, emit a JSON verdict"
 
