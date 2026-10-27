@@ -57,7 +57,7 @@ per host by design.
 ## Device names are BOARDS, and renaming one needs an alias
 
 Agreed with gale on jess#266. **Every device name is a board, never a probe model.** Two boards on
-one host can carry the same probe model — wohl.local has two ST-LINK/V2-1s reporting the identical
+one host can carry the same probe model — bench-host-A has two ST-LINK/V2-1s reporting the identical
 `0483:374b` — so a name like `stlink-v2-1` is ONE lock for TWO boards. That is AFD-082's vacuous
 lock by construction rather than by typo, and unpinned openocd has already reached the wrong one
 while a claim was held (gale#397).

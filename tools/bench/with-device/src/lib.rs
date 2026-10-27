@@ -67,7 +67,7 @@ pub const EXIT_BUSY: i32 = 3;
 /// COULD NOT DETERMINE whether the device is free — distinct from BUSY on purpose (jess#280).
 ///
 /// An `EACCES` on the lock file used to collapse into "claimed": `try_claim` returned `None` for
-/// ANY open failure and `None` means held at every call site. On fourpi.local, where the lockdir
+/// ANY open failure and `None` means held at every call site. On bench-host-C, where the lockdir
 /// is `pi:pi` and the standard account is `r`, that made EVERY device permanently busy and made
 /// `--self-test` fail three checks in a pattern accusing its own locking — a far more alarming
 /// bug than "you cannot write here".
@@ -542,7 +542,7 @@ NOT a statement about whether '{dev}' is in use",
     }
     // THE OPERATIONAL HALF OF jess#280. Diagnosing EACCES is not enough: the interlock has to
     // WORK across accounts, and it could not. Nothing here ever set a mode, so the lockdir and
-    // the lock files inherited the creating user's umask — on fourpi.local that left them
+    // the lock files inherited the creating user's umask — on bench-host-C that left them
     // `pi:pi drwxrwxr-x` / `-rw-rw-r--`, and the standard account `r` is not in group `pi`. An
     // exclusive flock(2) needs the file WRITABLE, so cross-account claiming was impossible by
     // construction and every device looked busy.

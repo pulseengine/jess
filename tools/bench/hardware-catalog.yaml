@@ -361,9 +361,9 @@ boards:
   nordic-dfu:
     what: >
       A Nordic Semiconductor device sitting in its Open DFU Bootloader (1915:521f), serial
-      E5669E3CB6C9, on wohl.local. A BOARD, not a probe — which board is NOT ESTABLISHED.
+      <serial: see host-local registry>, on wohl.local. A BOARD, not a probe — which board is NOT ESTABLISHED.
     usb: { vid: 0x1915, pid: 0x521f }
-    serial: E5669E3CB6C9
+    serial: "<serial-in-host-local-registry>"   # placeholder: the real probe serial is kept in the bench host's host-local registry (see devices.yaml), not in this repo
     role: unassigned — present on the bench, no jess work depends on it yet.
     caveats:
       - >
