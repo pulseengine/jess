@@ -131,4 +131,14 @@ spar parse hardware/pixhawk6x-rt.aadl            # the hardware model
 spar instance --root Pixhawk6XRT::Pixhawk6XRT.v2a hardware/pixhawk6x-rt.aadl
 ```
 
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE) (`Apache-2.0`), the license most of the
+PulseEngine toolchain uses. Every Rust crate in this repository declares it in its `Cargo.toml`.
+
+Third-party inputs the oracles consume — falcon components, gale-nano, NXP's RT1176 flashloader,
+PX4's `mavlink_shell.py` and the toolchain binaries — are **not redistributed** here. They are
+fetched by digest into the gitignored `.scratch/` by `tools/deps/fetch.sh` and remain under their
+own licenses; `tools/deps/artifacts.pins` records where each one comes from.
+
 Part of the [PulseEngine](https://github.com/pulseengine) toolchain.
