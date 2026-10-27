@@ -122,7 +122,8 @@ galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc9
 # vel-n, vel-e, vel-d, the translational sub-vector. So the failing case is OBSERVABLE by this
 # instrument and 14/14 is a result, not a vacuous pass.
 #
-# WHY QEMU AND NOT RENODE: Renode is not installed on this host. QEMU is not a weaker substitute
+# WHY QEMU FIRST: Renode was believed absent on this host (CORRECTED 2026-10-27 — it IS installed,
+# at ~/renode-1.16.1, just not on PATH; `command -v renode` was the wrong test). QEMU is not a weaker substitute
 # here - hardware/qemu/run-ekf-qemu.sh exists because jess already MEASURED (2026-09-30) that
 # all 31 parked words are bit-identical between Renode 1.16.1 on the RT1176 model and QEMU
 # 11.1.1 on mps2-an500 for this exact image, which is what exonerated Renode. The Renode rung
@@ -159,7 +160,8 @@ galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc9
 # with the first wrong write 28 stores into tick 1. NOTE: the `f32.store offset=1448` synth
 # names is an instruction IMMEDIATE, not an absolute linear-memory address -- the effective
 # address is base+1448 -- so confirming that specific slot needs the ARM/QEMU side and is NOT
-# claimed here. Renode is not installed on this host; the ARM rungs run in CI.
+# claimed here. (An earlier version of this line said Renode was not installed on this host; it is,
+# at ~/renode-1.16.1, off PATH. The ARM rungs also run in CI.)
 #
 # BUMPED 0.64.0 -> 0.77.0 (AFD-126), thirteen releases, for a reason and not for currency: the
 # first question about any lowering defect is whether a newer compiler already fixes it, and

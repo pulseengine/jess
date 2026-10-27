@@ -1,8 +1,14 @@
 # Interactive smoke: boot the bring-up firmware on the jess RT1176 platform.
 #   renode hardware/renode/rt1176-smoke.resc
+#
+# Paths are $ORIGIN-relative (this script's own directory), so it runs from ANY working
+# directory — inside the checkout or from an unpacked jess-renode-rt1176 release archive
+# (jess#299). They used to be repo-root-relative and failed from anywhere else with
+# "Could not find file 'hardware/renode/pixhawk6xrt.repl'". Note: NO `@` before $ORIGIN —
+# Renode documents that, and `@$ORIGIN/...` is read as a literal path (measured: it fails).
 using sysbus
 mach create "pixhawk6xrt"
-machine LoadPlatformDescription @hardware/renode/pixhawk6xrt.repl
-sysbus LoadELF @hardware/renode/smoke/rt1176-smoke.elf
+machine LoadPlatformDescription $ORIGIN/pixhawk6xrt.repl
+sysbus LoadELF $ORIGIN/smoke/rt1176-smoke.elf
 showAnalyzer sysbus.lpuart1
 start

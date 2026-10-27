@@ -417,11 +417,36 @@ jobs:
           set -euo pipefail
           cd /tmp
           curl -fsSL -o renode.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
+          # Trust-on-first-use digest (Renode publishes none); same pin as release.yml.
+          echo "1a532d4b5b82de0dd154970c401e0c7b0e498d17304b2cecc007e306c8f9617c  renode.tgz" | sha256sum -c -
           mkdir -p renode && tar xzf renode.tgz -C renode --strip-components=1
       - name: renode-test deps
         run: pip install -r /tmp/renode/tests/requirements.txt
       - name: RT1176 smoke (Robot)
         run: /tmp/renode/renode-test hardware/renode/rt1176-smoke.robot
+      # The Renode model RELEASE ASSET (jess#299), exercised on every PR rather than first on a
+      # real tag. A release-only step is a step whose first run is the release: if it is broken,
+      # the tag is already pushed. So the same pack + consumer-verify the release runs, here.
+      #   - packed TWICE from the same commit and required byte-identical (determinism)
+      #   - unpacked fresh and booted from cwd / via BOTH the robot suite and the .resc — the
+      #     robot uses ${CURDIR} and passes even with repo-root-relative .resc paths, so it
+      #     alone cannot see the defect #299 fixed
+      #   - --self-test: 1 positive + 4 negative controls, NC1 being the old .resc paths
+      - name: Renode model asset — reproducible, and boots unpacked from cwd / (jess#299)
+        env:
+          RENODE: /tmp/renode/renode
+          RENODE_TEST: /tmp/renode/renode-test
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct HEAD)"
+          C="$(git rev-parse HEAD)"
+          python3 tools/renode-model/pack.py --version 0.0.0-ci --commit "$C" --out /tmp/model-a
+          python3 tools/renode-model/pack.py --version 0.0.0-ci --commit "$C" --out /tmp/model-b
+          cmp /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz /tmp/model-b/jess-renode-rt1176-0.0.0-ci.tar.gz \
+            || { echo "the Renode model archive is NOT reproducible from one commit"; exit 1; }
+          echo "reproducible: two packs of $C are byte-identical"
+          tools/renode-model/verify.sh /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
+          tools/renode-model/verify.sh --self-test /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
       - name: RT1176 bulk-memory OOB-trap oracle (synth#374 / AFD-026)
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
@@ -493,6 +518,8 @@ jobs:
           set -euo pipefail
           cd /tmp
           curl -fsSL -o renode.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable.tar.gz
+          # Trust-on-first-use digest (Renode publishes none); same pin as release.yml.
+          echo "1a532d4b5b82de0dd154970c401e0c7b0e498d17304b2cecc007e306c8f9617c  renode.tgz" | sha256sum -c -
           mkdir -p renode && tar xzf renode.tgz -C renode --strip-components=1
           test -x /tmp/renode/renode
       - name: oras (for the gale-nano OCI pin)
