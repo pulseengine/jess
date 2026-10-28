@@ -1,0 +1,55 @@
+# Self-asserting smoke check for the jess RT1176 model: boot the bring-up firmware and require
+# "JESS-RT1176 boot OK" on LPUART1. Needs ONLY Renode — no host Python, no renode-test, no Robot
+# Framework (jess#299, maintainer decision 2026-10-27). Renode's built-in IronPython is used.
+#
+#   renode --console --disable-xwt rt1176-smoke-check.resc
+#
+# PASS IS exit 0 AND the line "SMOKE PASS: JESS-RT1176 boot OK". Exit 0 alone is NOT a pass:
+# measured, `renode --console --disable-xwt <path that does not exist>` exits 0 in ~3 s without
+# loading anything (the monitor reaches end of input and quits). This script cannot report on a
+# run in which it was never loaded, so a caller must require the line as well as the code.
+#
+# Exit codes:   0  the boot line appeared (and "SMOKE PASS" is printed)
+#               3  the model ran, the boot line did not appear within 2 s of VIRTUAL time
+#               4  the script never reached its verdict (e.g. a file failed to load)
+# Paths are $ORIGIN-relative, so it runs from any working directory, in the checkout or from an
+# unpacked jess-renode-rt1176 archive. (No `@` before $ORIGIN: Renode reads `@$ORIGIN` literally.)
+#
+# WHY IT IS SHAPED LIKE THIS — each line below is a measured fix, Renode 1.16.1, 2026-10-28:
+#  * The UART hook only RECORDS the result. Calling System.Environment.Exit from inside the hook
+#    deadlocks (the hook runs on the emulation thread while the monitor thread is blocked in
+#    RunFor): the process hung instead of exiting.
+#  * TWO guards, because a failed command (a missing .repl) ends the script in one of two ways:
+#    - Renode EXITS with code 0: the .resc run as the positional script with non-interactive
+#      stdin reaches end of input and quits. Measured: the old repo-root paths gave exit 0 with
+#      no verdict. On .NET, the ProcessExit handler registered first turns that into exit 4.
+#
+#      KNOWN LIMITATION ON MONO (the legacy x86_64 linux-portable build). Measured in CI,
+#      2026-10-28: on Mono a LOAD error still exits 0 — neither setting Environment.ExitCode
+#      nor calling Environment.Exit(4) from ProcessExit changes the code there (most likely the
+#      handler does not run on that exit path). It exits WITHOUT the "SMOKE PASS" line, so the
+#      pass contract above still rejects it; a caller on Mono must check the line, not only the
+#      code. A boot failure (exit 3) behaves the same on both runtimes. Accepted by the
+#      maintainer on jess#299; CI keeps measuring both runtimes so this stays a known quantity.
+#    - Renode IDLES at its monitor forever: an interactive terminal, or `-e "include @…"`.
+#      Neither pass nor fail. The watchdog turns that hang into exit 4. It is 120 s: measured,
+#      a healthy run spends 5.7-7.1 s inside the watchdog window
+#    (3 runs), and one cold start took 45 s of WALL time. A watchdog near the healthy figure would
+#    fire during a healthy run on a slow runner and report a false failure.
+#  * The watchdog is DISPOSED before the verdict exits. With it still armed, both `quit` and
+#    Environment.Exit hung.
+#  * Success leaves via `quit`, failure via Environment.Exit(3). Environment.Exit hung once a UART
+#    hook had fired, while `quit` did not; on the failure path no hook has fired, so Exit works.
+#  * Process.Kill() on itself was tried for the failure exit and did NOT work (the script hung
+#    after printing its verdict); it is not used.
+python "import System; D = System.AppDomain.CurrentDomain; D.SetData('jess_verdict', False); D.ProcessExit += (lambda s, e: (System.Console.Error.WriteLine('SMOKE FAIL: exited before reaching a verdict'), setattr(System.Environment, 'ExitCode', 4)) if not D.GetData('jess_verdict') else None)"
+python "import System; from System.Threading import Timer, TimerCallback; System.AppDomain.CurrentDomain.SetData('jess_wd', Timer(TimerCallback(lambda s: (System.Console.Error.WriteLine('SMOKE FAIL: watchdog - the script did not reach its verdict within 120 s'), System.Environment.Exit(4))), None, 120000, -1))"
+using sysbus
+mach create "pixhawk6xrt"
+machine LoadPlatformDescription $ORIGIN/pixhawk6xrt.repl
+sysbus LoadELF $ORIGIN/smoke/rt1176-smoke.elf
+python "import System; System.AppDomain.CurrentDomain.SetData('jess_boot_ok', False)"
+sysbus.lpuart1 AddLineHook "JESS-RT1176 boot OK" "import System; System.AppDomain.CurrentDomain.SetData('jess_boot_ok', True)"
+emulation RunFor "00:00:02"
+python "import System; ok = System.AppDomain.CurrentDomain.GetData('jess_boot_ok'); System.AppDomain.CurrentDomain.SetData('jess_verdict', True); System.AppDomain.CurrentDomain.GetData('jess_wd').Dispose(); System.Console.Error.WriteLine('SMOKE PASS: JESS-RT1176 boot OK' if ok else 'SMOKE FAIL: boot line not seen within 2 s of virtual time'); (None if ok else System.Environment.Exit(3))"
+quit

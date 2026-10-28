@@ -60,11 +60,23 @@ platform = "pixhawk6xrt.repl"
 
 [tested-with]
 renode = "{RENODE_TESTED}"
+# The self-test is checked on BOTH Renode runtimes in jess CI; they differ in how a
+# non-zero exit can be raised, and rt1176-smoke-check.resc handles each.
+runtimes = ["mono (linux-portable)", "dotnet (linux-portable-dotnet; osx-arm64 dotnet locally)"]
+# KNOWN LIMITATION on Mono: a LOAD error (e.g. a missing file) exits 0 rather than 4, but
+# WITHOUT the SMOKE PASS line — so check the line, not only the exit code. On .NET it exits 4.
+
+[self-test]
+# Needs ONLY Renode — no host Python, no renode-test, no Robot Framework.
+command = "renode --console --disable-xwt rt1176-smoke-check.resc"
+pass = "exit 0 AND the line 'SMOKE PASS: {UART_OK}'"
+exit-codes = {{ 0 = "boot line seen", 3 = "boot line not seen", 4 = "script did not reach a verdict: Renode exited early (e.g. a file failed to load) or the 120 s watchdog fired" }}
+# Exit 0 ALONE is not a pass: Renode given a script path that does not exist exits 0 without
+# loading anything, so require the line too.
 
 [entry]
-script = "rt1176-smoke.resc"     # $ORIGIN-relative: runs from any working directory
-robot = "rt1176-smoke.robot"     # ${{CURDIR}}-relative
-expect-uart = "{UART_OK}"
+interactive = "rt1176-smoke.resc"    # $ORIGIN-relative: runs from any working directory
+robot = "rt1176-smoke.robot"         # OPTIONAL extra, for renode-test users; nothing depends on it
 
 [fidelity]
 silicon-cross-validated = false

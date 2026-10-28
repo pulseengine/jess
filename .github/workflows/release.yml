@@ -92,7 +92,7 @@ jobs:
           if-no-files-found: error
 
   # ── Did the Renode model BOOT on this commit? (jess#299) ──────────────────────────────
-  # Read-only. Booting the model needs third-party code (Renode, renode-test's pip deps); it does
+  # Read-only. Booting the model runs third-party code (Renode itself, fetched under a TOFU pin); it does
   # NOT run anywhere in this workflow. A run's artifact store is shared by every job in the run
   # regardless of `permissions:`, so a job executing third-party code here could upload an
   # artifact the signing job would sweep up and sign (security review, 2026-10-27). ci.yml packs

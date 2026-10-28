@@ -1,35 +1,47 @@
 #!/usr/bin/env bash
 # Verify a packed jess Renode model the way a CONSUMER would (jess#299): unpack it fresh, leave
-# the checkout entirely (`cd /`), and require the model to boot.
+# the checkout entirely (`cd /`), and run its self-test with nothing but Renode.
 #
-#   verify.sh <jess-renode-rt1176-<v>.tar.gz>        env: RENODE, RENODE_TEST
-#   verify.sh --self-test <good.tar.gz>              runs 1 positive + 4 negative controls
+#   verify.sh <jess-renode-rt1176-<v>.tar.gz>        env: RENODE (default: renode)
+#   verify.sh --self-test <good.tar.gz>              1 positive + 5 negative controls
 #
-# THREE checks, all required:
+# NO HOST PYTHON on the verdict path (maintainer decision on #299, 2026-10-27): no renode-test,
+# no Robot Framework. The self-test is rt1176-smoke-check.resc, which asserts the boot line on
+# the UART itself and exits non-zero on failure. rt1176-smoke.robot still ships, as an optional
+# extra; nothing here runs it.
+#
+# TWO checks, both required:
 #   1. EXACT member set: MODEL.files + LICENSE + renode-model.toml, nothing more, nothing less.
-#      Membership alone ("the files we need are in there") would pass an archive that also
-#      carries an untracked experiment or a stray binary.
-#   2. renode-test on the unpacked robot suite, from cwd /, must pass (the check #299 names).
-#   3. The unpacked rt1176-smoke.resc, run headless from cwd /, must print the boot line.
+#   2. `renode --console --disable-xwt rt1176-smoke-check.resc`, from cwd /, gives exit 0 AND
+#      prints "SMOKE PASS: JESS-RT1176 boot OK". BOTH: measured, Renode exits 0 in ~3 s when the
+#      script path does not exist, without loading anything — so exit 0 alone could be a script
+#      that never ran. An outer timeout above the script's own 120 s watchdog is the last line of
+#      defence against a hang the watchdog could not convert.
 #
-# WHY (3) AS WELL AS (2). The robot suite resolves paths with ${CURDIR}, so it passes even if the
-# .resc still had repo-root-relative paths — the exact defect #299 asked to fix. Measured
-# 2026-10-27: the pre-fix .resc run from / fails with "Could not find file
-# 'hardware/renode/pixhawk6xrt.repl'" while the robot would still be green. A check that only
-# runs the robot cannot see the property it is supposed to protect. Self-test NC1 proves (3) can.
-#
-# Exit 0 = all three hold. 1 = a check failed. 2 = could not run (no renode / renode-test).
+# Exit 0 = both hold. 1 = a check failed. 2 = could not run (no renode).
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
-RENODE="${RENODE:-renode}"; RENODE_TEST="${RENODE_TEST:-renode-test}"
-UART_OK="JESS-RT1176 boot OK"
+RENODE="${RENODE:-renode}"
+PASS_LINE="SMOKE PASS: JESS-RT1176 boot OK"
+OUTER=180   # > the .resc's 120 s watchdog
 fail() { echo "FAIL: $*"; exit 1; }
 
+# Which Renode runtime is this? Detected from the files beside the binary, not taken from a
+# label a caller could get wrong: the .NET builds ship libcoreclr.*, the Mono build ships
+# libmono*. Checked against all three installs in use (macOS .NET, CI Mono, CI .NET).
+# ORDER MATTERS: the .NET build ALSO ships libMono.Unix.so, and on a case-insensitive filesystem
+# (macOS) `libmono*` matches it. libcoreclr is therefore tested first; the Mono build has none.
+runtime_of() {
+  local r d; r=$(command -v "$1" 2>/dev/null || echo "$1"); d=$(dirname "$r")
+  if ls "$d"/libcoreclr.* >/dev/null 2>&1; then echo dotnet
+  elif ls "$d"/libmono* >/dev/null 2>&1; then echo mono
+  else echo unknown; fi
+}
+
 verify_one() {
-  local tgz="$1" work base root got want
+  local tgz="$1" work base root got want rc out
   [ -f "$tgz" ] || fail "no archive at $tgz"
   command -v "$RENODE" >/dev/null 2>&1 || [ -x "$RENODE" ] || { echo "CANNOT RUN: renode not found ($RENODE)"; return 2; }
-  command -v "$RENODE_TEST" >/dev/null 2>&1 || [ -x "$RENODE_TEST" ] || { echo "CANNOT RUN: renode-test not found ($RENODE_TEST)"; return 2; }
 
   work=$(mktemp -d); trap 'rm -rf "$work"' RETURN
   tar xzf "$tgz" -C "$work" || fail "archive does not unpack"
@@ -46,61 +58,60 @@ verify_one() {
   fi
   echo "  1. members: exactly $(printf '%s\n' "$got" | wc -l | tr -d ' ') ($(printf '%s\n' "$want" | wc -l | tr -d ' ') expected)"
 
-  # 2. the robot suite, from /
-  # cwd is / so nothing in the MODEL can resolve against a checkout — that is what #299's `cd /`
-  # is for. renode-test's own results go to a temp dir: by default it writes them into the cwd,
-  # and / is read-only on macOS and not writable by the `runner` user on a GitHub runner, so a
-  # literal `cd / && renode-test …` fails for a reason that says nothing about the model.
-  # Measured: "Opening output file '/results-rt1176-smoke.robot.xml' failed: Read-only file system".
-  mkdir -p "$work/results"
-  if ! ( cd / && "$RENODE_TEST" -r "$work/results" "$root/rt1176-smoke.robot" ) > "$work/robot.log" 2>&1; then
-    # A renode-test that cannot START (its Python deps are absent) says nothing about the model.
-    # Reporting it as a model failure would be "could not run" passed off as "answered no" —
-    # found the first time this script ran, on a host without robotframework installed.
-    if grep -qE "No module named|Please install required dependencies|Opening output file .* failed" "$work/robot.log"; then
-      echo "CANNOT RUN: renode-test could not start or could not write its results (an environment fault, not a model result):"; sed 's/^/    /' "$work/robot.log" | head -3
-      return 2
-    fi
-    tail -15 "$work/robot.log"; fail "renode-test on the unpacked robot suite failed (cwd /)"
+  # 2. the self-asserting check, plain Renode, from /
+  # stdin from /dev/null: deterministic. With a terminal on stdin, a failed command would leave
+  # Renode idling until the .resc's watchdog (still exit 4, but 120 s later); with stdin at end of
+  # input it exits at once and the .resc's ProcessExit guard turns that into exit 4.
+  ( cd / && perl -e "alarm $OUTER; exec @ARGV" "$RENODE" --console --disable-xwt "$root/rt1176-smoke-check.resc" ) </dev/null > "$work/check.log" 2>&1
+  rc=$?
+  out=$(perl -pe 's/\e\[[0-9;]*m//g' "$work/check.log" | grep -oE 'SMOKE (PASS|FAIL)[^\r]*' | head -1)
+  pkill -9 -f "$root/rt1176-smoke-check.resc" 2>/dev/null || true
+  if [ "$rc" = 0 ] && printf '%s' "$out" | grep -qF "$PASS_LINE"; then
+    echo "  2. rt1176-smoke-check.resc from cwd /, plain Renode ($(runtime_of "$RENODE")): exit 0 and '$PASS_LINE'"
+    return 0
   fi
-  echo "  2. renode-test rt1176-smoke.robot from cwd /: passed"
-
-  # 3. the .resc, from /, headless; poll for the boot line rather than sleeping a fixed time
-  ( cd / && "$RENODE" --console --disable-xwt -e "include @$root/rt1176-smoke.resc" > "$work/resc.log" 2>&1 & echo $! > "$work/pid" )
-  local i=0 ok=0
-  while [ $i -lt 60 ]; do
-    perl -pe 's/\e\[[0-9;]*m//g' "$work/resc.log" 2>/dev/null | grep -q "$UART_OK" && { ok=1; break; }
-    perl -pe 's/\e\[[0-9;]*m//g' "$work/resc.log" 2>/dev/null | grep -q 'Could not find file' && break
-    sleep 0.5; i=$((i+1))
-  done
-  kill "$(cat "$work/pid")" 2>/dev/null; sleep 0.5; kill -9 "$(cat "$work/pid")" 2>/dev/null
-  if [ $ok != 1 ]; then
-    perl -pe 's/\e\[[0-9;]*m//g' "$work/resc.log" | grep -iE 'error|could not' | head -3 | sed 's/^/    /'
-    fail "the unpacked rt1176-smoke.resc did not print '$UART_OK' when run from cwd /"
-  fi
-  echo "  3. rt1176-smoke.resc from cwd /: printed '$UART_OK'"
-  return 0
+  case "$rc" in
+    0)   fail "exit 0 but NO '$PASS_LINE' line — the check may never have run (exit 0 alone is not a pass)";;
+    3)   fail "the model ran but the boot line did not appear (exit 3): $out";;
+    4)   fail "the check exited or timed out before reaching a verdict (exit 4): $out";;
+    142) fail "renode hung past the outer ${OUTER}s timeout — even the watchdog did not end it";;
+    *)   fail "unexpected exit $rc: ${out:-no SMOKE line}";;
+  esac
 }
 
 if [ "${1:-}" = "--self-test" ]; then
   good="${2:?--self-test needs the good archive}"
   tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
   me="$ROOT/tools/renode-model/verify.sh"
-  mutate() {   # mutate <out.tgz> <python snippet operating on dir d>
+  mutate() {   # mutate <out.tgz> <python snippet operating on dir d> — repacks with plain tar (a control)
     rm -rf "$tmp/m"; mkdir -p "$tmp/m"; tar xzf "$good" -C "$tmp/m"; d="$tmp/m/$(ls "$tmp/m")"
-    python3 -c "import os,sys; d=sys.argv[1]; $2" "$d"; tar czf "$1" -C "$tmp/m" .  # plain tar is fine for a control
+    python3 -c "import os,sys; d=sys.argv[1]; $2" "$d"; tar czf "$1" -C "$tmp/m" .
   }
-  ctl() { rc=0; RENODE="$RENODE" RENODE_TEST="$RENODE_TEST" "$me" "$1" > "$tmp/o" 2>&1 || rc=$?; echo $rc; }
-  r=$(ctl "$good"); [ "$r" = 0 ] && echo "NC0 the real archive                      -> PASS (exit 0)  [positive control]" || { echo "NC0 expected 0 got $r"; cat "$tmp/o"; exit 1; }
-  mutate "$tmp/nc1.tgz" "p=d+'/rt1176-smoke.resc'; s=open(p).read().replace('\$ORIGIN/','@hardware/renode/'); open(p,'w').write(s)"
-  r=$(ctl "$tmp/nc1.tgz"); [ "$r" = 1 ] && grep -q 'rt1176-smoke.resc did not print' "$tmp/o" && echo "NC1 .resc with the OLD repo-root paths     -> FAIL at check 3  [the defect #299 fixes is observable]" || { echo "NC1 expected a check-3 failure, got rc=$r"; cat "$tmp/o"; exit 1; }
-  mutate "$tmp/nc2.tgz" "os.remove(d+'/pixhawk6xrt.repl')"
-  r=$(ctl "$tmp/nc2.tgz"); [ "$r" = 1 ] && grep -q 'missing' "$tmp/o" && echo "NC2 a listed file missing                  -> FAIL at check 1" || { echo "NC2 expected 1 got $r"; cat "$tmp/o"; exit 1; }
-  mutate "$tmp/nc3.tgz" "open(d+'/stray.bin','w').write('x')"
-  r=$(ctl "$tmp/nc3.tgz"); [ "$r" = 1 ] && grep -q 'extra' "$tmp/o" && echo "NC3 an extra unlisted file                 -> FAIL at check 1  [exact set, not membership]" || { echo "NC3 expected 1 got $r"; cat "$tmp/o"; exit 1; }
-  mutate "$tmp/nc4.tgz" "os.remove(d+'/LICENSE')"
-  r=$(ctl "$tmp/nc4.tgz"); [ "$r" = 1 ] && grep -q 'LICENSE' "$tmp/o" && echo "NC4 LICENSE missing                        -> FAIL at check 1" || { echo "NC4 expected 1 got $r"; cat "$tmp/o"; exit 1; }
-  echo "all 5 controls behaved as specified (1 positive, 4 negative)"
+  ctl() { rc=0; RENODE="$RENODE" "$me" "$1" > "$tmp/o" 2>&1 || rc=$?; echo $rc; }
+  r=$(ctl "$good"); [ "$r" = 0 ] && echo "NC0 the real archive                         -> PASS (exit 0)  [positive control]" || { echo "NC0 expected 0 got $r"; cat "$tmp/o"; exit 1; }
+  mutate "$tmp/nc1.tgz" "p=d+'/rt1176-smoke-check.resc'; s=open(p).read().replace('JESS-RT1176 boot OK\" \"','JESS-RT1176 NEVER PRINTED\" \"'); open(p,'w').write(s)"
+  r=$(ctl "$tmp/nc1.tgz"); [ "$r" = 1 ] && grep -q 'exit 3' "$tmp/o" && echo "NC1 check asserts a line never printed       -> FAIL, exit 3  [the assertion inside the .resc bites]" || { echo "NC1 expected an exit-3 failure, got rc=$r"; cat "$tmp/o"; exit 1; }
+  mutate "$tmp/nc2.tgz" "p=d+'/rt1176-smoke-check.resc'; s=open(p).read().replace('\$ORIGIN/','@hardware/renode/'); open(p,'w').write(s)"
+  # NC2 — a LOAD error. On EVERY runtime verify.sh must REJECT it (rc=1). On .NET the .resc
+  # itself exits 4. On Mono it exits 0 without the PASS line (the documented limitation), and
+  # the pass contract is what rejects it. If .NET ever shows the Mono symptom, that is a
+  # regression and this control fails: the Mono allowance is granted only to a detected Mono.
+  rt=$(runtime_of "$RENODE")
+  r=$(ctl "$tmp/nc2.tgz")
+  if [ "$r" = 1 ] && grep -q 'exit 4' "$tmp/o"; then
+    echo "NC2 check with the OLD repo-root paths       -> FAIL, exit 4  [$rt; the .resc itself exits non-zero]"
+  elif [ "$r" = 1 ] && [ "$rt" = mono ] && grep -q 'exit 0 but NO' "$tmp/o"; then
+    echo "NC2 check with the OLD repo-root paths       -> FAIL via the PASS-line contract  [mono: exit 0, no PASS line — the documented limitation]"
+  else
+    echo "NC2 expected verify.sh to REJECT a load error (exit 4, or on Mono exit 0 without the PASS line); runtime=$rt rc=$r"; cat "$tmp/o"; exit 1
+  fi
+  mutate "$tmp/nc3.tgz" "os.remove(d+'/pixhawk6xrt.repl')"
+  r=$(ctl "$tmp/nc3.tgz"); [ "$r" = 1 ] && grep -q 'missing' "$tmp/o" && echo "NC3 a listed file missing                    -> FAIL at check 1" || { echo "NC3 expected 1 got $r"; cat "$tmp/o"; exit 1; }
+  mutate "$tmp/nc4.tgz" "open(d+'/stray.bin','w').write('x')"
+  r=$(ctl "$tmp/nc4.tgz"); [ "$r" = 1 ] && grep -q 'extra' "$tmp/o" && echo "NC4 an extra unlisted file                   -> FAIL at check 1  [exact set, not membership]" || { echo "NC4 expected 1 got $r"; cat "$tmp/o"; exit 1; }
+  mutate "$tmp/nc5.tgz" "os.remove(d+'/LICENSE')"
+  r=$(ctl "$tmp/nc5.tgz"); [ "$r" = 1 ] && grep -q 'LICENSE' "$tmp/o" && echo "NC5 LICENSE missing                          -> FAIL at check 1" || { echo "NC5 expected 1 got $r"; cat "$tmp/o"; exit 1; }
+  echo "all 6 controls behaved as specified (1 positive, 5 negative)"
   exit 0
 fi
 
