@@ -26,6 +26,16 @@ PASS_LINE="SMOKE PASS: JESS-RT1176 boot OK"
 OUTER=180   # > the .resc's 120 s watchdog
 fail() { echo "FAIL: $*"; exit 1; }
 
+# Which Renode runtime is this? Detected from the files beside the binary, not taken from a
+# label a caller could get wrong: the .NET builds ship libcoreclr.*, the Mono build ships
+# libmono*. Checked against all three installs in use (macOS .NET, CI Mono, CI .NET).
+runtime_of() {
+  local r d; r=$(command -v "$1" 2>/dev/null || echo "$1"); d=$(dirname "$r")
+  if ls "$d"/libcoreclr.* >/dev/null 2>&1; then echo dotnet
+  elif ls "$d"/libmono* >/dev/null 2>&1; then echo mono
+  else echo unknown; fi
+}
+
 verify_one() {
   local tgz="$1" work base root got want rc out
   [ -f "$tgz" ] || fail "no archive at $tgz"
@@ -55,7 +65,7 @@ verify_one() {
   out=$(perl -pe 's/\e\[[0-9;]*m//g' "$work/check.log" | grep -oE 'SMOKE (PASS|FAIL)[^\r]*' | head -1)
   pkill -9 -f "$root/rt1176-smoke-check.resc" 2>/dev/null || true
   if [ "$rc" = 0 ] && printf '%s' "$out" | grep -qF "$PASS_LINE"; then
-    echo "  2. rt1176-smoke-check.resc from cwd /, plain Renode: exit 0 and '$PASS_LINE'"
+    echo "  2. rt1176-smoke-check.resc from cwd /, plain Renode ($(runtime_of "$RENODE")): exit 0 and '$PASS_LINE'"
     return 0
   fi
   case "$rc" in
@@ -80,7 +90,19 @@ if [ "${1:-}" = "--self-test" ]; then
   mutate "$tmp/nc1.tgz" "p=d+'/rt1176-smoke-check.resc'; s=open(p).read().replace('JESS-RT1176 boot OK\" \"','JESS-RT1176 NEVER PRINTED\" \"'); open(p,'w').write(s)"
   r=$(ctl "$tmp/nc1.tgz"); [ "$r" = 1 ] && grep -q 'exit 3' "$tmp/o" && echo "NC1 check asserts a line never printed       -> FAIL, exit 3  [the assertion inside the .resc bites]" || { echo "NC1 expected an exit-3 failure, got rc=$r"; cat "$tmp/o"; exit 1; }
   mutate "$tmp/nc2.tgz" "p=d+'/rt1176-smoke-check.resc'; s=open(p).read().replace('\$ORIGIN/','@hardware/renode/'); open(p,'w').write(s)"
-  r=$(ctl "$tmp/nc2.tgz"); [ "$r" = 1 ] && grep -q 'exit 4' "$tmp/o" && echo "NC2 check with the OLD repo-root paths       -> FAIL, exit 4  [the defect #299 fixes is observable; NOT a silent exit 0]" || { echo "NC2 expected an exit-4 failure, got rc=$r"; cat "$tmp/o"; exit 1; }
+  # NC2 — a LOAD error. On EVERY runtime verify.sh must REJECT it (rc=1). On .NET the .resc
+  # itself exits 4. On Mono it exits 0 without the PASS line (the documented limitation), and
+  # the pass contract is what rejects it. If .NET ever shows the Mono symptom, that is a
+  # regression and this control fails: the Mono allowance is granted only to a detected Mono.
+  rt=$(runtime_of "$RENODE")
+  r=$(ctl "$tmp/nc2.tgz")
+  if [ "$r" = 1 ] && grep -q 'exit 4' "$tmp/o"; then
+    echo "NC2 check with the OLD repo-root paths       -> FAIL, exit 4  [$rt; the .resc itself exits non-zero]"
+  elif [ "$r" = 1 ] && [ "$rt" = mono ] && grep -q 'exit 0 but NO' "$tmp/o"; then
+    echo "NC2 check with the OLD repo-root paths       -> FAIL via the PASS-line contract  [mono: exit 0, no PASS line — the documented limitation]"
+  else
+    echo "NC2 expected verify.sh to REJECT a load error (exit 4, or on Mono exit 0 without the PASS line); runtime=$rt rc=$r"; cat "$tmp/o"; exit 1
+  fi
   mutate "$tmp/nc3.tgz" "os.remove(d+'/pixhawk6xrt.repl')"
   r=$(ctl "$tmp/nc3.tgz"); [ "$r" = 1 ] && grep -q 'missing' "$tmp/o" && echo "NC3 a listed file missing                    -> FAIL at check 1" || { echo "NC3 expected 1 got $r"; cat "$tmp/o"; exit 1; }
   mutate "$tmp/nc4.tgz" "open(d+'/stray.bin','w').write('x')"

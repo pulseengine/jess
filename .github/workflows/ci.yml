@@ -436,10 +436,14 @@ jobs:
       #     satisfies -> exit 3; the old repo-root paths -> exit 4 via the watchdog; three
       #     exact-set violations). The watchdog control waits out the .resc's 120 s on purpose.
       # The model's self-test is checked on BOTH Renode runtimes, because they behave
-      # differently exactly where it matters: on Mono (the linux-portable build installed above)
-      # an Environment.ExitCode set during ProcessExit is IGNORED, so a load error exited 0;
-      # on .NET it is honoured. Measured on this job, 2026-10-28. The .resc handles both, and a
-      # check validated on one runtime is not evidence about the other — so both run here.
+      # differently exactly where it matters (measured on this job, 2026-10-28):
+      #   .NET  — fully conforming: boot line 0, line missing 3, load error 4.
+      #   Mono  — the legacy linux-portable build installed above: line missing still 3, but a
+      #           LOAD error exits 0, WITHOUT the "SMOKE PASS" line; nothing raised from
+      #           ProcessExit changes the code on Mono. The pass contract (exit 0 AND the line)
+      #           still rejects it. Documented limitation, accepted on jess#299.
+      # verify.sh detects the runtime from the files beside the binary and grants the Mono
+      # allowance only to a detected Mono, so .NET regressing to the Mono symptom fails here.
       # .NET is Renode's primary runtime (the only build for macOS, Windows and arm64 Linux).
       - name: Renode .NET build as well (the model self-test runs on both runtimes)
         run: |
@@ -464,7 +468,7 @@ jobs:
             RENODE="${rt#*:}" tools/renode-model/verify.sh /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
             RENODE="${rt#*:}" tools/renode-model/verify.sh --self-test /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
           done
-          echo "the model self-test holds on 2 of 2 Renode runtimes (Mono, .NET)"
+          echo "the model self-test passes on 2 of 2 Renode runtimes (.NET fully; Mono with its documented load-error limitation)"
       - name: RT1176 bulk-memory OOB-trap oracle (synth#374 / AFD-026)
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)

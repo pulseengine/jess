@@ -22,10 +22,15 @@
 #  * TWO guards, because a failed command (a missing .repl) ends the script in one of two ways:
 #    - Renode EXITS with code 0: the .resc run as the positional script with non-interactive
 #      stdin reaches end of input and quits. Measured: the old repo-root paths gave exit 0 with
-#      no verdict. The ProcessExit handler registered first turns that into exit 4. The two
-#      runtimes differ here: on .NET, setting Environment.ExitCode in the handler is honoured;
-#      on Mono (CI's linux-portable build) it is IGNORED — measured in CI, the exit stayed 0 —
-#      so on Mono the handler calls Environment.Exit(4) instead.
+#      no verdict. On .NET, the ProcessExit handler registered first turns that into exit 4.
+#
+#      KNOWN LIMITATION ON MONO (the legacy x86_64 linux-portable build). Measured in CI,
+#      2026-10-28: on Mono a LOAD error still exits 0 — neither setting Environment.ExitCode
+#      nor calling Environment.Exit(4) from ProcessExit changes the code there (most likely the
+#      handler does not run on that exit path). It exits WITHOUT the "SMOKE PASS" line, so the
+#      pass contract above still rejects it; a caller on Mono must check the line, not only the
+#      code. A boot failure (exit 3) behaves the same on both runtimes. Accepted by the
+#      maintainer on jess#299; CI keeps measuring both runtimes so this stays a known quantity.
 #    - Renode IDLES at its monitor forever: an interactive terminal, or `-e "include @…"`.
 #      Neither pass nor fail. The watchdog turns that hang into exit 4. It is 120 s: measured,
 #      a healthy run spends 5.7-7.1 s inside the watchdog window
@@ -37,7 +42,7 @@
 #    hook had fired, while `quit` did not; on the failure path no hook has fired, so Exit works.
 #  * Process.Kill() on itself was tried for the failure exit and did NOT work (the script hung
 #    after printing its verdict); it is not used.
-python "import System; D = System.AppDomain.CurrentDomain; D.SetData('jess_verdict', False); mono = System.Type.GetType('Mono.Runtime') is not None; D.ProcessExit += (lambda s, e: (System.Console.Error.WriteLine('SMOKE FAIL: exited before reaching a verdict'), (System.Environment.Exit(4) if mono else setattr(System.Environment, 'ExitCode', 4))) if not D.GetData('jess_verdict') else None)"
+python "import System; D = System.AppDomain.CurrentDomain; D.SetData('jess_verdict', False); D.ProcessExit += (lambda s, e: (System.Console.Error.WriteLine('SMOKE FAIL: exited before reaching a verdict'), setattr(System.Environment, 'ExitCode', 4)) if not D.GetData('jess_verdict') else None)"
 python "import System; from System.Threading import Timer, TimerCallback; System.AppDomain.CurrentDomain.SetData('jess_wd', Timer(TimerCallback(lambda s: (System.Console.Error.WriteLine('SMOKE FAIL: watchdog - the script did not reach its verdict within 120 s'), System.Environment.Exit(4))), None, 120000, -1))"
 using sysbus
 mach create "pixhawk6xrt"
