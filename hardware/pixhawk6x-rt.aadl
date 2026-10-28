@@ -231,7 +231,9 @@ public
     in1 : requires bus access VBRICK1;
     in2 : requires bus access VBRICK2;
     in3 : requires bus access VUSB;
-    out : provides bus access VSYS;
+    --  `vsys_out`, not `out`: `out` is an AADL reserved word (AS-5506B Annex A). spar 0.40.0
+    --  accepted it; spar 0.47.1 refuses to parse the model, which blocked the varve layer move.
+    vsys_out : provides bus access VSYS;
   end PWR_OR;
 
   --  Per-IMU LDO regulators off VSYS — independent power control per sensor
@@ -416,7 +418,7 @@ public
     or_in1 : bus access vbrick1 <-> pwr_or.in1;
     or_in2 : bus access vbrick2 <-> pwr_or.in2;
     or_in3 : bus access vusb <-> pwr_or.in3;
-    or_out : bus access pwr_or.out <-> vsys;
+    or_out : bus access pwr_or.vsys_out <-> vsys;
     ldo1_in : bus access vsys <-> ldo1.vin;
     ldo2_in : bus access vsys <-> ldo2.vin;
     ldo3_in : bus access vsys <-> ldo3.vin;

@@ -48,7 +48,12 @@ env:
   # and all clear the floor — but the coverage NUMBER moved, 63.9% under 0.34.0 and 64.8%
   # under 0.35.0+. The metric is version-dependent, so a coverage figure is only meaningful
   # beside the binary that produced it.
-  RIVET_VERSION: v0.35.0
+  # 2026.09.2 -> 2026.10.32 (2026-10-28) moved it 0.35.0 -> 0.41.1. Measured on one store:
+  # both `Result: PASS`; warnings 297 -> 629, ALL attributed: +330 prose-mention (a wider ID
+  # detector: TEST/REQ/SC/L/META now matched), +1 L-001 list<string> type, +1 schema rule that
+  # can never fire (AFD-144). Coverage 64.7% under both, every table row identical;
+  # --fail-under 70 goes red under both (the floor gate is still potent).
+  RIVET_VERSION: v0.41.1
   # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
@@ -58,7 +63,11 @@ env:
   # Measured before bumping: both emit BYTE-IDENTICAL wit/ from hardware/pixhawk6x-rt.aadl,
   # and both report WIT-DERIVATION OK against the committed tree. 0.24.0 also predates
   # `--version` (CLI convention #1), which is why check-drift.sh could not see it on PATH.
-  SPAR_VERSION: v0.40.0
+  # 0.40.0 -> 0.47.1 (layer 2026.10.32): 0.47.1 REFUSES to parse the model — PWR_OR had a
+  # feature named `out`, an AADL reserved word (AS-5506B Annex A). Renamed to `vsys_out`;
+  # both versions then emit BYTE-IDENTICAL wit/ (WIT-DERIVATION OK). Both versions had been
+  # silently DROPPING that feature from the instance model (46 features, 47 after the rename).
+  SPAR_VERSION: v0.47.1
   # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the fused-core
   # reproducibility gate (TEST-PIX-026, meld#325/#341).
   #
