@@ -99,7 +99,7 @@ env:
   # asserted: `check-drift.sh --committed-only` runs in rivet-validate below. It was cited in
   # five comments in this file as the thing keeping them in step and was never invoked — and
   # this very bump proved it, by going green with the two files disagreeing (AFD-137).
-  MELD_VERSION: v0.62.0
+  MELD_VERSION: v0.65.1
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
@@ -796,6 +796,19 @@ jobs:
         run: hardware/renode/cascade-invoke/run-ekf-oracle.sh
         env:
           RENODE: /tmp/renode/renode
+      # AFD-143. linmem-capture.sh is the one-command differential jess and synth re-run on each
+      # other's measurements, and NOTHING ran it, so it broke twice without going red: AFD-141's
+      # interface bump made its hardcoded export name a KeyError, and meld 0.64's +16 B guard moved
+      # the return area off the hardcoded 0xb024. --check-inputs is the part decidable without
+      # QEMU: the export resolves on THIS build's module, the return area is derived from the
+      # export's own result, and a unit quaternion sits there (|q|=1 is the positive control; the
+      # old fixed 0xac18 reads |q|=0.51 on this layout and is REJECTED). Exit 0 AND the line.
+      - name: linmem-capture inputs — export resolves, return area derived, |q|=1 (AFD-143)
+        run: |
+          set -euo pipefail
+          out=$(tools/cascade-differential/linmem-capture.sh --check-inputs 2>&1) || { echo "$out"; exit 1; }
+          echo "$out"
+          grep -qx 'CHECK-INPUTS OK' <<<"$out" || { echo "exit 0 without CHECK-INPUTS OK" >&2; exit 1; }
       - name: ekf reference vacuity guards self-test (AFD-125)
         run: python3 tools/cascade-differential/ekf_ref.py --self-test
       # The observer-seam decoder constants (DD-028). Only --self-test is gated: relay has NOT

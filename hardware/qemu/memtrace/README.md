@@ -38,7 +38,8 @@ access pattern.
 
 ## What it found, and what it refuted
 
-**The persistent quaternion is bit-identical between the two runtimes** — wasm offset `0xac18`,
+**The persistent quaternion is bit-identical between the two runtimes** — wasm offset `0xac18` on the meld 0.62 layout (meld 0.64+ adds a 16-byte guard per packed provider, so this
+offset MOVES with the meld pin — derive it, never reuse it; see linmem-capture.sh),
 at ticks 1, 2, 3, 15 and 16. That retires the *lagged / stale attitude* reading, which jess had
 proposed from the tick-16 numbers and synth had adopted into the v0.80 plan. The attitude state
 agrees; only what is computed from it diverges. See AFD-134.
