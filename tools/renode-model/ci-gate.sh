@@ -4,7 +4,8 @@
 #
 #   ci-gate.sh <owner/repo> <commit-sha>
 #
-# WHY THIS EXISTS. Booting the model needs third-party code (Renode, renode-test's pip deps).
+# WHY THIS EXISTS. Booting the model runs third-party code (Renode itself; since #299's no-Python
+# decision it needs no pip packages, but Renode is still downloaded code).
 # Running that inside the release workflow put it in the same run as the signing job — and a run's
 # artifact store is shared by every job in it regardless of `permissions:`, so a compromised
 # dependency could upload an artifact the signing job then swept up and signed (security review,

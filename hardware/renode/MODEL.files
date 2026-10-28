@@ -20,7 +20,12 @@ pixhawk6xrt.repl
 vehicle/rt1176-dualcore.repl
 vehicle/README.md
 
-# smoke: the script, the robot suite, and the firmware with the source it was built from
+# smoke. rt1176-smoke-check.resc IS the self-test: plain Renode runs it, it asserts the boot line
+# itself and exits non-zero on failure, and it needs no host Python (jess#299, 2026-10-27).
+# rt1176-smoke.resc is the interactive version (opens the UART analyser).
+# rt1176-smoke.robot travels as an OPTIONAL extra for those who already use renode-test; nothing
+# here depends on it.
+rt1176-smoke-check.resc
 rt1176-smoke.resc
 rt1176-smoke.robot
 smoke/rt1176-smoke.elf

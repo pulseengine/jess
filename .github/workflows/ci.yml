@@ -428,14 +428,16 @@ jobs:
       # real tag. A release-only step is a step whose first run is the release: if it is broken,
       # the tag is already pushed. So the same pack + consumer-verify the release runs, here.
       #   - packed TWICE from the same commit and required byte-identical (determinism)
-      #   - unpacked fresh and booted from cwd / via BOTH the robot suite and the .resc — the
-      #     robot uses ${CURDIR} and passes even with repo-root-relative .resc paths, so it
-      #     alone cannot see the defect #299 fixed
-      #   - --self-test: 1 positive + 4 negative controls, NC1 being the old .resc paths
+      #   - unpacked fresh and run from cwd / as `renode --console --disable-xwt
+      #     rt1176-smoke-check.resc` — plain Renode, NO host Python, no renode-test (maintainer
+      #     decision on #299). The .resc asserts the boot line itself; a pass is exit 0 AND its
+      #     "SMOKE PASS" line, because Renode exits 0 when the script path does not exist.
+      #   - --self-test: 1 positive + 5 negative controls (an assertion the firmware never
+      #     satisfies -> exit 3; the old repo-root paths -> exit 4 via the watchdog; three
+      #     exact-set violations). The watchdog control waits out the .resc's 120 s on purpose.
       - name: Renode model asset — reproducible, and boots unpacked from cwd / (jess#299)
         env:
           RENODE: /tmp/renode/renode
-          RENODE_TEST: /tmp/renode/renode-test
         run: |
           set -euo pipefail
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct HEAD)"
