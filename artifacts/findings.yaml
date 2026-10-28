@@ -9308,3 +9308,18 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-10-22T06:45:47Z
+
+  - id: AFD-143
+    type: ai-found-defect
+    title: "linmem-capture.sh broke twice without going red: a hardcoded export name and a hardcoded return-area offset, in a script nothing ran"
+    status: resolved
+    description: "SYMPTOM, measured first while adopting meld 0.65.1: the default run of tools/cascade-differential/linmem-capture.sh raised KeyError. Two literals had silently stopped matching what the script consumes. (1) EKF_EXPORT was hardcoded; AFD-141's interface bump (0.10.0 -> 0.11.0) updated the literal to agree with the PINNED falcon, but the script's default MOD was the FROZEN repro/synth-1436/c.loom.wasm, which exports ekf@0.10.0. The literal agreed with the pin and was wrong about what the script reads. (2) The return-area offset was hardcoded at 0xb024 (and the precondition quaternion at a fixed 0xac18). meld 0.64+ adds a 16-byte guard per packed provider (meld#479, SR-102), moving the return area to 0xb064. Both dumps come from the same module, so the fixed-offset precondition compared the two at a shifted address and kept passing while no longer reading the quaternion: measured |q| = 0.509902 at 0xac18 on the new layout. A THIRD mismatch sat underneath: the default ELF was rebuilt on current pins while the default MOD was frozen, so a default run compared an ARM image of one module against wasmtime running another. FIX: MOD defaults to the module the ELF was lowered from; the export is resolved version-agnostically (ifacever.find_export); the return area is the export's own i32 result; the precondition additionally requires |q| = 1 (positive control). ELF/MOD are absolutised (an absolute ELF was joined as ROOT/ELF and gave 'pmemsave produced nothing'). A --check-inputs mode, which needs no QEMU (its first version ran QEMU anyway, found by running it with qemu off PATH), is now a CI step in on-target-oracles, so the script cannot break silently a third time. Controls: both ekf@0.11.0 (0xb064) and the frozen ekf@0.10.0 repro (0xb024) pass; TICKS=0 fails (no return pointer); the old 0xac18 is rejected at |q|=0.51. ALSO CLASSIFIED: the whole-memory differential reports 10 DIVERGENT words at 0xe000-0xe044. They are the cascade harness's INPUT vehicle-state (qw=1, pos-d -2.5, vel 0.1/-0.2/0.05, w 0.30/-0.15/0.07, matching cascade_ref.py VEHICLE_STATE at 4-byte stride) plus two setpoint words, staged by the ARM boot code; the wasmtime side calls only ekf#estimate and never writes them. Byte-identical on the meld 0.62 and 0.65.1 builds (one variable), so they predate the bump. The 14-field return area is identical in both builds."
+    fields:
+      detected-by: "jess release-watch of meld 0.62.0 -> 0.65.1: the linmem-capture prerequisite, run rather than read"
+      discovered-at: 2026-10-28
+      severity: minor
+      triage-status: resolved
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T07:58:55Z

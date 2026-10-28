@@ -12,7 +12,8 @@ filter.
 
 This is what retired the hypothesis both jess and synth had adopted. synth#1436 had converged on
 a "lagged or stale attitude" — jess proposed it from the tick-16 numbers and synth wrote it into
-the v0.80 plan. The persistent quaternion is at offset 0xac18, and it is BIT-IDENTICAL between
+the v0.80 plan. The persistent quaternion is at offset 0xac18 ON THE meld 0.62 LAYOUT (it moves with meld's
+packing; linmem-capture.sh derives the return area rather than trusting a literal), and it is BIT-IDENTICAL between
 the two runtimes at every tick. A stale attitude would have shown up there. It did not.
 
 TWO MASKS, both of which must be stated or the count is wrong:

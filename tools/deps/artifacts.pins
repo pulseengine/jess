@@ -249,8 +249,35 @@ synthpin/synth               7d2844ce671daded0bc5c9dd9bee554ad34b194122469c46720
 # NOTE the tarball layout changed: the binary is inside `meld-v0.62.0-<triple>/` rather than at the
 # archive root. fetch.sh resolves it because it uses `find -type f -name "$member"`, which is
 # recursive — worth recording, since a naive extractor would silently find nothing.
-meld/meld                    d088e668be4026c1264434aa565c1921b0aa94e08c152cc7f5a102660971f516  release:pulseengine/meld@v0.62.0!meld-v0.62.0-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
-meld/meld                    8c05a305b904b956519088a4ab60a3cb7a20de5c2801111b41a44e8e106a7931  release:pulseengine/meld@v0.62.0!meld-v0.62.0-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
+# BUMPED 0.62.0 -> 0.65.1, and this one is NOT for currency: 0.64.0 fixed a --pack-rebase
+# CORRECTNESS defect on jess's exact path (SR-102, meld#479). A packed provider's last data byte
+# could sit within 7 bytes of the next provider's data, so an 8-byte access near a boundary lands
+# in the neighbour's placement; synth's VCR-VER-003 flagged 0.63.0 composites for exactly this.
+# jess fuses FIVE providers with --pack-rebase. Each placement now ends with >= 7 unwritten bytes,
+# "this costs 16 bytes per provider" (meld's note).
+#
+# EVERY BYTE ATTRIBUTED, one variable at a time, synth 0.88.0 held throughout:
+#   0.62.0 -> 0.64.0  the lowered objects all differ, at IDENTICAL size. The fused module's section
+#                     layout is unchanged; the only changes are memory-offset constants, in four
+#                     graduated groups. Data-segment bases, measured on these exact files:
+#                       segs 10,11,12 +0 | 8,9 +16 | 5,6,7 +32 | 2,3,4 +48 | 0,1 +64
+#                     — five providers, 16 B each: meld's own figure, confirmed three ways (WAT
+#                     offset deltas, content search, segment bases). Instruction count unchanged.
+#   0.64.0 -> 0.65.1  NO-OP for jess: cascade.o, ekf.elf, soak.elf and c.loom.wasm are
+#                     BYTE-IDENTICAL. The fused c.wasm differs in ONE section only,
+#                     `wsc.transformation.attestation`, at the same 1,946 B (the tool version);
+#                     the other 14 sections, code and data included, are identical. 0.65.x's
+#                     changes are all --memory multi / nested-list adapters; jess uses
+#                     --memory shared.
+#
+# THE LAYOUT MOVES, so anything that hardcodes a linear-memory offset goes wrong. The one consumer
+# that did — tools/cascade-differential/linmem-capture.sh, fixed 0xac18 and 0xb024 — now takes
+# the offset from the export's own returned pointer (0xb024 under 0.62.0, 0xb064 under 0.64.0+)
+# and requires a unit quaternion there as a positive control. Its old fixed-offset check would
+# have stayed GREEN under this bump: both dumps shift together, so it compared two reads of the
+# same wrong place.
+meld/meld                    e84e2daf84d6d229fe78e0719da8672c9a09272e861f9d0989403265f2284bb0  release:pulseengine/meld@v0.65.1!meld-v0.65.1-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
+meld/meld                    e61e4f3ad1d73f2f99565c08f3c347cee8aa98136a384965291ba306fc2ab1af  release:pulseengine/meld@v0.65.1!meld-v0.65.1-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
 # loom STAYS AT 1.4.0 DELIBERATELY, and this is the one pin that is BEHIND the varve layer
 # (both 2026.09.2 and 2026.10.23 carry 1.4.1), so a layer migration would adopt 1.4.1 by
 # accident unless this line keeps saying no. check-drift.sh reports the gap as
