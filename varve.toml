@@ -13,7 +13,7 @@ manifest-version = 1
 [toolchain]
 realm   = "pulseengine"
 channel = "rolling"
-layer   = "2026.09.2"
+layer   = "2026.10.32"
 # The layer NAME is not sufficient on its own: two entries for 2026.08.4 existed in the old
 # realm under different digests, and varve refuses to guess between them rather than
 # silently picking one. That refusal is the feature.
@@ -25,4 +25,10 @@ layer   = "2026.09.2"
 # digest, which does not exist in the new registry.
 # This digest is the one `varve install` fetched and verified against the NEW trust root on
 # 2026-09-09; it was resolved by name and then recorded, never guessed.
-digest  = "sha256:67d585476be898dcd6c7f0e31fb8abe9c6548f708b3cb44804ad61cc5d999025"
+# MOVED 2026-10-28: 2026.09.2 -> 2026.10.32, resolved by `varve install` against the committed
+# realm (trust root unchanged since 2026-09-09) and then recorded. The layer changes rivet
+# 0.35.0 -> 0.41.1 and spar 0.40.0 -> 0.47.1 for jess; it carries meld 0.65.1 and synth 0.88.0,
+# EQUAL to artifacts.pins. loom stays 1.4.1 in the layer, as it already was in 2026.09.2:
+# the campaign keeps loom 1.4.0 through artifacts.pins (AFD-142, loom#448), and nothing that
+# builds the lowered object dispatches loom from the layer.
+digest  = "sha256:53e2cdf8a2e9755cdefd8fd3dbeddab9deca8de28ca8994ddcc427856265ea53"

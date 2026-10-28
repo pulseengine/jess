@@ -9323,3 +9323,33 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-28T07:58:55Z
+
+  - id: AFD-144
+    type: ai-found-defect
+    title: "schemas/common.yaml's ai-generated-needs-review rule can never fire: it tests status == active, a value no artifact can hold"
+    status: open
+    description: "Surfaced by rivet 0.41.1 during the varve layer move 2026.09.2 -> 2026.10.32: 'conditional rule ai-generated-needs-review tests status for a value none of its allowed-values can take (draft, proposed, approved, implemented, verified, released, accepted, deprecated, rejected); it can never fire'. rivet 0.35.0 said nothing. The rule's description promises 'AI-generated artifacts with active/approved status must have a reviewer'; its condition is status equals active, so the requirement on provenance.reviewed-by has never been checked in jess. Same class as AFD-135..141: a rule written down, mechanically unenforced, found by a tool that USED it. MEASURED IMPACT of a fix (read from the artifact YAML, because rivet list --format json omits provenance entirely, so a count taken from it reads 0 AI-created artifacts — checked against AFD-143, which carries created-by: ai): 73 of 1557 artifacts carry provenance created-by ai; 0 carry reviewed-by. By status: 41 ai-found-defect open, 26 ai-found-defect resolved, 3 test-spec valid, 1 test-spec draft, 1 design-decision proposed, 1 design-decision approved. A rule on status approved would warn on exactly 1 artifact today. NOT fixed in the layer-move PR (one variable); the fix is a separate change that must also decide which statuses count as active."
+    fields:
+      detected-by: rivet 0.41.1 validate during the varve layer move 2026.09.2 -> 2026.10.32
+      discovered-at: 2026-10-28
+      severity: minor
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T15:55:33Z
+
+  - id: AFD-145
+    type: ai-found-defect
+    title: The RT1176 AADL named a feature 'out' (reserved word); spar parse accepted it until 0.47.1, and spar instance silently dropped it under both versions
+    status: resolved
+    description: "hardware/pixhawk6x-rt.aadl device PWR_OR declared 'out : provides bus access VSYS' — the output of the power-OR the model's own comment calls the keystone of power redundancy. 'out' is an AADL reserved word (AS-5506B Annex A). spar 0.40.0 'parse' accepted the model; spar 0.47.1 refuses it ('a feature cannot be named in or out'), which made tools/wit/regen.sh --check fail and blocked the varve layer move to 2026.10.32. MEASURED on the unrenamed model: 'spar instance --root Pixhawk6XRT::Pixhawk6XRT.v2a' exits 0 under BOTH 0.40.0 and 0.47.1 (even though 0.47.1's parse rejects the same file) and lists 46 features with no 'out'; after renaming it to vsys_out, both list 47 including 'feature vsys_out : BusAccess'. So every instance model jess has produced lacked the power-OR output. Not claimed: whether the or_out connection was dangling — the instance printer shows no connection endpoints, so this run cannot say. FIX: renamed to vsys_out (and the one connection pwr_or.vsys_out); wit/ is byte-identical under both spar versions (WIT-DERIVATION OK), instance output differs from before only by the restored feature. The instance-exits-0-on-a-model-parse-rejects behaviour is spar's to fix."
+    fields:
+      detected-by: spar 0.47.1 parse during the varve layer move 2026.09.2 -> 2026.10.32; the silent drop found by diffing instance output before and after the rename
+      discovered-at: 2026-10-28
+      severity: minor
+      triage-status: resolved
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-28T15:55:33Z
