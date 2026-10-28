@@ -60,6 +60,9 @@ platform = "pixhawk6xrt.repl"
 
 [tested-with]
 renode = "{RENODE_TESTED}"
+# The self-test is checked on BOTH Renode runtimes in jess CI; they differ in how a
+# non-zero exit can be raised, and rt1176-smoke-check.resc handles each.
+runtimes = ["mono (linux-portable)", "dotnet (linux-portable-dotnet; osx-arm64 dotnet locally)"]
 
 [self-test]
 # Needs ONLY Renode — no host Python, no renode-test, no Robot Framework.

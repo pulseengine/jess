@@ -435,9 +435,21 @@ jobs:
       #   - --self-test: 1 positive + 5 negative controls (an assertion the firmware never
       #     satisfies -> exit 3; the old repo-root paths -> exit 4 via the watchdog; three
       #     exact-set violations). The watchdog control waits out the .resc's 120 s on purpose.
-      - name: Renode model asset — reproducible, and boots unpacked from cwd / (jess#299)
-        env:
-          RENODE: /tmp/renode/renode
+      # The model's self-test is checked on BOTH Renode runtimes, because they behave
+      # differently exactly where it matters: on Mono (the linux-portable build installed above)
+      # an Environment.ExitCode set during ProcessExit is IGNORED, so a load error exited 0;
+      # on .NET it is honoured. Measured on this job, 2026-10-28. The .resc handles both, and a
+      # check validated on one runtime is not evidence about the other — so both run here.
+      # .NET is Renode's primary runtime (the only build for macOS, Windows and arm64 Linux).
+      - name: Renode .NET build as well (the model self-test runs on both runtimes)
+        run: |
+          set -euo pipefail
+          cd /tmp
+          curl -fsSL -o renode-dotnet.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable-dotnet.tar.gz
+          # Trust-on-first-use digest (Renode publishes none); two agreeing fetches, 2026-10-28.
+          echo "00e113cdbd0f5354cf2f64bbe3f5a070d8958409542fca66e45ac97d982938c0  renode-dotnet.tgz" | sha256sum -c -
+          mkdir -p renode-dotnet && tar xzf renode-dotnet.tgz -C renode-dotnet --strip-components=1
+      - name: Renode model asset — reproducible, and boots unpacked from cwd / on Mono AND .NET (jess#299)
         run: |
           set -euo pipefail
           export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct HEAD)"
@@ -447,8 +459,12 @@ jobs:
           cmp /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz /tmp/model-b/jess-renode-rt1176-0.0.0-ci.tar.gz \
             || { echo "the Renode model archive is NOT reproducible from one commit"; exit 1; }
           echo "reproducible: two packs of $C are byte-identical"
-          tools/renode-model/verify.sh /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
-          tools/renode-model/verify.sh --self-test /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
+          for rt in mono:/tmp/renode/renode dotnet:/tmp/renode-dotnet/renode; do
+            echo "════ runtime: ${rt%%:*} (${rt#*:}) ════"
+            RENODE="${rt#*:}" tools/renode-model/verify.sh /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
+            RENODE="${rt#*:}" tools/renode-model/verify.sh --self-test /tmp/model-a/jess-renode-rt1176-0.0.0-ci.tar.gz
+          done
+          echo "the model self-test holds on 2 of 2 Renode runtimes (Mono, .NET)"
       - name: RT1176 bulk-memory OOB-trap oracle (synth#374 / AFD-026)
         run: /tmp/renode/renode-test hardware/renode/rt1176-bulkmem.robot
       - name: br_table selector-honored oracle (synth#507 / AFD-032, TEST-PIX-020)
