@@ -452,11 +452,14 @@ jobs:
           curl -fsSL -o renode-dotnet.tgz https://github.com/renode/renode/releases/download/v1.16.1/renode-1.16.1.linux-portable-dotnet.tar.gz
           # Trust-on-first-use digest (Renode publishes none); two agreeing fetches, 2026-10-28.
           echo "00e113cdbd0f5354cf2f64bbe3f5a070d8958409542fca66e45ac97d982938c0  renode-dotnet.tgz" | sha256sum -c -
-          # Installed OUTSIDE /tmp. In the first both-runtimes run, /tmp/renode-dotnet was present
-          # after this step (digest OK, tar exit 0) and GONE by the time the .NET iteration ran,
-          # after the Mono iteration — "renode not found". Leading hypothesis: Renode's temporary-
-          # file cleanup (cf. its --keep-temporary-files) removing /tmp/renode-* on Linux. Not
-          # reproduced on macOS .NET, so the canary below MEASURES it rather than assuming it.
+          # Installed OUTSIDE /tmp, because RENODE DELETES /tmp/renode-* ON LINUX. Measured on this
+          # job, 2026-10-28: /tmp/renode-dotnet was present after this step (digest OK, tar exit 0,
+          # `test -x`) and gone after the Mono iteration ran — "renode not found". A canary,
+          # /tmp/renode-canary-jess, planted here was then DELETED during the Renode runs, whose
+          # only other actors (pack.py, verify.sh) never touch it. cf. Renode's
+          # --keep-temporary-files. NOT reproduced on macOS, where .NET's temp path is $TMPDIR under
+          # /var/folders rather than /tmp. /tmp/renode (no dash) is not matched and is safe.
+          # Never put anything you need at /tmp/renode-* in a job that runs Renode.
           mkdir -p "$HOME/rn-dotnet" && tar xzf renode-dotnet.tgz -C "$HOME/rn-dotnet" --strip-components=1
           test -x "$HOME/rn-dotnet/renode"
           mkdir -p /tmp/renode-canary-jess && echo canary > /tmp/renode-canary-jess/f
