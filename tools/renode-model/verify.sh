@@ -29,6 +29,8 @@ fail() { echo "FAIL: $*"; exit 1; }
 # Which Renode runtime is this? Detected from the files beside the binary, not taken from a
 # label a caller could get wrong: the .NET builds ship libcoreclr.*, the Mono build ships
 # libmono*. Checked against all three installs in use (macOS .NET, CI Mono, CI .NET).
+# ORDER MATTERS: the .NET build ALSO ships libMono.Unix.so, and on a case-insensitive filesystem
+# (macOS) `libmono*` matches it. libcoreclr is therefore tested first; the Mono build has none.
 runtime_of() {
   local r d; r=$(command -v "$1" 2>/dev/null || echo "$1"); d=$(dirname "$r")
   if ls "$d"/libcoreclr.* >/dev/null 2>&1; then echo dotnet
