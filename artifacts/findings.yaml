@@ -9353,3 +9353,18 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-28T15:55:33Z
+
+  - id: AFD-146
+    type: ai-found-defect
+    title: "The bench ran with-device 0.5.0 with no release provenance: jess's last release (v0.7.2) shipped 0.2.2, and the queued 'stale varve copy' premise had the cause inverted"
+    status: resolved
+    description: "QUEUED PREMISE (loop feature #3): 'the varve layer ships with-device 0.2.2 while jess ships 0.5.0 — a stale copy of jess's own tool; worth an upstream ask'. MEASURED instead: layer 2026.10.32 carries with-device 0.2.2 (varve inspect, all four platforms), and jess's latest release v0.7.2 (2026-09-05) ships with-device-0.2.2 assets; v0.7.1 shipped 0.2.1, v0.7.0 0.2.0. The source went 0.2.2 -> 0.3.0 at 0192371 (AFD-123, board names + alias resolution, 2026-09-30) -> 0.5.0 at f2a6365 (AFD-133, EACCES no longer reported as CLAIMED, 2026-10-02), and was never tagged. So varve was CORRECT: it carried jess's latest release. The defect was jess's: all three bench hosts run 'with-device 0.5.0' (fourpi measured by --version) built from untagged source, with no signed asset, SBOM or provenance, while the release pipeline that produces exactly those existed. An upstream ask to varve would have been misdirected. Checked that 0.5.0 names one source: the only post-0.5.0 change, 279f857 (#301), edits two comments in src/lib.rs. FIX: release v0.7.3 (tool release, no milestone scope) from main, carrying with-device 0.5.0 and the Renode model asset. NOT verified here: that the bench hosts' 0.5.0 binaries are bit-identical to what the release builds; replacing them with the signed asset is the follow-up."
+    fields:
+      detected-by: "jess loop queued feature #3, checking the instrument (release assets vs layer inspect) before filing upstream"
+      discovered-at: 2026-10-29
+      severity: minor
+      triage-status: resolved
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T12:46:40Z
