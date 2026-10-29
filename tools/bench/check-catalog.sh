@@ -205,7 +205,14 @@ preflight || { echo "CATALOG FAIL"; exit 1; }
 if [ "${1:-}" = "--self-test" ]; then
   echo "== negative controls: every assertion must be observed to FAIL =="
   t=$(mktemp -d)
-  sed 's/^  pixhawk-6xrt:/  pixhawk-6xrt-typo:/' "$REG" > "$t/reg.yaml"
+  # Rename the registry's FIRST device, whatever it is. This used to rename `pixhawk-6xrt` by
+  # literal; once that entry left the registry (AFD-147) the sed matched nothing, the copy was
+  # identical to the original, and the control tested the real file. Assert the copy DIFFERS.
+  first=$(python3 -c 'import sys,yaml; print(sorted(yaml.safe_load(open(sys.argv[1]))["devices"])[0])' "$REG")
+  sed "s/^  ${first}:/  ${first}-typo:/" "$REG" > "$t/reg.yaml"
+  if cmp -s "$REG" "$t/reg.yaml"; then
+    echo "  NC1 FAILED: the injection did not change the registry — the control would be vacuous"; rm -rf "$t"; exit 1
+  fi
   if run_check "$CAT" "$t/reg.yaml" >/dev/null 2>&1; then
     echo "  NC1 FAILED: an unknown registry name did not trip the check"; rm -rf "$t"; exit 1
   fi

@@ -9368,3 +9368,63 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-29T12:46:40Z
+
+  - id: AFD-147
+    type: ai-found-defect
+    title: "with-device GRANTED a pixhawk-6xrt claim on a Mac with no board attached: the committed registry is read CWD-relatively on every host (jess#308)"
+    status: resolved
+    description: "jess#308 reported that tools/bench/devices.yaml registers pixhawk-6xrt while the board is on a Pi bench host. MEASURED: on this Mac ioreg shows no PX4 FMU and /dev/cu.usbmodem01 does not exist; 'with-device pixhawk-6xrt -- …' run from the root of a jess checkout was GRANTED (exit 0, WITH_DEVICE_CLAIM=pixhawk-6xrt), a lock over nothing that excludes nobody on the Pi where the vehicle is. From / the same command refuses (exit 2): the Mac's ~/.config registry does not list it. MECHANISM, from with-device's registry_search_path: ./bench-devices.yaml, then ./tools/bench/devices.yaml, then ~/.config/pulseengine/bench-devices.yaml. The second is relative to the CURRENT DIRECTORY, so the committed file becomes the registry of any host whenever with-device runs from a jess checkout. FIX HERE: the entry is removed (as AFD-129 removed nucleo-g474re); re-measured: the same claim now exits 2 'UNKNOWN DEVICE', and a registered name (selftest-device) is still granted. check-catalog.sh NC1 renamed pixhawk-6xrt by literal; with the entry gone that sed would match nothing and the control would test the real file, so NC1 now renames the registry's first device and asserts the copy differs. ALSO MEASURED, not fixed (host files outside the repo): the Mac's own ~/.config registry lists stlink-v3 (serial 003B001A…, the probe AFD-129 placed on bench-host-B) and esp-jtag (303a:1001), and system_profiler shows 0 ST and 0 Espressif USB devices: both entries are vacuous too. Nothing checks presence at claim time; #308's 'match: VID:PID + serial before granting' is the mechanical fix and is with-device code (follow-up)."
+    fields:
+      detected-by: jess#308 (claim-free registry/host audit), confirmed by a claim on this Mac
+      discovered-at: 2026-10-30
+      severity: minor
+      triage-status: resolved
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T23:51:40Z
+
+  - id: AFD-148
+    type: ai-found-defect
+    title: "with-device --status is not read-only: it claims every lock to probe it and OVERWRITES each .holder file, erasing who last held the device"
+    status: open
+    description: "MEASURED on the vehicle host: after three 'with-device --status' calls over ssh (used as a read-only check), all 7 .holder files in /var/tmp/pulseengine-bench carried the timestamp of those calls (mtime 00:49 local). scan_status() calls try_claim_outcome(dev, 'status probe', …) for every *.lock in the lockdir, and a successful probe writes the holder record. So the one trace of the last real claim (what jess#307 wants to keep as history) is destroyed by the command an operator uses to look. Also measured: --status enumerates LOCK FILES, not the registry, so it lists stale September locks (stlink-v1, stlink-v1-f100) for boards no longer on that host and omits a registered device that was never claimed (ft231x). Fix belongs in with-device: probe without writing the holder (or restore it), and report registered-but-never-claimed and claimed-but-unregistered separately."
+    fields:
+      detected-by: "jess loop investigating jess#308: ls of fourpi's lockdir after --status calls"
+      discovered-at: 2026-10-30
+      severity: minor
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T23:51:41Z
+
+  - id: AFD-149
+    type: ai-found-defect
+    title: "jess's merge gate was EMPTY: the ruleset required zero status checks, so CI never mechanically blocked a merge"
+    status: resolved
+    description: "Before tagging v0.7.3, the release procedure asserts the protected branch's required checks are non-empty. MEASURED: ruleset temper-default-branch-protection (17279788) carried deletion, non_fast_forward, required_signatures and pull_request, and NO required_status_checks; GET /rules/branches/main confirmed it. Every 'merge only on green' in this campaign was discipline, not a gate. WHAT SHIPPED BEHIND IT: of 56 commits on main since v0.7.2, 52 have a successful push CI run; 2 were cancelled (superseded by later green runs); e92aa99 (2026-10-01) failed rivet validate; b810466 (#304, meld 0.65.1) failed the Renode smoke job on main although its PR run passed (AFD-150). FIX (2026-10-29, maintainer-approved): required_status_checks added to the ruleset with all 9 CI job names and strict=true (the branch must be up to date, which is the loop's baseRefOid == main rule made mechanical); re-read from /rules/branches/main: strict=true n=9; still present on 2026-10-30. Not yet proven potent: no PR has been observed BLOCKED by it. The ruleset name suggests it is managed by temper and could be re-applied without the checks; re-check each tick."
+    fields:
+      detected-by: release-execution step 5 invariant check before tagging v0.7.3
+      discovered-at: 2026-10-30
+      severity: minor
+      triage-status: resolved
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T23:51:41Z
+
+  - id: AFD-150
+    type: ai-found-defect
+    title: "The Renode smoke job's Mono negative control is nondeterministic: NC1 expected exit 3, got rc=1, then an exit 134 abort"
+    status: open
+    description: "Main push run 40664674271 (b810466, #304) failed 'Renode RT1176 smoke' with 'NC0 the real archive -> PASS', then 'NC1 expected an exit-3 failure, got rc=1' and 'FAIL: unexpected exit 134: SMOKE FAIL: boot line not seen within 2 s'. The same commit's PR run passed, and every later main run passed both runtimes. 134 is SIGABRT. The failure path is the boot-failure exit (Environment.Exit(3)) on the legacy Mono runtime, where rt1176-smoke-check.resc already documents that exit codes are unreliable on load errors. DENOMINATOR: 1 run with this signature of the 12 CI runs since 2026-10-28 whose logs could be read for it; 3 other Renode failures in that window were PR iterations on #299 whose logs no longer carry a signature. With the job now REQUIRED (AFD-149), a recurrence blocks a merge until re-run. Not yet diagnosed; not yet reproduced locally (local Renode is the .NET build)."
+    fields:
+      detected-by: the AFD-149 audit of main's push runs
+      discovered-at: 2026-10-30
+      severity: minor
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-29T23:51:41Z
