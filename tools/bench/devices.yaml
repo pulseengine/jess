@@ -40,15 +40,19 @@ devices:
   # AND THE GAP THIS EXPOSED: nothing verifies presence. check-catalog.sh asserts registry names
   # resolve in the catalogue; it does not assert a registered device is attached. Every device here
   # carries an `identify:` command precisely so presence COULD be checked, and no gate runs one.
-  pixhawk-6xrt:
-    what: Holybro Pixhawk 6X-RT flight controller (i.MX RT1176)
-    usb: PX4 FMU v6XRT.x, idVendor 13891
-    tty: /dev/cu.usbmodem01
-    identify: "ioreg -p IOUSB -l -w 0 | grep 'PX4 FMU'"
-    note: >
-      Vehicle. Anything that WRITES — ISP entry, SDP, flash — needs this claim AND operator
-      consent. SO DOES READING THE TTY: see the claim rule below. An earlier version of this
-      file exempted read-only telemetry and that was WRONG (gale#356).
+  # REMOVED 2026-10-30 (AFD-147, jess#308): `pixhawk-6xrt` is NOT on this Mac. It is on the Pi bench
+  # host that carries its MCU-Link, and that host's own registry already registers it (with
+  # `mcu-link` and `ft231x`). Measured: ioreg shows no PX4 FMU here and /dev/cu.usbmodem01 does
+  # not exist, yet `with-device pixhawk-6xrt -- …` run from a jess checkout was GRANTED (exit 0):
+  # a lock over nothing that excludes nobody on the host where the vehicle actually is.
+  #
+  # WORSE THAN AFD-129's CASE, because of WHERE this file is read: with-device searches
+  # ./bench-devices.yaml, then ./tools/bench/devices.yaml, then ~/.config. The second entry is
+  # relative to the CURRENT DIRECTORY, so this committed file becomes the registry of ANY host
+  # whenever with-device runs from the root of a jess checkout. A device listed here is
+  # "registered" everywhere jess is checked out. Removing the entry closes this instance; the
+  # CWD-relative search path and the missing presence check at claim time are the mechanism,
+  # and they are with-device code (follow-up).
   selftest-device:
     what: SYNTHETIC — not real hardware. Used only by `with-device --self-test`.
     note: >
