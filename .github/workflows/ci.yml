@@ -121,7 +121,7 @@ jobs:
     name: rivet validate (artifact spine)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: jess
       # gale + relay externals are declared as git-links in rivet.yaml (pinned in
@@ -329,7 +329,7 @@ jobs:
         os: [ubuntu-latest, macos-14]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: build + self-test
         working-directory: tools/bench/with-device
         run: |
@@ -378,7 +378,7 @@ jobs:
     name: spar model (Pixhawk 6X-RT)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Fetch pinned spar release
         run: |
           set -euo pipefail
@@ -410,7 +410,7 @@ jobs:
     name: mav_bench oracle (REQ-PIX-010)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: mav_bench oracle over the committed sample
         run: python3 tools/bench/test_mav_bench.py
 
@@ -420,7 +420,7 @@ jobs:
     name: Renode RT1176 smoke (REQ-PIX-005)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install Renode (pinned portable)
         run: |
           set -euo pipefail
@@ -552,7 +552,7 @@ jobs:
     name: on-target cascade oracles (TEST-PIX-032 / TEST-PIX-033)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: arm-none-eabi toolchain
         run: |
           set -euo pipefail
@@ -846,7 +846,7 @@ jobs:
     name: component oracles (composition, dispatch, timer)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: rust wasm32 target
         run: rustup target add wasm32-unknown-unknown
       - name: wasm-tools / wac / wasmtime (pinned to the versions used locally)
@@ -931,7 +931,7 @@ jobs:
     name: scry sound-analysis (REQ-PIX-018 / TEST-PIX-022)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Fetch pinned meld release
         run: |
           set -euo pipefail
