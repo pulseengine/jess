@@ -90,7 +90,23 @@ if [ "${1:-}" = "--self-test" ]; then
   ctl() { rc=0; RENODE="$RENODE" "$me" "$1" > "$tmp/o" 2>&1 || rc=$?; echo $rc; }
   r=$(ctl "$good"); [ "$r" = 0 ] && echo "NC0 the real archive                         -> PASS (exit 0)  [positive control]" || { echo "NC0 expected 0 got $r"; cat "$tmp/o"; exit 1; }
   mutate "$tmp/nc1.tgz" "p=d+'/rt1176-smoke-check.resc'; s=open(p).read().replace('JESS-RT1176 boot OK\" \"','JESS-RT1176 NEVER PRINTED\" \"'); open(p,'w').write(s)"
-  r=$(ctl "$tmp/nc1.tgz"); [ "$r" = 1 ] && grep -q 'exit 3' "$tmp/o" && echo "NC1 check asserts a line never printed       -> FAIL, exit 3  [the assertion inside the .resc bites]" || { echo "NC1 expected an exit-3 failure, got rc=$r"; cat "$tmp/o"; exit 1; }
+  # NC1 — the boot assertion bites. On .NET the .resc exits 3, exactly. On MONO the same
+  # Environment.Exit(3) sometimes ABORTS (exit 134, SIGABRT) AFTER the verdict line is printed:
+  # measured twice in CI (AFD-150: 2 of 13 runs), each time with 'SMOKE FAIL: boot line not seen'
+  # in the output and verify.sh rejecting (rc=1). The assertion bit; the exit channel is what
+  # Mono garbles, exactly as the .resc documents for load errors. So, as in NC2, the Mono allowance
+  # is granted only to a DETECTED Mono, and it still requires the rejection AND the FAIL line AND
+  # no PASS line — it accepts 3 or 134 as the code, nothing else. .NET keeps the exact exit 3.
+  rt=$(runtime_of "$RENODE")
+  r=$(ctl "$tmp/nc1.tgz")
+  if [ "$r" = 1 ] && grep -q 'exit 3' "$tmp/o"; then
+    echo "NC1 check asserts a line never printed       -> FAIL, exit 3  [the assertion inside the .resc bites]"
+  elif [ "$r" = 1 ] && [ "$rt" = mono ] && grep -q 'unexpected exit 134' "$tmp/o" \
+       && grep -q 'SMOKE FAIL: boot line not seen' "$tmp/o" && ! grep -q "$PASS_LINE" "$tmp/o"; then
+    echo "NC1 check asserts a line never printed       -> FAIL, verdict printed then exit 134  [mono aborted in Exit(3) — AFD-150; the assertion still bit]"
+  else
+    echo "NC1 expected the boot assertion to bite (exit 3, or on Mono the FAIL line then exit 134); runtime=$rt rc=$r"; cat "$tmp/o"; exit 1
+  fi
   mutate "$tmp/nc2.tgz" "p=d+'/rt1176-smoke-check.resc'; s=open(p).read().replace('\$ORIGIN/','@hardware/renode/'); open(p,'w').write(s)"
   # NC2 — a LOAD error. On EVERY runtime verify.sh must REJECT it (rc=1). On .NET the .resc
   # itself exits 4. On Mono it exits 0 without the PASS line (the documented limitation), and
