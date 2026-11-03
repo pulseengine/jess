@@ -9428,3 +9428,18 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-10-29T23:51:41Z
+
+  - id: AFD-151
+    type: ai-found-defect
+    title: "hardware/renode/tcb-link no longer builds: synth refuses its --shadow-stack-size on a module with no linear memory, and nothing runs the script"
+    status: open
+    description: "tcb-link is the DD-018 evidence ('TCB-link EXECUTES on RT1176', 5c11eaa, 2026-07-11). Its build.sh compiles seam.wat with 'synth compile -t cortex-m7dp --relocatable --native-pointer-abi --shadow-stack-size 1024'. MEASURED: under BOTH synth 0.88.0 (the pin until today) and 0.89.0 that compile exits non-zero with 'Error: --shadow-stack-size: no __synth_wasm_data/__synth_globals relocation reaches the native-pointer region (linear memory 0 B), so there is no reservation to shrink — refusing rather than silently ignoring the flag. VCR-MEM-001/#739.' So build.sh (set -euo pipefail) stops there, and run-oracle.sh, its only caller, cannot produce an image. Nothing in CI invokes either (grep over .github, scripts, tools, hardware: only run-oracle.sh). The synth refusal is correct; jess's flag is the stale part. Dropping --shadow-stack-size alone makes the 0.88.0 compile succeed (exit 0, the one undefined symbol is tcb_seed, as the seam intends). NOT DONE: re-running the link and the Renode oracle after that change, which is what would restore the DD-018 claim; until then the claim rests on a script that does not build. Same recurring shape as AFD-137/141: a check that nothing runs breaks without going red."
+    fields:
+      detected-by: the synth 0.88.0 -> 0.89.0 differential over every lowering jess does, which replays each script's synth command
+      discovered-at: 2026-11-04
+      severity: minor
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-03T23:49:25Z
