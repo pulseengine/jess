@@ -54,7 +54,7 @@ jobs:
           - { os: macos-14,        target: aarch64-apple-darwin }
           - { os: macos-14,        target: x86_64-apple-darwin }
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - name: rust target
@@ -85,7 +85,7 @@ jobs:
           cp ../devices.yaml "/tmp/pkg/$NAME/devices.yaml.example"
           tar czf "/tmp/${NAME}.tar.gz" -C /tmp/pkg "$NAME"
           ls -l "/tmp/${NAME}.tar.gz"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pkg-${{ matrix.target }}
           path: /tmp/with-device-*.tar.gz
@@ -105,7 +105,7 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag || github.ref }}
       - name: require ci.yml's model step to have succeeded on this exact sha
@@ -126,10 +126,10 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: pkg-*
           path: artifacts
@@ -200,7 +200,7 @@ jobs:
       # An in-toto SLSA v1 statement per archive, signed keyless via Sigstore and recorded in
       # Rekor. Verify with `gh attestation verify <file> --repo pulseengine/jess`.
       - name: Generate SLSA build provenance
-        uses: actions/attest-build-provenance@v4
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
           subject-path: "release-assets/*.tar.gz"
 
@@ -214,7 +214,7 @@ jobs:
       #     --bundle SHA256SUMS.txt.cosign.bundle \
       #     SHA256SUMS.txt
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
         with:
           cosign-release: 'v2.4.1'
       - name: Sign SHA256SUMS with cosign (keyless OIDC)
@@ -275,7 +275,7 @@ jobs:
       id-token: write
     steps:
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
         with:
           cosign-release: 'v2.4.1'
       - name: Download the published release and verify it
