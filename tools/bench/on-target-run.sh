@@ -59,17 +59,39 @@ DEVS="${DEVS:-pixhawk-6xrt mcu-link}"
 DEV="${DEV:-}"            # back-compat: DEV=x is honoured as a single-device DEVS
 [ -n "$DEV" ] && DEVS="$DEV"
 TTY="${TTY:-/dev/ttyACM0}"
-OOCD_CFG="${OOCD_CFG:-/tmp/rt1176-dapread.cfg}"
-SRST_CFG="${SRST_CFG:-/tmp/rt1176-srst.cfg}"
+OOCD_CFG="${OOCD_CFG:-$D/openocd/rt1176-swd.cfg}"
+SRST_CFG="${SRST_CFG:-$D/openocd/rt1176-srst.cfg}"
 SETTLE="${SETTLE:-3}"
 RUNFOR_MS="${RUNFOR_MS:-3000}"
-SENTINEL="1e55d09e"            # the chain image's completion marker, at CHAIN+20
+# WHICH PARKING LAYOUT TO READ. The load procedure is the same for every jess image; what differs
+# is where the image parks its results and which word proves it finished.
+#   chain (default)  the cascade chain image: 5 words at 0x20011000, 6 at 0x20011100, sentinel
+#                    1e55d09e as the 6th CHAIN word.
+#   ekf              the estimator image (cascade-invoke/boot-ekf.S): 31 words at 0x20011400,
+#                    sentinel 1e55e4f0 as word 30. This script does NOT judge those words; it
+#                    writes them to $CAPTURE, bound to the ELF's sha256, and
+#                    run-ekf-oracle.sh WORDS_DIR=... judges them against wasmtime with the same
+#                    code that judges the emulator.
+READ="${READ:-chain}"
+case "$READ" in
+  chain) SENTINEL="1e55d09e" ;;
+  ekf)   SENTINEL="1e55e4f0"; EKF_BASE=0x20011400; EKF_WORDS=31 ;;
+  *)     printf 'FAIL: READ=%s is not one of: chain ekf\n' "$READ" >&2; exit 1 ;;
+esac
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
-[ $# -ge 1 ] || fail "usage: on-target-run.sh <image.elf> [--restore]"
+[ $# -ge 1 ] || fail "usage: [READ=chain|ekf] [CAPTURE=<file>] on-target-run.sh <image.elf> [--restore]"
 ELF="$1"; shift
 RESTORE=0; for a in "$@"; do [ "$a" = "--restore" ] && RESTORE=1; done
 [ -f "$ELF" ] || fail "image not found: $ELF"
+if [ "$READ" = "ekf" ]; then
+  CAPTURE="${CAPTURE:-$(basename "$ELF" .elf).words}"
+  # Remove a previous capture FIRST, so a run that fails below cannot leave an older run's words
+  # under this name for the oracle to read as this run's.
+  rm -f "$CAPTURE"
+  ELF_SHA="$( (sha256sum "$ELF" 2>/dev/null || shasum -a 256 "$ELF") | awk '{print $1}')"
+  [ -n "$ELF_SHA" ] || fail "could not hash $ELF"
+fi
 
 # ── (1) THE INTERLOCK, ASSERTED NOT ASSUMED ───────────────────────────────────────────────────
 # A script that touches hardware without a claim races another agent silently. This makes that
@@ -115,8 +137,36 @@ sleep "$SETTLE"
 # count is reported so a reader can see the procedure is not yet reliable (the cause is unknown —
 # see the note at the top), rather than having that hidden by a clean-looking pass.
 ATTEMPTS="${ATTEMPTS:-3}"
-OUT="$(mktemp)"; trap 'rm -f "$OUT"' EXIT
+# --restore RUNS ON EVERY EXIT FROM HERE ON, not only after a clean read. Measured 2026-11-17: the
+# init-skipped ekf control locked the M7 up (double fault), the readout failed, the script exited
+# through `fail`, and PX4 was left down although --restore was given. From this point the board
+# may hold jess's image, so a failure must not skip the restore. Before this point nothing was
+# loaded and the board is left alone.
+restore_px4() {
+  echo "   === restoring PX4 via nRST (a core-only reset is NOT sufficient) ==="
+  if [ ! -f "$SRST_CFG" ]; then
+    echo "FAIL: no SRST config at $SRST_CFG — cannot restore; the board is left holding jess's
+   image in RAM. Power-cycle it." >&2; return 1
+  fi
+  timeout 45 openocd -f "$SRST_CFG" -c "init" -c "reset run" -c "shutdown" >/dev/null 2>&1
+  for i in $(seq 1 12); do
+    sleep 5
+    case "$(lsusb -d 3643:001d 2>/dev/null)" in
+      *"PX4 FMU"*) echo "   PX4 app back up after ~$((i*5))s"; return 0;;
+    esac
+  done
+  echo "FAIL: PX4 did NOT come back within 60s. Check lsusb: it may be sitting in the bootloader
+   ('PX4 BL'), which chains to the app on its own, or it may need a power cycle." >&2
+  return 1
+}
+OUT="$(mktemp)"
+trap 'rc=$?; rm -f "$OUT"; if [ "$RESTORE" = "1" ]; then restore_px4 || rc=1; fi; exit $rc' EXIT
 attempt=0
+if [ "$READ" = "ekf" ]; then
+  RD=( -c "mdw $EKF_BASE $EKF_WORDS" )
+else
+  RD=( -c "mdw 0x20011000 5" -c "mdw 0x20011100 6" )
+fi
 while : ; do
 attempt=$((attempt+1))
 timeout 120 openocd -f "$OOCD_CFG" \
@@ -126,8 +176,7 @@ timeout 120 openocd -f "$OOCD_CFG" \
   -c "reg sp 0x20040000" -c "reg pc 0x8" \
   -c "resume" -c "sleep $RUNFOR_MS" -c "halt" \
   -c "reg pc" \
-  -c "mdw 0x20011000 5" \
-  -c "mdw 0x20011100 6" \
+  "${RD[@]}" \
   -c "shutdown" > "$OUT" 2>&1
 rc=$?
 
@@ -148,12 +197,34 @@ if grep -q 'external reset detected' "$OUT" && ! grep -q "$SENTINEL" "$OUT"; the
 fi
 break
 done
-[ "$attempt" -gt 1 ] && echo "   NOTE: succeeded on attempt $attempt of $ATTEMPTS — the procedure is
+[ "$attempt" -gt 1 ] && echo "   NOTE: attempt $attempt of $ATTEMPTS did not reset mid-run (its result is judged below) — the procedure is
    NOT yet reliable and the cause is unestablished. Do not read a single clean run as stability."
 
+PC="$(grep -oE '^pc \(/32\): 0x[0-9a-f]+' "$OUT" | tail -1 | awk '{print $3}')"
+
+if [ "$READ" = "ekf" ]; then
+  # openocd prints `mdw` as lines of up to 8 words, each prefixed by its address. Take every word
+  # on the lines in [EKF_BASE, EKF_BASE + 4*EKF_WORDS) and require EXACTLY EKF_WORDS of them.
+  W=( $(grep -oE '^0x200114[0-9a-f]{2}: ([0-9a-f]{8} ?)+' "$OUT" | cut -d: -f2-) )
+  [ "${#W[@]}" -eq "$EKF_WORDS" ] \
+    || { sed 's/^/     /' "$OUT" >&2; fail "read ${#W[@]} words from $EKF_BASE, not $EKF_WORDS — could not read the parking area"; }
+  if [ "${W[30]}" != "$SENTINEL" ]; then
+    echo "   WORDS ${W[*]}"
+    fail "completion sentinel is '${W[30]}', not $SENTINEL — the image DID NOT FINISH, so these
+   words are not a result. No capture written."
+  fi
+  {
+    echo "sha256 $ELF_SHA"
+    echo "origin rt1176-silicon swd-load-to-ram attempt=$attempt/$ATTEMPTS pc=$PC"
+    echo "${W[*]}"
+  } > "$CAPTURE"
+  echo "   halted at PC $PC"
+  echo "   sentinel $SENTINEL present — the image ran to completion"
+  echo "   $EKF_WORDS words from $EKF_BASE written to $CAPTURE (bound to sha256 $ELF_SHA)"
+  echo "   judge them with: WORDS_DIR=<dir> hardware/renode/cascade-invoke/run-ekf-oracle.sh"
+else
 RES="$(grep -oE '^0x20011000: ([0-9a-f]{8} ?){5}' "$OUT" | head -1 | cut -d: -f2-)"
 CHN="$(grep -oE '^0x20011100: ([0-9a-f]{8} ?){6}' "$OUT" | head -1 | cut -d: -f2-)"
-PC="$(grep -oE '^pc \(/32\): 0x[0-9a-f]+' "$OUT" | tail -1 | awk '{print $3}')"
 [ -n "$RES" ] && [ -n "$CHN" ] || { sed 's/^/     /' "$OUT" >&2; fail "could not read the parking area"; }
 
 # ── (4) THE SENTINEL IS THE ONLY PROOF OF COMPLETION ──────────────────────────────────────────
@@ -170,23 +241,13 @@ echo "   halted at PC $PC (0x52 = the spin loop at the end of _reset)"
 echo "   RESULT 0x20011000 (ret-offset + 4 torque words): $RES"
 echo "   CHAIN  0x20011100 (pwm-offset + 4 pwm + sentinel): $CHN"
 echo "   sentinel $SENTINEL present — the image ran to completion"
+fi
 
 # ── (5) RESTORE, ONLY IF ASKED ────────────────────────────────────────────────────────────────
 # Not the default: a caller running several images back to back should not pay a ~20 s reboot
-# between them. But leaving the vehicle with jess's image in RAM is not an end state.
-if [ "$RESTORE" = "1" ]; then
-  echo "   === restoring PX4 via nRST (a core-only reset is NOT sufficient) ==="
-  [ -f "$SRST_CFG" ] || fail "no SRST config at $SRST_CFG — cannot restore; the board is left
-   holding jess's image in RAM. Power-cycle it."
-  timeout 45 openocd -f "$SRST_CFG" -c "init" -c "reset run" -c "shutdown" >/dev/null 2>&1
-  for i in $(seq 1 12); do
-    sleep 5
-    case "$(lsusb -d 3643:001d 2>/dev/null)" in
-      *"PX4 FMU"*) echo "   PX4 app back up after ~$((i*5))s"; exit 0;;
-    esac
-  done
-  fail "PX4 did NOT come back within 60s. Check lsusb: it may be sitting in the bootloader
-   ('PX4 BL'), which chains to the app on its own, or it may need a power cycle."
-fi
-echo "   NOTE: jess's image is still in RAM and PX4 is NOT running. Re-run with --restore, or
+# between them. But leaving the vehicle with jess's image in RAM is not an end state. With
+# --restore it runs from the EXIT trap above, so it also runs when a step after the load fails.
+if [ "$RESTORE" != "1" ]; then
+  echo "   NOTE: jess's image is still in RAM and PX4 is NOT running. Re-run with --restore, or
    reset the board, before leaving it."
+fi

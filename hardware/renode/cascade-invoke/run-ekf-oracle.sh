@@ -38,11 +38,30 @@ N="${N:-16}"                      # MUST match EKF_N in boot-ekf.S; asserted bel
 RUNFOR="${RUNFOR:-4.0}"
 WORDS=31                          # 1 trip count + 14 tick1 + 14 tickN + fold + sentinel
 
+# WHERE THE WORDS COME FROM. By default this script runs each image on Renode. With
+# WORDS_DIR=<dir> it runs nothing: it reads <dir>/{ekf,ekf_nc1,ekf_nc2}.words, as written by
+# tools/bench/on-target-run.sh READ=ekf on the real RT1176, and judges them with the SAME code
+# below. Each capture names the sha256 of the ELF that produced it; a capture whose hash is not
+# this tree's ELF is REFUSED, so words from another build cannot pass for this one. Its
+# `origin` line is printed in the Result, so a Renode capture cannot be reported as silicon.
+# DUMP_WORDS=<dir> (Renode mode only) writes the Renode words in the same format; CI uses it to
+# build the planted bad captures in tools/ci/test-ekf-words-dir.sh.
+WORDS_DIR="${WORDS_DIR:-}"
+DUMP_WORDS="${DUMP_WORDS:-}"
+
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 RESCDIR="$(mktemp -d)"
 RESC="$RESCDIR/oracle.resc"
 trap 'rm -rf "$RESCDIR"' EXIT
-[ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
+sha() { (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | awk '{print $1}'; }
+if [ -n "$WORDS_DIR" ]; then
+  [ -n "$DUMP_WORDS" ] && fail "WORDS_DIR and DUMP_WORDS together would copy a capture into itself"
+  [ -d "$WORDS_DIR" ] || fail "WORDS_DIR=$WORDS_DIR is not a directory"
+  WHERE="the target named by the captures' origin lines"
+else
+  [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
+  WHERE="emulated RT1176 Cortex-M7 (Renode)"
+fi
 [ -f "$E" ]   || fail "ekf image missing — run build.sh first"
 [ -f "$MOD" ] || fail "module missing — run build.sh first"
 
@@ -73,6 +92,37 @@ done
 echo "   ekf.elf is newer than harness.c, boot-ekf.S, link.ld and the module"
 
 read_ekf() {   # $1 = elf ; echoes $WORDS hex words
+  if [ -n "$WORDS_DIR" ]; then read_capture "$1"; return; fi
+  local w; w="$(read_renode "$1")"
+  if [ -n "$DUMP_WORDS" ]; then
+    mkdir -p "$DUMP_WORDS"
+    { echo "sha256 $(sha "$1")"
+      echo "origin renode $("$RENODE" --version 2>/dev/null | head -1 | awk '{print $2}') pixhawk6xrt.repl"
+      echo "$w"; } > "$DUMP_WORDS/$(basename "$1" .elf).words"
+  fi
+  echo "$w"
+}
+
+# A capture is three lines: `sha256 <hex>`, `origin <text>`, then the words. Anything else is
+# refused rather than guessed at. Called in a command substitution, so `fail` here only ends the
+# subshell; it prints nothing on stdout, and the word-count check at each call site then stops
+# the run.
+read_capture() {
+  local f="$WORDS_DIR/$(basename "$1" .elf).words"
+  [ -f "$f" ] || fail "no capture $f — 'could not run' on the target, not a result"
+  local want got origin
+  want="$(sha "$1")"
+  got="$(sed -n '1s/^sha256 //p' "$f")"
+  [ "$got" = "$want" ] || fail "$f was captured from an ELF with sha256 '$got', but this tree's
+   $(basename "$1") is $want — those words are not this image's"
+  origin="$(sed -n '2s/^origin //p' "$f")"
+  [ -n "$origin" ] || fail "$f has no origin line — where these words executed is unknown"
+  echo "   $(basename "$f"): origin $origin" >&2
+  # openocd prints bare hex; Renode prints 0x-prefixed. Accept either, emit 0x-prefixed.
+  sed -n '3p' "$f" | tr ' ' '\n' | grep -E '^(0x)?[0-9a-fA-F]{1,8}$' | sed -E 's/^(0x)?/0x/' | tr '\n' ' '
+}
+
+read_renode() {   # $1 = elf ; echoes $WORDS hex words
   {
     echo "using sysbus"
     echo 'mach create "tp36"'
@@ -102,7 +152,7 @@ print(" ".join(out))'
 
 norm() { printf '0x%08X' "$1"; }
 
-echo "== 1. run $N estimator ticks on emulated RT1176 =="
+echo "== 1. $N estimator ticks on $WHERE =="
 W=( $(read_ekf "$E") )
 [ "${#W[@]}" -eq "$WORDS" ] || fail "expected $WORDS words from the ekf region, got ${#W[@]} (${W[*]:-none})"
 
@@ -188,6 +238,11 @@ echo "   perturbed-gy control completed, folded $nc1_f != $g_f  (a wrong-but-pla
 NC2="$SCRATCH/invoke/ekf_nc2.elf"
 [ -f "$NC2" ] || fail "ekf_nc2.elf missing — build.sh must build the controls"
 W2=( $(read_ekf "$NC2") )
+# AN EMPTY READ IS NOT A DIFFERENT FOLD. Without this check an unreadable control B left nc2_f
+# empty, "" != the baseline fold, and the run printed Result: PASS with control B never
+# observed (found 2026-11-17 when the init-skipped image locked up on the real RT1176 and
+# left no capture). Control A always had this check; control B did not.
+[ "${#W2[@]}" -eq "$WORDS" ] || fail "control B returned ${#W2[@]} words, not $WORDS — control B was NOT observed"
 nc2_f="$(norm "${W2[29]}")"
 if [ "$nc2_f" = "$g_f" ]; then
   fail "control B folded identically with the embedder init skipped — the promises are not load-bearing"
@@ -195,7 +250,8 @@ fi
 echo "   init-skipped control folded $nc2_f != $g_f (LIVENESS ONLY — attributes nothing; see note)"
 
 echo
-echo "Result: PASS — falcon's ESTIMATOR ran $N ticks on emulated RT1176 Cortex-M7 and tracked"
+[ -n "$WORDS_DIR" ] && WHERE="$(sed -n '2s/^origin //p' "$WORDS_DIR/ekf.words")"
+echo "Result: PASS — falcon's ESTIMATOR ran $N ticks on $WHERE and tracked"
 echo "        the wasmtime reference bit-exact on all 14 state words at tick 1 and tick $N,"
 echo "        and across a fold of all $((14 * N)) state words. The estimator integrates"
 echo "        (tick1 != tickN), and perturbing ONE of its six live inputs moves the fold."
