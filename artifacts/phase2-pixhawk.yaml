@@ -1558,8 +1558,9 @@ artifacts:
                  silicon, so the oracle run over the silicon captures exits 1 at control B
                  (AFD-153). It attributes nothing either way; control A carries the attribution.
 
-      NOT CLAIMED: stability. 2 of the 4 load attempts reset mid-run with no sentinel, the
-      intermittent the runner already documents with cause unknown. Only one run per image.
+      NOT CLAIMED: stability. 7 load attempts in all (ekf 2, ekf_nc1 1, ekf_nc2 2 in each of 2
+      runs): 3 reset mid-run with no sentinel, the intermittent the runner already documents with
+      cause unknown; 2 were the ekf_nc2 lockups; 2 completed. One completed run per image.
     fields:
       test-method: manual-test
       preconditions:
