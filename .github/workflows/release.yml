@@ -49,10 +49,10 @@ jobs:
           # unexecuted. aarch64-linux — the Raspberry Pi target — was previously
           # cross-built with its self-test skipped; `ubuntu-24.04-arm` is free for public
           # repos and removes that gap rather than documenting it.
-          - { os: ubuntu-latest,   target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04,   target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: macos-14,        target: aarch64-apple-darwin }
-          - { os: macos-14,        target: x86_64-apple-darwin }
+          - { os: macos-15,        target: aarch64-apple-darwin }
+          - { os: macos-15,        target: x86_64-apple-darwin }
     steps:
       - uses: actions/checkout@v7
         with:
@@ -100,7 +100,7 @@ jobs:
   # step succeeded on EXACTLY the tagged commit, and the release does not proceed otherwise.
   model-gate:
     name: Renode model booted on this commit (from ci.yml's run)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
@@ -117,7 +117,7 @@ jobs:
   publish:
     name: sign + publish
     needs: [build, model-gate]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # Release-asset upload needs contents: write. Keyless cosign signing and the SLSA
       # build-provenance attestation both need an OIDC token; the attestation also needs
@@ -269,7 +269,7 @@ jobs:
   verify:
     name: verify the published release as a consumer
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
