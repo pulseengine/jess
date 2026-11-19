@@ -1715,3 +1715,22 @@ artifacts:
     links:
       - type: satisfies
         target: REQ-PIX-007
+
+  - id: DD-029
+    type: design-decision
+    title: "Ladder rungs: r0 (on-target differential) beside the north star's three (hil, real-drone, flight); a rung not run is fail with ran false"
+    status: draft
+    release: v0.8.0
+    description: >
+      Proposed, awaiting the owner. The north star's O1 indicator names three rungs; jess#264
+      numbers four. jess reports r0 beside the three and never counts it as one of them. A rung
+      that did not run is recorded as fail with ran false and a reason (the O1 guard: a skipped
+      hardware run counts as a failure). OPEN for the owner: does lockstep sensor injection over
+      SWD, with the cascade on the real RT1176, fill the hil rung, or is it a processor-in-the-loop
+      step below it? Each entry records cascade identity and whether it ran under gust.
+    tags: [ladder, north-star-o1, owner-decision]
+    fields:
+      rationale: The O1 indicator is read by a script, so every rung needs a mechanical verdict; recording not-run as fail with a reason keeps "could not run" distinguishable from "answered no" without letting a skipped run read as a pass.
+    links:
+      - type: satisfies
+        target: REQ-PIX-023

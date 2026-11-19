@@ -1579,3 +1579,105 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-17T20:30:00Z
+
+  - id: REQ-PIX-023
+    type: requirement
+    title: "jess publishes a machine-readable ladder result per target and version, generated only from judged captures, where a rung that did not run is a fail with ran false"
+    status: draft
+    release: v0.8.0
+    description: >
+      Serves north-star O1. One record per (target, jess version): rungs r0 (on-target
+      differential), hil, real-drone, flight. Each entry: verdict pass|fail, ran true|false with a
+      reason, denominator (attempts, completed, words compared), image sha256, falcon and synth
+      versions, where it executed (rt1176-silicon | renode), cascade identity, under-gust yes|no,
+      capture date. Slots for synth's reach, execution-match and WCET numbers read "not reported
+      by jess". A generator writes the file from committed captures by re-running the existing
+      judges; it never takes a typed verdict, and refuses an emulator capture in a silicon rung.
+      Not-run is "fail, ran false" (the O1 guard), not a refusal. Plan: docs/plan-v0.8.0.md B1.
+    tags: [phase-2, ladder, north-star-o1, on-target, evidence]
+    fields:
+      category: functional
+    links:
+      - type: satisfies
+        target: FEATURE-014
+
+  - id: REQ-PIX-024
+    type: requirement
+    title: "Lockstep HIL rung: the lowered cascade on the real RT1176 is stepped tick by tick against the relay plant and compared with wasmtime in the same loop"
+    status: draft
+    release: v0.8.0
+    description: >
+      Serves north-star O1 (the hil rung). Lockstep, not real time: no timing claim follows.
+      Whether lockstep SWD injection fills the hil rung is DD-029's open question for the owner.
+      Pass needs: 2000 ticks, at least 3 runs, motor words bit-identical to wasmtime every tick,
+      a perturbed-input control that changes the trajectory, and a planted one-word output
+      difference that the comparator flags. Renode runs the loop first and stays labelled
+      emulator. Gated on TEST-PIX-040 (a loop around 3 of 5 stages is not this rung) and on relay's
+      plant being steppable from outside its harness (not verified). Plan: docs/plan-v0.8.0.md B4.
+    tags: [phase-2, ladder, hil, north-star-o1, relay-seam]
+    fields:
+      category: functional
+    links:
+      - type: satisfies
+        target: FEATURE-014
+
+  - id: TEST-PIX-038
+    type: test-spec
+    title: "Ladder generator self-test: genuine, pass-path, not-run and planted sets each give their stated result, N of N in CI"
+    status: draft
+    release: v0.8.0
+    description: >
+      Verifies REQ-PIX-023. Cases: the genuine silicon captures give r0's real verdict; a planted
+      all-pass set must give pass (so a generator hard-wired to fail is caught); tampered words
+      must give fail; a missing capture must give "fail, ran false", not an error; refusals for an
+      emulator origin in a silicon rung, a sha mismatch, a stale version, an absent sentinel and a
+      rung omitted from the output. Reports N of M and Result PASS|FAIL. The output validates
+      against a committed schema.
+    tags: [phase-2, ladder, gate-potency, planted-inputs]
+    fields:
+      test-method: automated-test
+    links:
+      - type: verifies
+        target: REQ-PIX-023
+
+  - id: TEST-PIX-039
+    type: test-spec
+    title: "R0 repeatable on silicon: 20 load attempts per image, a completion floor, and zero wrong answers"
+    status: draft
+    release: v0.8.0
+    description: >
+      Extends TEST-PIX-037. 3 images x 20 load-to-RAM attempts = 60, under both claims and the
+      disarmed gate. Pass: at least 10 of 20 complete per image, at least 3 completed runs per
+      image judged, every completed run matches wasmtime on tick 1, tick 16 and the fold, and the
+      oracle exits 0. Control B is replaced by a control that differs from the baseline in one
+      variable and completes on silicon; it is specified and its expected effect predicted
+      before any run. The nc2 double fault is recorded as its own finding. Any wrong word stops
+      the bet and outranks the release. Plan: docs/plan-v0.8.0.md B2.
+    tags: [phase-2, on-target, silicon, ladder, r0]
+    fields:
+      test-method: manual-test
+    links:
+      - type: verifies
+        target: REQ-PIX-011
+      - type: traces-to
+        target: TEST-PIX-037
+
+  - id: TEST-PIX-040
+    type: test-spec
+    title: "Five of five falcon stages run on the RT1176: position and attitude added, first on falcon v1.140.0, then the pin moves to v1.142.0 as its own step"
+    status: draft
+    release: v0.8.0
+    description: >
+      Today rate, mixer and ekf are invoked on target; position and attitude are in the fused
+      image and never called (harness.c). Step 1: invoke both on Renode and on silicon at the
+      current pin, bit-exact against wasmtime with one attributive control per stage, stating
+      ticks, words compared and load attempts. Step 2, separately: the falcon pin moves to
+      v1.142.0 (closes AFD-152 against the fetched component). If relay#376 vectors land, the
+      captures are also judged against them; until then the reference is jess-generated wasmtime
+      and is labelled not independent. Plan: docs/plan-v0.8.0.md B3.
+    tags: [phase-2, on-target, silicon, cascade, ladder]
+    fields:
+      test-method: manual-test
+    links:
+      - type: verifies
+        target: REQ-PIX-011
