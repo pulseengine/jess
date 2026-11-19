@@ -805,6 +805,14 @@ jobs:
         run: hardware/renode/cascade-invoke/run-ekf-oracle.sh
         env:
           RENODE: /tmp/renode/renode
+          DUMP_WORDS: /tmp/ekf-words
+      # The SAME oracle judges words captured on the real RT1176 (on-target-run.sh READ=ekf ->
+      # WORDS_DIR=...). CI has no board, so this gates the judge: the Renode captures written
+      # above must PASS, and seven planted bad sets (another build's hash, one tick-16 word off by
+      # one ulp, no sentinel, a missing control A or B, no origin line, a control that repeats the
+      # baseline) must each FAIL for their own stated reason.
+      - name: ekf capture judge — genuine passes, 7 planted captures refused
+        run: tools/ci/test-ekf-words-dir.sh /tmp/ekf-words
       # AFD-143. linmem-capture.sh is the one-command differential jess and synth re-run on each
       # other's measurements, and NOTHING ran it, so it broke twice without going red: AFD-141's
       # interface bump made its hardcoded export name a KeyError, and meld 0.64's +16 B guard moved

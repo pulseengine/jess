@@ -1529,3 +1529,53 @@ artifacts:
       created-by: ai
       model: claude-opus-5
       timestamp: 2026-09-30T11:24:22Z
+
+  - id: TEST-PIX-037
+    type: test-spec
+    title: The synth-0.89 falcon ESTIMATOR runs 16 ticks on the REAL RT1176 and is bit-exact with wasmtime on all 14 state words and the 224-word fold
+    status: draft
+    description: |-
+      The ekf image from hardware/renode/cascade-invoke/build.sh (sha256 28d297f3…5f9505, synth
+      0.89.0, the image TEST-PIX-035 runs on Renode) EXECUTED on the real Pixhawk 6X-RT's RT1176 M7,
+      loaded to RAM over SWD by tools/bench/on-target-run.sh READ=ekf under both the pixhawk-6xrt
+      and mcu-link claims and the fail-closed disarmed gate. Nothing was written to flash.
+
+      THE JUDGE IS THE EMULATOR'S JUDGE. on-target-run.sh does not judge the words: it writes them
+      to a capture bound to the ELF's sha256 and the run's origin, and
+      WORDS_DIR=<dir> run-ekf-oracle.sh judges them with the same code that judges Renode. CI
+      gates that judge with one genuine and seven planted bad capture sets
+      (tools/ci/test-ekf-words-dir.sh).
+
+      MEASURED 2026-11-17, three images, three runs:
+        ekf      completed (sentinel 0x1E55E4F0, trip count 16) on attempt 2 of 3; tick-1 and
+                 tick-16 state 14/14 each match the wasmtime reference; fold 0x6EC49E30 over 224
+                 words matches. All 31 words are identical to Renode's.
+        ekf_nc1  (gy perturbed, control A, attributive) completed on attempt 1; fold 0x3D0B2071,
+                 which differs from the baseline; all 31 words are identical to Renode's.
+        ekf_nc2  (embedder init skipped, control B, liveness only) did NOT produce words on silicon:
+                 attempt 1 reset mid-run, attempt 2 ended in "clearing lockup after double fault".
+                 On Renode the same image completes. Control B was therefore NOT OBSERVED on
+                 silicon, so the oracle run over the silicon captures exits 1 at control B
+                 (AFD-153). It attributes nothing either way; control A carries the attribution.
+
+      NOT CLAIMED: stability. 7 load attempts in all (ekf 2, ekf_nc1 1, ekf_nc2 2 in each of 2
+      runs): 3 reset mid-run with no sentinel, the intermittent the runner already documents with
+      cause unknown; 2 were the ekf_nc2 lockups; 2 completed. One completed run per image.
+    fields:
+      test-method: manual-test
+      preconditions:
+        - both pixhawk-6xrt and mcu-link claims held
+        - preflight-disarmed.py reports DISARMED
+        - load-to-RAM over SWD only, no flash write
+    tags: [estimator, on-target-differential, silicon, afd-125]
+    links:
+      - type: verifies
+        target: REQ-PIX-011
+      - type: traces-to
+        target: TEST-PIX-035
+      - type: traces-to
+        target: AFD-153
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-17T20:30:00Z

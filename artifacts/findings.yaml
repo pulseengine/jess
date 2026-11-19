@@ -9443,3 +9443,39 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-03T23:49:25Z
+
+  - id: AFD-152
+    type: ai-found-defect
+    title: "tools/abi/check-observer-layout.py expects the stale 84-byte flight-state layout; CI runs only its --self-test, so it never saw interface 0.12 or 0.13"
+    status: open
+    description: "EXPECT in check-observer-layout.py holds valid at 76 and tick-tail at 80 (84 B, grouped field names). Computed with jess's canonical_layout from the WIT text: @0.12.0 is 88 B, and @0.13.0 (relay binding v3) is 92 B with failsafe 76, valid 80, prearm 84, tail 88. Not computed from a built component: building wasm/cm/cascade failed with 'no external crate falcon_cascade_bindings'. CI invokes only --self-test, whose negative control is jess's own wrong layout, so the real check has not run against any published interface. Fix waits on a tagged falcon release that publishes the 0.13.0 cascade component (falcon-v1.142.0, jess#313 tier 1.1)."
+    fields:
+      detected-by: measuring relay binding v3 (jess#167) against falcon-hitl's public API
+      discovered-at: 2026-11-08
+      severity: minor
+      triage-status: open
+    links:
+      - type: defect-against
+        target: REQ-PIX-010
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-17T20:30:00Z
+
+  - id: AFD-153
+    type: ai-found-defect
+    title: "run-ekf-oracle.sh printed Result: PASS with control B never observed: an empty read compared as a different fold"
+    status: resolved
+    description: "Control A checked that it read 31 words; control B did not. When control B's read returned nothing, nc2_f was empty, the empty string differed from the baseline fold, and the oracle printed 'init-skipped control folded  != 0x6EC49E30' and Result: PASS. Found 2026-11-17 by USING the oracle on silicon captures: ekf_nc2 locked up on the real RT1176 (double fault), left no capture, and the judge still passed. Same defect in Renode mode: a Renode read failure on ekf_nc2 would have passed. FIX: control B requires $WORDS words, else 'control B was NOT observed'. Planted case no-control-b added to tools/ci/test-ekf-words-dir.sh. MEASURED: with the fix, 8 of 8 cases behave; with only the new check removed (one variable), 7 of 8, no-control-b PASSES wrongly. A missing word-count check is the 'missing evidence must be red' class (gate-potency step 6)."
+    fields:
+      detected-by: judging the first silicon ekf captures with the emulator's oracle
+      discovered-at: 2026-11-17
+      severity: major
+      triage-status: resolved
+    links:
+      - type: defect-against
+        target: TEST-PIX-035
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-17T20:30:00Z
