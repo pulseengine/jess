@@ -46,8 +46,14 @@ WORDS=31                          # 1 trip count + 14 tick1 + 14 tickN + fold + 
 # `origin` line is printed in the Result, so a Renode capture cannot be reported as silicon.
 # DUMP_WORDS=<dir> (Renode mode only) writes the Renode words in the same format; CI uses it to
 # build the planted bad captures in tools/ci/test-ekf-words-dir.sh.
+# ELF_DIR=<dir> (WORDS_DIR mode only) judges captures against the ELFs that actually ran on the
+# target, kept beside the captures as evidence, instead of this tree's build: the bench host's
+# compiler is not CI's, so a CI-built image never has the silicon image's sha256. The captures'
+# sha256 lines still have to name these ELFs, and the reference still comes from this tree's
+# module, so a stale or foreign evidence directory fails rather than passes.
 WORDS_DIR="${WORDS_DIR:-}"
 DUMP_WORDS="${DUMP_WORDS:-}"
+ELF_DIR="${ELF_DIR:-}"
 
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 RESCDIR="$(mktemp -d)"
@@ -58,7 +64,12 @@ if [ -n "$WORDS_DIR" ]; then
   [ -n "$DUMP_WORDS" ] && fail "WORDS_DIR and DUMP_WORDS together would copy a capture into itself"
   [ -d "$WORDS_DIR" ] || fail "WORDS_DIR=$WORDS_DIR is not a directory"
   WHERE="the target named by the captures' origin lines"
+  if [ -n "$ELF_DIR" ]; then
+    [ -d "$ELF_DIR" ] || fail "ELF_DIR=$ELF_DIR is not a directory"
+    E="$ELF_DIR/ekf.elf"
+  fi
 else
+  [ -n "$ELF_DIR" ] && fail "ELF_DIR is only meaningful with WORDS_DIR"
   [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
   WHERE="emulated RT1176 Cortex-M7 (Renode)"
 fi
@@ -83,6 +94,9 @@ fi
 # FRESHNESS. This oracle reads a prebuilt ELF, so a FAILED build leaves the previous run's
 # image in place and the oracle passes on it — the AFD-047 staleness class, which has now bitten
 # this repo three times (AFD-049, and AFD-124's consumers left on a renamed pin path).
+if [ -n "$ELF_DIR" ]; then
+  echo "   freshness not applicable: the ELFs are evidence from $ELF_DIR, bound to the captures by sha256"
+else
 for src in "$D/harness.c" "$D/boot-ekf.S" "$D/link.ld" "$MOD"; do
   [ -f "$src" ] || fail "missing build input $src"
   # Strictly newer only: `-nt` is false for equal mtimes, and one build.sh run writes the
@@ -90,6 +104,7 @@ for src in "$D/harness.c" "$D/boot-ekf.S" "$D/link.ld" "$MOD"; do
   [ "$src" -nt "$E" ] && fail "$(basename "$src") is NEWER than ekf.elf — STALE image; re-run build.sh (a failed build leaves the previous image in place)"
 done
 echo "   ekf.elf is newer than harness.c, boot-ekf.S, link.ld and the module"
+fi
 
 read_ekf() {   # $1 = elf ; echoes $WORDS hex words
   if [ -n "$WORDS_DIR" ]; then read_capture "$1"; return; fi
@@ -220,7 +235,7 @@ echo "   ekf_ref.py vacuity guard self-test PASS"
 # scalars were measured LIVE in wasmtime (each moves 5-8 of the 14 state fields), so a moved
 # fold attributes the result to the computation rather than merely to liveness. Contrast the
 # composed-app oracle, whose own scope line reports only 4 of its 18 inputs move its fold.
-NC1="$SCRATCH/invoke/ekf_nc1.elf"
+NC1="${ELF_DIR:-$SCRATCH/invoke}/ekf_nc1.elf"
 [ -f "$NC1" ] || fail "ekf_nc1.elf missing — build.sh must build the controls"
 W1=( $(read_ekf "$NC1") )
 [ "${#W1[@]}" -eq "$WORDS" ] || fail "control A returned ${#W1[@]} words, not $WORDS"
@@ -235,7 +250,7 @@ echo "   perturbed-gy control completed, folded $nc1_f != $g_f  (a wrong-but-pla
 # the same all-zero fold, so three different breakages are indistinguishable here. This answers
 # "did anything survive", not "are the embedder promises load-bearing" (clean-room finding on
 # the soak's equivalent control).
-NC2="$SCRATCH/invoke/ekf_nc2.elf"
+NC2="${ELF_DIR:-$SCRATCH/invoke}/ekf_nc2.elf"
 [ -f "$NC2" ] || fail "ekf_nc2.elf missing — build.sh must build the controls"
 W2=( $(read_ekf "$NC2") )
 # AN EMPTY READ IS NOT A DIFFERENT FOLD. Without this check an unreadable control B left nc2_f
