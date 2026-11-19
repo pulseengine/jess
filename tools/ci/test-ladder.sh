@@ -69,16 +69,17 @@ expect no-evidence-dir  notrun  "$T/does-not-exist"
 expect no-r0-given      notrun  ""
 
 # The checker itself: an omitted rung and a field outside the schema must both be INVALID.
-for c in drop-rung extra-field pass-without-run; do
+for c in drop-rung extra-field pass-without-run wrong-objective-name; do
   n=$((n+1)); f="$T/$c.json"
   case $c in
     drop-rung)        jq 'del(.facts[] | select(.id=="pixhawk-6xrt/flight"))' "$T/no-r0-given.json" > "$f" ;;
     extra-field)      jq '. + {verdict: "pass"}' "$T/no-r0-given.json" > "$f" ;;
+    wrong-objective-name) f="$T/north-star-input.O5.json"; cp "$T/no-r0-given.json" "$f" ;;
     pass-without-run) jq '(.facts[] | select(.id=="pixhawk-6xrt/hil") | .pass) = true' "$T/no-r0-given.json" > "$f" ;;
   esac
   if "$L" check "$f" --target pixhawk-6xrt >"$T/$c.log" 2>&1; then echo "  BAD  check accepted $c"
   else [ $? -eq 1 ] && { ok=$((ok+1)); echo "  ok   check refuses $c"; } || echo "  BAD  check $c exited oddly"; fi
 done
 
-echo "$ok of $n cases behaved as expected (1 pass path, 2 genuine, 7 planted generator inputs, 3 planted checker inputs)"
+echo "$ok of $n cases behaved as expected (1 pass path, 2 genuine, 7 planted generator inputs, 4 planted checker inputs)"
 if [ "$ok" -eq "$n" ]; then echo "Result: PASS"; else echo "Result: FAIL"; exit 1; fi

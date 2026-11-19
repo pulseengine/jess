@@ -1,4 +1,4 @@
-//! jess-ladder: write jess's ladder result as `north-star-input.json` (pulseengine.eu seam #393,
+//! jess-ladder: write jess's ladder result as `north-star-input.O1.json` (pulseengine.eu seam #393,
 //! schema_version 1, objective O1).
 //!
 //! The generator never takes a verdict as input. For rung r0 it re-runs the existing judge
@@ -205,6 +205,14 @@ fn check_cmd(args: &[String]) -> Result<ExitCode, Refuse> {
             return Ok(ExitCode::from(1));
         }
     };
+    // Seam #393 (pulseengine.eu#394): the asset is north-star-input.<objective>.json, and the
+    // name and the objective field must agree.
+    let base = Path::new(file).file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let named = format!("north-star-input.{}.json", doc["objective"].as_str().unwrap_or("?"));
+    if base.starts_with("north-star-input") && base != named {
+        println!("INVALID: {file}: file name '{base}' does not match its objective (expected '{named}')");
+        return Ok(ExitCode::from(1));
+    }
     Ok(match validate(&doc, &target) {
         Ok(()) => {
             println!("VALID: {file} ({} facts, schema_version 1)", doc["facts"].as_array().map_or(0, |a| a.len()));

@@ -813,7 +813,7 @@ jobs:
       # baseline) must each FAIL for their own stated reason.
       - name: ekf capture judge — genuine passes, 7 planted captures refused
         run: tools/ci/test-ekf-words-dir.sh /tmp/ekf-words
-      # REQ-PIX-023 / TEST-PIX-038. jess-ladder writes north-star-input.json (pulseengine.eu#393,
+      # REQ-PIX-023 / TEST-PIX-038. jess-ladder writes north-star-input.O1.json (pulseengine.eu#393,
       # objective O1) by re-running the judge above over the committed silicon evidence; it takes
       # no verdict as input. The self-test plants 7 bad generator inputs and 3 bad checker inputs,
       # and proves the pass path with the Renode captures relabelled as silicon.
@@ -824,7 +824,7 @@ jobs:
           cargo build --release --locked --manifest-path tools/ladder/Cargo.toml
           tools/ci/test-ladder.sh tools/ladder/target/release/jess-ladder /tmp/ekf-words \
             .scratch/invoke hardware/silicon/evidence/ekf-rt1176-2026-11-17
-      - name: ladder result for this commit (north-star-input.json, not a release asset yet)
+      - name: ladder result for this commit (north-star-input.O1.json, not a release asset yet)
         env:
           RENODE: /tmp/renode/renode
         run: |
@@ -832,12 +832,12 @@ jobs:
             --target pixhawk-6xrt --judge hardware/renode/cascade-invoke/run-ekf-oracle.sh \
             --r0 hardware/silicon/evidence/ekf-rt1176-2026-11-17 \
             --evidence "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-            --out north-star-input.json
-          jq -r '.facts[] | "\(.id): ran=\(.ran) pass=\(.pass)"' north-star-input.json | tee -a "$GITHUB_STEP_SUMMARY"
+            --out north-star-input.O1.json
+          jq -r '.facts[] | "\(.id): ran=\(.ran) pass=\(.pass)"' north-star-input.O1.json | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: north-star-input
-          path: north-star-input.json
+          path: north-star-input.O1.json
       # AFD-143. linmem-capture.sh is the one-command differential jess and synth re-run on each
       # other's measurements, and NOTHING ran it, so it broke twice without going red: AFD-141's
       # interface bump made its hardcoded export name a KeyError, and meld 0.64's +16 B guard moved
