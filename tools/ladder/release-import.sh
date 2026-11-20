@@ -14,7 +14,12 @@
 # PRECISE: requires a completed ci.yml PUSH run for this sha whose job "$JOB" has the step
 # "$STEP_PREFIX…" concluded success, and an artifact "north-star-input" holding exactly one file,
 # north-star-input.O1.json, generated for this sha (version 0.0.0-ci.<sha12>).
-# The only edit is .version, from the CI label to the release version. Facts are untouched.
+# The only edit is .version, from the CI label to the release version. Facts are untouched, and
+# every rung that ran must name THIS source run as its evidence, so after the relabel the asset
+# still points at the run that measured it, and through the run at the sha.
+# gh is preinstalled on the hosted ubuntu-24.04 runner the signing job uses. Without gh the first
+# call fails, the script exits 2 and the release goes red; it cannot quietly download nothing.
+# A missing or expired artifact (default retention 90 days) is exit 1: no release without O1.
 #
 # Exit 0 = file written. Exit 1 = a run exists but the file is missing, failed, or malformed.
 # Exit 2 = could not determine (no completed run for this sha yet, or the API did not answer).
@@ -25,10 +30,16 @@ STEP_PREFIX="ladder result for this commit"
 NAME="north-star-input.O1.json"
 fail() { echo "FAIL: $*"; exit 1; }
 
-runs=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&status=completed&per_page=20" \
-        --jq '.workflow_runs[] | .id' 2>/dev/null) \
+# Strict source: ci.yml, a PUSH to main, head_sha == this sha, the whole run concluded success.
+# The query filters are re-asserted on every returned run, so a pull_request or
+# workflow_dispatch run with the same head can never supply the file.
+api=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&branch=main&status=completed&per_page=20" 2>/dev/null) \
   || { echo "CANNOT DETERMINE: the Actions API did not answer for $SHA"; exit 2; }
-[ -n "$runs" ] || { echo "CANNOT DETERMINE: no completed ci.yml push run for $SHA yet; wait for CI on main, then re-run the release"; exit 2; }
+runs=$(printf '%s' "$api" | jq -r --arg sha "$SHA" '.workflow_runs[]
+          | select(.head_sha == $sha and .event == "push" and .head_branch == "main"
+                   and .path == ".github/workflows/ci.yml" and .conclusion == "success") | .id') \
+  || { echo "CANNOT DETERMINE: the Actions API answer for $SHA did not parse"; exit 2; }
+[ -n "$runs" ] || { echo "CANNOT DETERMINE: no successful ci.yml push run on main for $SHA (still running, failed, or never ran); the release does not ship without O1"; exit 2; }
 
 run=""; seen=0
 for id in $runs; do
@@ -51,12 +62,13 @@ got=$(cd "$DL" && find . -type f | sed 's|^\./||' | sort)
 [ "$got" = "$NAME" ] || fail "run $run: artifact holds '$(echo $got)', expected exactly $NAME"
 
 F="$DL/$NAME"
-jq -e --arg repo "$REPO" --arg v "0.0.0-ci.${SHA:0:12}" '
+jq -e --arg src "https://github.com/$REPO/actions/runs/$run" --arg repo "$REPO" --arg v "0.0.0-ci.${SHA:0:12}" '
     .schema_version == 1 and .objective == "O1" and .repo == $repo and .version == $v
     and ([.facts[].id] | sort) == (["flight","hil","r0","real-drone"] | map("pixhawk-6xrt/" + .) | sort)
     and all(.facts[]; (.ran | type) == "boolean" and (.pass | type) == "boolean")
-    and all(.facts[]; .pass == false or .ran == true)' "$F" >/dev/null \
-  || fail "run $run: $NAME is not an O1 ladder for $REPO at ${SHA:0:12} (schema_version, objective, repo, version, the four rungs, or a pass without a run)"
+    and all(.facts[]; .pass == false or .ran == true)
+    and all(.facts[]; .ran == false or .evidence == $src)' "$F" >/dev/null \
+  || fail "run $run: $NAME is not an O1 ladder for $REPO at ${SHA:0:12} (schema_version, objective, repo, version, the four rungs, a pass without a run, or a rung that ran without this run as its evidence)"
 
 mkdir -p "$OUT"
 jq --arg v "$VERSION" '.version = $v' "$F" > "$OUT/$NAME" || fail "could not write $OUT/$NAME"
