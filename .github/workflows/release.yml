@@ -53,7 +53,6 @@ jobs:
           - { os: ubuntu-24.04,   target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
           - { os: macos-15,        target: aarch64-apple-darwin }
-          - { os: macos-15,        target: x86_64-apple-darwin }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -140,18 +139,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          # EXACT SET, not a wildcard sweep: exactly the four with-device packages the build
+          # EXACT SET, not a wildcard sweep: exactly the three with-device packages the build
           # matrix produces, and nothing else. A stray or injected .tar.gz in the artifact store
           # fails the release here instead of being signed.
           VER=$(grep -m1 '^version' tools/bench/with-device/Cargo.toml | cut -d'"' -f2)
           want=""
-          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
+          for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu aarch64-apple-darwin; do
             want="$want with-device-${VER}-${t}.tar.gz"
           done
           got=$(find artifacts -type f -name '*.tar.gz' -exec basename {} \; | sort)
           exp=$(printf '%s\n' $want | sort)
           if [ "$got" != "$exp" ]; then
-            echo "::error::artifact set is not exactly the four with-device packages"
+            echo "::error::artifact set is not exactly the three with-device packages"
             diff <(printf '%s\n' "$exp") <(printf '%s\n' "$got") || true
             exit 1
           fi
@@ -323,9 +322,9 @@ jobs:
           # dropped asset fails here rather than passing quietly.
           sha256sum -c SHA256SUMS.txt
 
-          echo "── 3. the manifest covers all four targets, the SBOM, the Renode model and the O1 ladder ──"
+          echo "── 3. the manifest covers all three targets, the SBOM, the Renode model and the O1 ladder ──"
           for t in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu \
-                   aarch64-apple-darwin x86_64-apple-darwin; do
+                   aarch64-apple-darwin; do
             grep -q "with-device-.*-${t}\.tar\.gz\$" SHA256SUMS.txt \
               || { echo "manifest does not cover $t"; exit 1; }
           done

@@ -37,7 +37,10 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # without waiting for a red CI run to discover a typo'd digest.
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64)  HOST_PLATFORM="aarch64-apple-darwin" ;;
-  Darwin/x86_64) HOST_PLATFORM="x86_64-apple-darwin" ;;
+  # Intel macOS is not supported (owner decision 2026-11-20): PulseEngine tools ship no
+  # x86_64-apple-darwin asset. Refuse here rather than fail later on a missing download.
+  Darwin/x86_64) [ -n "${HOST_PLATFORM_OVERRIDE:-}" ] || { echo "FAIL: Intel macOS (x86_64-apple-darwin) is not supported; PulseEngine tools ship no asset for it. Use an Apple-silicon Mac or Linux." >&2; exit 1; }
+                 HOST_PLATFORM="unsupported-x86_64-apple-darwin" ;;
   Linux/aarch64) HOST_PLATFORM="aarch64-unknown-linux-gnu" ;;
   Linux/x86_64)  HOST_PLATFORM="x86_64-unknown-linux-gnu" ;;
   *)             HOST_PLATFORM="unknown" ;;
