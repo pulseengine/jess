@@ -201,3 +201,26 @@ artifacts:
     links:
       - type: implements
         target: FEATURE-001
+
+  - id: FEATURE-014
+    type: feature
+    title: "jess 0.8.0 (proposed) — the ladder is reported per rung, pass or fail, from judged captures"
+    status: draft
+    release: v0.8.0
+    tags: [roadmap, v0.8.0, ladder, north-star-o1]
+    fields:
+      phase: phase-2
+    description: >
+      Serves north-star objective O1 ("Runs on target"; named here until rivet's `serves:` field is
+      validated in jess). Plan: docs/plan-v0.8.0.md, drafted 2026-11-19 by a planner pass and
+      revised after a cold checker pass. Bets in order: B1 ladder result file (REQ-PIX-023,
+      TEST-PIX-038), B2 R0 repeatable on silicon (TEST-PIX-039), B3 five of five stages on
+      silicon (TEST-PIX-040), B4 lockstep HIL rung against the relay plant (REQ-PIX-024).
+      Rung definitions and the not-run rule: DD-029. O1 stays "unmeasured" until pulseengine.eu
+      runs an indicator script over this file; jess supplies the first input, not the value.
+      OWNER DECISION PENDING: FEATURE-011 (safety case) also carries release v0.8.0.
+      EXIT: a signed ladder.json on the release whose every rung entry was generated from judged
+      captures, with denominators, and a generator self-test that is N of N in CI.
+    links:
+      - type: implements
+        target: FEATURE-002
