@@ -1,0 +1,15 @@
+[package]
+name = "jess-ladder"
+version = "0.1.0"
+edition = "2021"
+description = "Write jess's ladder result as north-star-input.json, generated only from judged on-target captures"
+license = "Apache-2.0"
+publish = false
+
+# input.schema.json is vendored from pulseengine/pulseengine.eu data/north-star/input.schema.json
+# (schema_version 1, main 21bf3cd358ad, seam pulseengine.eu#393). A change upstream is a new
+# schema_version, so a vendored copy cannot silently drift into a different shape.
+
+[dependencies]
+serde_json = "1"
+jsonschema = { version = "0.61", default-features = false }

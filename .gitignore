@@ -22,6 +22,8 @@ logs/
 hardware/silicon/**/*.o
 hardware/silicon/**/*.elf
 hardware/silicon/**/*.bin
+# ...except evidence: the exact images that ran on the target, bound to their captures by sha256
+!hardware/silicon/evidence/**/*.elf
 # jess wasm components: rebuilt by tools/appcompose/build-and-verify.sh
 app/*/target/
 app/*/*.wasm
