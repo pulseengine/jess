@@ -21,7 +21,7 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 }
 
 for c in timer-probe gust-hal-tick; do
-  ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown ) || fail "$c build"
+  ( cd "$ROOT/app/$c" && cargo build --release --locked --target wasm32-unknown-unknown ) || fail "$c build"
 done
 wasm-tools component new "$ROOT/app/timer-probe/target/wasm32-unknown-unknown/release/jess_timer_probe.wasm" -o "$OUT/probe.wasm"
 # NAME THE ARTIFACT EXPLICITLY. The earlier version took `ls .../*.wasm | head -1` on the

@@ -61,7 +61,7 @@ jobs:
         run: rustup target add ${{ matrix.target }}
       - name: build
         working-directory: tools/bench/with-device
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --locked --target ${{ matrix.target }}
       # The full suite runs in CI on every PR; here it re-runs on the exact host that
       # produced the artefact. No `if:` guard and no skipped target — every asset in this
       # release has had its own tests run on hardware that executes it.
@@ -69,7 +69,7 @@ jobs:
         working-directory: tools/bench/with-device
         run: |
           set -euo pipefail
-          cargo test --all
+          cargo test --all --locked
           BIN=target/${{ matrix.target }}/release/with-device
           "$BIN" --version
           "$BIN" --self-test

@@ -85,7 +85,7 @@ done
 
 say "== 1. build the two jess components =="
 for c in flight-app gust-hal-stub; do
-  ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown )
+  ( cd "$ROOT/app/$c" && cargo build --release --locked --target wasm32-unknown-unknown )
   core="$ROOT/app/$c/target/wasm32-unknown-unknown/release/$(echo "jess_$c" | tr - _).wasm"
   [ -f "$core" ] || fail "core module not produced for $c"
   wasm-tools component new "$core" -o "$ROOT/app/$c/$c.wasm"

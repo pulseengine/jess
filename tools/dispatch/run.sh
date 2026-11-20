@@ -32,7 +32,7 @@ SCRATCH="$SCRATCH" "$ROOT/tools/deps/check.sh" --only galenano >/dev/null 2>&1 \
 
 echo "== 1. build the probe and the driver =="
 for c in gust-dispatch-probe dispatch-driver; do
-  ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown ) >/dev/null 2>&1 || fail "$c build"
+  ( cd "$ROOT/app/$c" && cargo build --release --locked --target wasm32-unknown-unknown ) >/dev/null 2>&1 || fail "$c build"
 done
 wasm-tools component new "$ROOT/app/gust-dispatch-probe/target/wasm32-unknown-unknown/release/jess_gust_dispatch_probe.wasm" -o "$OUT/probe.wasm" || fail "probe componentize"
 wasm-tools component new "$ROOT/app/dispatch-driver/target/wasm32-unknown-unknown/release/jess_dispatch_driver.wasm"      -o "$OUT/driver.wasm" || fail "driver componentize"
@@ -41,7 +41,7 @@ cp "$NANO" "$OUT/gale-nano.wasm"
 # The VARIANT probe returns 1 from poll-task instead of 0. EXACTLY ONE variable differs;
 # it is what turns "the return value means something" from a guess into a measurement.
 rm -rf "$OUT/probe1"; mkdir -p "$OUT/probe1"
-cp -r "$ROOT/app/gust-dispatch-probe/Cargo.toml" "$ROOT/app/gust-dispatch-probe/src" "$ROOT/app/gust-dispatch-probe/wit" "$OUT/probe1/"
+cp -r "$ROOT/app/gust-dispatch-probe/Cargo.toml" "$ROOT/app/gust-dispatch-probe/Cargo.lock" "$ROOT/app/gust-dispatch-probe/src" "$ROOT/app/gust-dispatch-probe/wit" "$OUT/probe1/"
 sed -i.bak 's|path = "../bump-alloc"|path = "'"$ROOT"'/app/bump-alloc"|' "$OUT/probe1/Cargo.toml"
 python3 - "$OUT/probe1/src/lib.rs" <<'EOP' || fail "variant edit"
 import sys
@@ -51,7 +51,7 @@ new="        ID_MASK.fetch_or(id, Ordering::Relaxed);\n        0\n    }"
 if old not in s: sys.exit("variant anchor not found — the probe's return value moved")
 open(p,'w').write(s.replace(old,new))
 EOP
-( cd "$OUT/probe1" && cargo build --release --target wasm32-unknown-unknown ) >/dev/null 2>&1 || fail "variant build"
+( cd "$OUT/probe1" && cargo build --release --locked --target wasm32-unknown-unknown ) >/dev/null 2>&1 || fail "variant build"
 wasm-tools component new "$OUT/probe1/target/wasm32-unknown-unknown/release/jess_gust_dispatch_probe.wasm" -o "$OUT/probe1.wasm" || fail "variant componentize"
 cmp -s "$OUT/probe.wasm" "$OUT/probe1.wasm" && fail "the ret-0 variant is byte-identical to the ret-1 probe — the control is inert"
 
