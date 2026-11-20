@@ -7,7 +7,7 @@ license = "Apache-2.0"
 publish = false
 
 # input.schema.json is vendored from pulseengine/pulseengine.eu data/north-star/input.schema.json
-# (schema_version 1, main 21bf3cd358ad, seam pulseengine.eu#393). A change upstream is a new
+# (schema_version 1, at the commit in schema.pin, seam pulseengine.eu#393). A change upstream is a new
 # schema_version, so a vendored copy cannot silently drift into a different shape.
 
 [dependencies]
