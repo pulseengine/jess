@@ -1603,18 +1603,20 @@ artifacts:
 
   - id: REQ-PIX-024
     type: requirement
-    title: "Lockstep HIL rung: the lowered cascade on the real RT1176 is stepped tick by tick against the relay plant and compared with wasmtime in the same loop"
+    title: "Lockstep processor-in-the-loop step below hil: the lowered cascade on the real RT1176 is stepped tick by tick against the relay plant and compared with wasmtime in the same loop"
     status: draft
     release: v0.8.0
     description: >
-      Serves north-star O1 (the hil rung). Lockstep, not real time: no timing claim follows.
-      Whether lockstep SWD injection fills the hil rung is DD-029's open question for the owner.
+      Serves north-star O1 as a step BELOW the hil rung. Lockstep, not real time: no timing claim
+      follows. Owner ruling 2026-11-20 (DD-029): lockstep SWD injection does not fill hil, so a pass
+      here is reported in the r0/PIL detail and the hil fact stays ran false until a UART or
+      real-time loop exists.
       Pass needs: 2000 ticks, at least 3 runs, motor words bit-identical to wasmtime every tick,
       a perturbed-input control that changes the trajectory, and a planted one-word output
       difference that the comparator flags. Renode runs the loop first and stays labelled
       emulator. Gated on TEST-PIX-040 (a loop around 3 of 5 stages is not this rung) and on relay's
       plant being steppable from outside its harness (not verified). Plan: docs/plan-v0.8.0.md B4.
-    tags: [phase-2, ladder, hil, north-star-o1, relay-seam]
+    tags: [phase-2, ladder, pil, north-star-o1, relay-seam]
     fields:
       category: functional
     links:

@@ -149,10 +149,10 @@ artifacts:
 
   - id: FEATURE-011
     type: feature
-    title: "jess 0.8.0 — Safety case (STPA and ISO 26262)"
+    title: "jess 0.9.0 — Safety case (STPA and ISO 26262)"
     status: draft
-    release: v0.8.0
-    tags: [roadmap, v0.8.0]
+    release: v0.9.0
+    tags: [roadmap, v0.9.0]
     fields:
       phase: phase-1
     description: >
@@ -163,10 +163,10 @@ artifacts:
 
   - id: FEATURE-012
     type: feature
-    title: "jess 0.9.0 — CI, hermetic build, and own compliance report"
+    title: "jess 0.10.0 — CI, hermetic build, and own compliance report"
     status: draft
-    release: v0.9.0
-    tags: [roadmap, v0.9.0]
+    release: v0.10.0
+    tags: [roadmap, v0.10.0]
     fields:
       phase: phase-1
     description: >
@@ -190,10 +190,10 @@ artifacts:
 
   - id: FEATURE-013
     type: feature
-    title: "jess 0.10.0 — Phase-1 complete and DO-178C bridge readiness"
+    title: "jess 0.11.0 — Phase-1 complete and DO-178C bridge readiness"
     status: draft
-    release: v0.10.0
-    tags: [roadmap, v0.10.0]
+    release: v0.11.0
+    tags: [roadmap, v0.11.0]
     fields:
       phase: phase-1
     description: >
@@ -204,7 +204,7 @@ artifacts:
 
   - id: FEATURE-014
     type: feature
-    title: "jess 0.8.0 (proposed) — the ladder is reported per rung, pass or fail, from judged captures"
+    title: "jess 0.8.0 — the ladder is reported per rung, pass or fail, from judged captures"
     status: draft
     release: v0.8.0
     tags: [roadmap, v0.8.0, ladder, north-star-o1]
@@ -218,7 +218,9 @@ artifacts:
       silicon (TEST-PIX-040), B4 lockstep HIL rung against the relay plant (REQ-PIX-024).
       Rung definitions and the not-run rule: DD-029. O1 stays "unmeasured" until pulseengine.eu
       runs an indicator script over this file; jess supplies the first input, not the value.
-      OWNER DECISION PENDING: FEATURE-011 (safety case) also carries release v0.8.0.
+      OWNER RULING 2026-11-20 (factory-notice 20261119T221437-aa7512, option ladder-080-pil-below):
+      the ladder takes v0.8.0; the safety case (FEATURE-011) moves to v0.9.0, and the two releases
+      after it shift by one (v0.10.0, v0.11.0). Bets B2-B4 come before the tag.
       EXIT: a signed ladder.json on the release whose every rung entry was generated from judged
       captures, with denominators, and a generator self-test that is N of N in CI.
     links:
