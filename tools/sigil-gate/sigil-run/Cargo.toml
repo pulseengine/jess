@@ -7,8 +7,8 @@ publish = false
 description = "jess sigil attestation gate driver: drive sigil's wsc-component.wasm (wasm-signatures:wasmsign/signing) to keygen -> sign -> verify the reproducible meld-fused falcon core; negative-controlled (tampered bytes fail verify). Closes DD-023's sigil-signed FIRST-FLASH rung."
 
 [dependencies]
-wasmtime = { version = "42", features = ["component-model"] }
-wasmtime-wasi = "42"
+wasmtime = { version = "50", features = ["component-model"] }
+wasmtime-wasi = "50"
 anyhow = "1"
 
 [[bin]]
