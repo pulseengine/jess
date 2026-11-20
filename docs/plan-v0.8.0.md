@@ -1,11 +1,11 @@
 ---
 id: DOC-002
-title: jess v0.8.0 plan (proposed) — the ladder reported per rung
+title: jess v0.8.0 plan — the ladder reported per rung
 type: doc
 status: draft
 ---
 
-# jess v0.8.0 plan (proposed)
+# jess v0.8.0 plan
 
 Work in progress, drafted 2026-11-19 against main `217114e`; nothing here is done or tagged. The substance lives in rivet:
 - FEATURE-014, the release
@@ -45,7 +45,7 @@ This page states only the bets, their order and what would kill each one.
 | B1 | **Ladder result file.** A generator re-runs the existing judges over committed captures and writes `ladder.json`, signed on the release (REQ-PIX-023). | the first O1 input from jess | TEST-PIX-038 passes N of N in CI. It needs a pass-path set, a tampered set, a not-run set (giving fail with ran false), and refusals for an emulator origin, a sha mismatch, a stale version, an absent sentinel and an omitted rung. The output validates against a committed schema. | The generator cannot refuse emulator captures mechanically, so the file would be a typed claim. |
 | B2 | **R0 repeatable on silicon** (TEST-PIX-039) | r0, the prerequisite for the hil rung | 60 load attempts in total. ≥10 of 20 complete per image, ≥3 completed runs judged per image, zero wrong words, oracle exit 0. A replacement control B is specified before any run. | Any wrong word stops the release. A completion rate under 50% means load-to-RAM is not a base for B4, and r0 is recorded as fail. |
 | B3 | **Five of five stages on silicon** (TEST-PIX-040). Position and attitude are added at the current pin. Moving the falcon pin to v1.142.0 is a separate step, which closes AFD-152. | the cascade under test becomes the whole cascade | Each stage is bit-exact against wasmtime on silicon, with one attributive control per stage and the denominators stated. | A divergence ships as a fail and becomes a lowering finding. The "independent oracle" part is dropped if relay#376 does not land. |
-| B4 | **Lockstep HIL rung** against the relay plant (REQ-PIX-024) | the hil rung goes from not run to pass or fail | 2000 ticks and ≥3 runs. Motor words are bit-identical to wasmtime every tick. A perturbed-input control and a planted output difference are both caught. | The owner rules (DD-029) that lockstep SWD is not hil. A 2000-tick run does not fit one claim window. The relay plant cannot be stepped from outside its harness. |
+| B4 | **Lockstep PIL step below hil** against the relay plant (REQ-PIX-024) | a PIL result reported under hil; the hil rung stays not run (ran false), per DD-029 | 2000 ticks and ≥3 runs. Motor words are bit-identical to wasmtime every tick. A perturbed-input control and a planted output difference are both caught. | (Fired 2026-11-20 as a hil bet: the owner ruled lockstep SWD is not hil; B4 continues as a PIL step.) A 2000-tick run does not fit one claim window. The relay plant cannot be stepped from outside its harness. |
 
 Small items in the same release:
 - `serves:` validation and its drift check in jess, once rivet ships the field.
@@ -63,9 +63,13 @@ Cut to a later release: on-target tick timing. It can only become an indicator a
 | relay | a plant that can be stepped from outside its harness | not verified |
 | synth, meld, loom | current pins | shipped |
 
+## Owner rulings (2026-11-20)
+
+- **The v0.8.0 number** goes to this release. The safety case (FEATURE-011) moves to v0.9.0; FEATURE-012 and FEATURE-013 shift to v0.10.0 and v0.11.0.
+- **DD-029, accepted:** lockstep SWD injection does not fill the hil rung. It is reported as a PIL step below hil.
+- B2-B4 are worked before the tag.
+
 ## Owner-gated
 
-- **The v0.8.0 number.** FEATURE-011 (the safety case) carries it too.
-- **DD-029:** does lockstep SWD injection fill the hil rung?
 - **O2:** is jess a consumer repository for O2?
 - Any required-check change, the tag, and every flash write. The plan uses load-to-RAM only.
