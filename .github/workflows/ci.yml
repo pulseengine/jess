@@ -824,7 +824,9 @@ jobs:
           cargo build --release --locked --manifest-path tools/ladder/Cargo.toml
           tools/ci/test-ladder.sh tools/ladder/target/release/jess-ladder /tmp/ekf-words \
             .scratch/invoke hardware/silicon/evidence/ekf-rt1176-2026-11-17
-      - name: ladder result for this commit (north-star-input.O1.json, not a release asset yet)
+      # release.yml imports THIS step's artifact for a tagged commit (tools/ladder/release-import.sh
+      # matches the step name by prefix "ladder result for this commit"; rename both together).
+      - name: ladder result for this commit (north-star-input.O1.json, imported by release.yml)
         env:
           RENODE: /tmp/renode/renode
         run: |
@@ -838,6 +840,10 @@ jobs:
         with:
           name: north-star-input
           path: north-star-input.O1.json
+      # The vendored schema must equal pulseengine.eu's at the commit in tools/ladder/schema.pin. The pin
+      # moves only in a reviewed change: a floating main would make every upstream edit our red CI.
+      - name: ladder schema equals pulseengine.eu at the pinned commit (seam pulseengine.eu#393)
+        run: tools/ladder/check-schema-pin.sh
       # AFD-143. linmem-capture.sh is the one-command differential jess and synth re-run on each
       # other's measurements, and NOTHING ran it, so it broke twice without going red: AFD-141's
       # interface bump made its hardcoded export name a KeyError, and meld 0.64's +16 B guard moved
