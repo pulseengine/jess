@@ -31,7 +31,7 @@ for t in cargo wasm-tools wac wasmtime; do command -v $t >/dev/null || fail "not
 }
 
 for c in flight-loop gust-hal-tick gust-hal-stub; do
-  ( cd "$ROOT/app/$c" && cargo build --release --target wasm32-unknown-unknown ) || fail "$c build"
+  ( cd "$ROOT/app/$c" && cargo build --release --locked --target wasm32-unknown-unknown ) || fail "$c build"
 done
 # Name every artifact EXPLICITLY. `ls | head -1` in the sibling timer probe silently
 # selected a stale stub for days and produced a wrong finding (AFD-049).

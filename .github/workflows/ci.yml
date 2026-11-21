@@ -299,6 +299,24 @@ jobs:
         run: |
           tools/compliance/gen.sh | tee -a "$GITHUB_STEP_SUMMARY"
           rivet coverage --fail-under 60
+      # Every lockfile jess builds from is committed and current: each tracked Cargo.toml has a
+      # tracked Cargo.lock that cargo accepts under --locked, and MODULE.bazel.lock passes
+      # `bazel mod deps --lockfile_mode=error` (bazelisk is preinstalled on ubuntu-24.04). The
+      # set comes from git ls-files and the step prints its denominator. Planted controls in the
+      # PR that added it: a manifest dep without a lock update, an uncommitted lock, and a
+      # bazel_dep the lock has never seen each exit 1.
+      - name: lockfiles committed and current (Cargo --locked, Bazel --lockfile_mode=error)
+        working-directory: jess
+        run: tools/deps/check-locks.sh fresh | tee -a "$GITHUB_STEP_SUMMARY"
+      # cargo audit over EVERY committed Cargo.lock, nested ones included. On 2026-11-20
+      # tools/sigil-gate/sigil-run/Cargo.lock held 29 advisories (RUSTSEC-2026-0587 among them)
+      # and nothing audited it. A newly published advisory turns this red without a code change;
+      # that is the intent.
+      - name: install cargo-audit (pinned)
+        run: cargo install --locked cargo-audit --version 0.22.1
+      - name: cargo audit, every committed Cargo.lock
+        working-directory: jess
+        run: tools/deps/check-locks.sh audit | tee -a "$GITHUB_STEP_SUMMARY"
       # Non-gating visibility: the open-defect punch-list + the V-gap
       # (non-draft requirements no test-spec verifies), emitted to the job
       # summary on every run via `rivet sql`. The gate is `validate` above;
@@ -334,7 +352,7 @@ jobs:
         working-directory: tools/bench/with-device
         run: |
           set -euo pipefail
-          cargo build --release
+          cargo build --release --locked
           B=target/release/with-device
           # CLI baseline (pulseengine-cli-conventions): --version/-V and --help exit 0,
           # an unknown flag exits 2 with usage on stderr.
@@ -354,12 +372,12 @@ jobs:
       # never wraps a command containing a flag with-device also understands (AFD-084).
       - name: cargo test (unit + behavioural)
         working-directory: tools/bench/with-device
-        run: cargo test --all
+        run: cargo test --all --locked
       - name: clippy + fmt
         working-directory: tools/bench/with-device
         run: |
           cargo fmt --check
-          cargo clippy --release --all-targets -- -D warnings
+          cargo clippy --release --locked --all-targets -- -D warnings
       - uses: taiki-e/install-action@5b56535d0239d0a46e7d74f64d83712fad4564d3 # cargo-llvm-cov
         if: matrix.os == 'ubuntu-24.04'
       # Floor matched to what the suite actually achieves (96.8% lines locally), not set far
@@ -371,7 +389,7 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         working-directory: tools/bench/with-device
         run: |
-          cargo llvm-cov --summary-only --fail-under-lines 90 | tee -a "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov --locked --summary-only --fail-under-lines 90 | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The spar/AADL model of the Phase-2 platform must stay parseable + instantiable.
   spar-model:

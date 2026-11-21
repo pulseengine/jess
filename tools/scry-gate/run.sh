@@ -59,7 +59,7 @@ fi
 
 # --- run scry ------------------------------------------------------------
 note "scry sound abstract interpretation"
-( cd "$ROOT/tools/scry-gate/scry-run" && cargo build --release -q )
+( cd "$ROOT/tools/scry-gate/scry-run" && cargo build --release --locked -q )
 VERDICT="$WORK/verdict.json"
 "$ROOT/tools/scry-gate/scry-run/target/release/scry-run" "$FUSED" >"$VERDICT"
 cat "$VERDICT"

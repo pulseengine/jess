@@ -47,6 +47,6 @@ echo "  module: $(wc -c <"$MOD") bytes (sha $(shasum -a 256 "$MOD" | awk '{print
 
 # --- build + run the sigil-run host driver --------------------------------
 note "build sigil-run (wasmtime component host over sigil's signing interface)"
-( cd "$D/sigil-run" && cargo build --release -q )
+( cd "$D/sigil-run" && cargo build --release --locked -q )
 note "sigil keygen -> sign -> verify (+ tamper negative control)"
 "$D/sigil-run/target/release/sigil-run" "$D/wsc-component.wasm" "$MOD"
