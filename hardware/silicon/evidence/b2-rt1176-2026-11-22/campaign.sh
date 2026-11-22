@@ -31,6 +31,7 @@ set -uo pipefail
 BENCH="${1:?bench dir}"; EV="${2:?evidence dir}"; OUT="${3:?out dir}"
 N="${N:-20}"; IMAGES="${IMAGES:-ekf ekf_nc1 ekf_n15}"
 WD="${WD:-/usr/local/bin/with-device}"
+RUNFOR_MS="${RUNFOR_MS:-3000}"   # on-target-run.sh's own default; B2b sets 200
 # The FMU console by its stable name. /dev/ttyACMn numbering moves when the host reboots: on
 # 2026-11-22 ttyACM0 became an unrelated radio dongle and the gate read the wrong device.
 TTY="${TTY:-/dev/serial/by-id/usb-Dronecode_Project__Inc._PX4_FMU_v6XRT.x_0-if00}"
@@ -55,10 +56,11 @@ for i in $(seq "${START:-1}" "$N"); do
   for img in $IMAGES; do
     wait_app || { echo "STOP: the PX4 app did not stay enumerated for 5 s within 120 s"; exit 3; }
     cap="$OUT/$img.a$i.words"; log="$OUT/$img.a$i.log"; rm -f "$cap"
+    { echo "campaign: RUNFOR_MS=$RUNFOR_MS"
     "$WD" pixhawk-6xrt mcu-link --wait 900 \
       --purpose "jess B2 TEST-PIX-039 round $i $img: load-to-RAM only, no flash" -- \
-      env READ=ekf ATTEMPTS=1 TTY="$TTY" CAPTURE="$cap" WD="$WD" \
-      "$BENCH/on-target-run.sh" "$EV/images/$img.elf" --restore > "$log" 2>&1
+      env READ=ekf ATTEMPTS=1 RUNFOR_MS="$RUNFOR_MS" TTY="$TTY" CAPTURE="$cap" WD="$WD" \
+      "$BENCH/on-target-run.sh" "$EV/images/$img.elf" --restore 2>&1; } > "$log"
     rc=$?
     if [ -f "$cap" ]; then
       if [ "$(tail -1 "$cap")" = "$(cat "$EV/expect/$img.words")" ]; then o=match; else o=WRONG; fi
