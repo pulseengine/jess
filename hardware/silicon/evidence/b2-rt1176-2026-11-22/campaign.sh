@@ -1,3 +1,17 @@
+# Wait for the PX4 APP, not the bootloader. Both enumerate as 3643:001d and lsusb names them from
+# its id database, so lsusb says "PX4 FMU" for the bootloader too. The kernel's product string
+# tells them apart ("PX4 BL FMU v6XRT.x" vs "PX4 FMU v6XRT.x"). Measured 2026-11-22: the gate
+# opened the port during the bootloader and got EIO when it dropped off 8 s later.
+wait_app() {
+  local t=0 ok=0 p
+  while [ $t -lt 120 ]; do
+    p="$(cat /sys/bus/usb/devices/*/product 2>/dev/null | grep -x "PX4 FMU v6XRT.x")"
+    if [ -n "$p" ] && [ -e "$TTY" ]; then ok=$((ok+1)); else ok=0; fi
+    [ $ok -ge 5 ] && return 0
+    sleep 1; t=$((t+1))
+  done
+  return 1
+}
 #!/usr/bin/env bash
 # B2 (TEST-PIX-039): 3 images x 20 load-to-RAM attempts on the real RT1176, round-robin.
 # Run ON THE PROBE HOST:  campaign.sh <bench-dir> <this-evidence-dir> <out-dir>
@@ -21,10 +35,25 @@ WD="${WD:-/usr/local/bin/with-device}"
 # 2026-11-22 ttyACM0 became an unrelated radio dongle and the gate read the wrong device.
 TTY="${TTY:-/dev/serial/by-id/usb-Dronecode_Project__Inc._PX4_FMU_v6XRT.x_0-if00}"
 [ -e "$TTY" ] || { echo "STOP: FMU console $TTY not present"; exit 2; }
+# Wait for the PX4 APP, not the bootloader. Both enumerate as 3643:001d and lsusb names them
+# from its id database, so lsusb says "PX4 FMU" for the bootloader too. The kernel's product
+# string tells them apart ("PX4 BL FMU v6XRT.x" vs "PX4 FMU v6XRT.x"). Measured 2026-11-22:
+# the gate opened the port during the bootloader and got EIO when it dropped off 8 s later.
+wait_app() {
+  local t=0 ok=0
+  while [ "$t" -lt 120 ]; do
+    if grep -qx 'PX4 FMU v6XRT.x' /sys/bus/usb/devices/*/product 2>/dev/null && [ -e "$TTY" ]; then
+      ok=$((ok+1)); else ok=0; fi
+    [ "$ok" -ge 5 ] && return 0
+    sleep 1; t=$((t+1))
+  done
+  return 1
+}
 mkdir -p "$OUT"; T="$OUT/attempts.tsv"
 [ -f "$T" ] || printf 'round\timage\trc\toutcome\tutc\n' > "$T"
 for i in $(seq "${START:-1}" "$N"); do
   for img in $IMAGES; do
+    wait_app || { echo "STOP: the PX4 app did not stay enumerated for 5 s within 120 s"; exit 3; }
     cap="$OUT/$img.a$i.words"; log="$OUT/$img.a$i.log"; rm -f "$cap"
     "$WD" pixhawk-6xrt mcu-link --wait 900 \
       --purpose "jess B2 TEST-PIX-039 round $i $img: load-to-RAM only, no flash" -- \
