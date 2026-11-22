@@ -10,3 +10,13 @@ The first attempt (round 1, `ekf`) was `refused`. Zero load attempts were made, 
 The cause is not established. The owner's decision is notice 20261122T155801-321c73.
 
 The hang has a second, separate finding. The gate has no bound on the open/termios step, so "could not determine" took about 5 minutes and a manual kill instead of exiting 1.
+
+## Correction, same day
+
+The "0 bytes" measurement above is not evidence about the FMU. There are two reasons.
+1. It read `/dev/ttyACM0` without mapping the node to a device. After the probe host rebooted at 17:33, `ttyACM0` belonged to an unrelated USB radio (04b4, iU893A) and the FMU was `ttyACM1`. What was on `ttyACM0` during run 1 can no longer be determined.
+2. It used `cat`, which reads in cooked mode (AFD-128).
+
+After the owner's power cycle, the gate run on the FMU's `/dev/serial/by-id` path read 99,649 B in 8 s and 8 heartbeats, all with SAFETY_ARMED clear, and exited 0. `campaign.sh` now passes that path as `TTY`.
+
+`on-target-run.sh` still defaults `TTY` to `/dev/ttyACM0`, which is a defect to fix after the CI hold. The default fails closed, because a device with no heartbeat makes the gate refuse.

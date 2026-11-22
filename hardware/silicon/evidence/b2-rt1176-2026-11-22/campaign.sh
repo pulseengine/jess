@@ -17,6 +17,10 @@ set -uo pipefail
 BENCH="${1:?bench dir}"; EV="${2:?evidence dir}"; OUT="${3:?out dir}"
 N="${N:-20}"; IMAGES="${IMAGES:-ekf ekf_nc1 ekf_n15}"
 WD="${WD:-/usr/local/bin/with-device}"
+# The FMU console by its stable name. /dev/ttyACMn numbering moves when the host reboots: on
+# 2026-11-22 ttyACM0 became an unrelated radio dongle and the gate read the wrong device.
+TTY="${TTY:-/dev/serial/by-id/usb-Dronecode_Project__Inc._PX4_FMU_v6XRT.x_0-if00}"
+[ -e "$TTY" ] || { echo "STOP: FMU console $TTY not present"; exit 2; }
 mkdir -p "$OUT"; T="$OUT/attempts.tsv"
 [ -f "$T" ] || printf 'round\timage\trc\toutcome\tutc\n' > "$T"
 for i in $(seq "${START:-1}" "$N"); do
@@ -24,7 +28,7 @@ for i in $(seq "${START:-1}" "$N"); do
     cap="$OUT/$img.a$i.words"; log="$OUT/$img.a$i.log"; rm -f "$cap"
     "$WD" pixhawk-6xrt mcu-link --wait 900 \
       --purpose "jess B2 TEST-PIX-039 round $i $img: load-to-RAM only, no flash" -- \
-      env READ=ekf ATTEMPTS=1 CAPTURE="$cap" WD="$WD" \
+      env READ=ekf ATTEMPTS=1 TTY="$TTY" CAPTURE="$cap" WD="$WD" \
       "$BENCH/on-target-run.sh" "$EV/images/$img.elf" --restore > "$log" 2>&1
     rc=$?
     if [ -f "$cap" ]; then
