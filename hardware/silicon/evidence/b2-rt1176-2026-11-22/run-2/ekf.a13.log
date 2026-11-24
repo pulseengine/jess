@@ -1,0 +1,50 @@
+campaign: RUNFOR_MS=3000
+   claims asserted: pixhawk-6xrt mcu-link (held: mcu-link,pixhawk-6xrt)
+  100223 bytes in 8s, 2365 frames, 2008 CRC-VALID, 9 HEARTBEAT
+  autopilot=PX4 type=QUADROTOR mavlink_version=3
+  base_mode=0x1d system_status=0
+  SAFETY_ARMED clear in all 9 heartbeats -> DISARMED, safe to proceed.
+   settling 3s before the first halt (see the note on reset state)
+   attempt 1/1: board reset mid-run, no sentinel -> the image did not run.
+     Open On-Chip Debugger 0.12.0+dev-snapshot (2026-02-16-16:07)
+     Licensed under GNU GPL v2
+     For bug reports, read
+     	http://openocd.org/doc/doxygen/bugs.html
+     DEPRECATED! use 'cmsis-dap vid_pid', not 'cmsis_dap_vid_pid'
+     Info : CMSIS-DAP: SWD supported
+     Info : CMSIS-DAP: JTAG supported
+     Info : CMSIS-DAP: Atomic commands supported
+     Info : CMSIS-DAP: FW Version = 1.10
+     Info : CMSIS-DAP: Serial# = ARMCR0OKTRM5Q
+     Info : CMSIS-DAP: Interface Initialised (SWD)
+     Info : SWCLK/TCK = 1 SWDIO/TMS = 1 TDI = 1 TDO = 1 nTRST = 0 nRESET = 1
+     Info : CMSIS-DAP: Interface ready
+     Info : clock speed 1000 kHz
+     Info : SWD DPIDR 0x6ba02477 DPv2
+     Info : [rt.cpu] Cortex-M7 r1p2 processor detected
+     Warn : [rt.cpu] Erratum 3092511: Cortex-M7 can halt in an incorrect address when breakpoint and exception occurs simultaneously
+     Info : [rt.cpu] The erratum 3092511 workaround will resume after an incorrect halt
+     Info : [rt.cpu] target has 8 breakpoints, 4 watchpoints
+     Info : [rt.cpu] Examination succeed
+     Info : [rt.cpu] starting gdb server on 3333
+     Info : Listening on port 3333 for gdb connections
+     Warn : [rt.cpu] target was in unknown state when halt was requested
+     84737 bytes written at address 0x00000000
+     downloaded 84737 bytes in 1.068405s (77.453 KiB/s)
+     sp (/32): 0x20040000
+     pc (/32): 0x00000008
+     Info : SWD DPIDR 0x6ba02477 DPv2
+     Info : [rt.cpu] external reset detected
+     [rt.cpu] halted due to debug-request, current mode: Thread 
+     xPSR: 0x81000000 pc: 0x00223104 msp: 0x20241db0
+     pc (/32): 0x00223104
+     0x20011400: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
+     0x20011420: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
+     0x20011440: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
+     0x20011460: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 
+     shutdown command invoked
+FAIL: the board RESET during every one of 1 attempts, each time with no sentinel, so
+   nothing was measured. This is 'could not run', NOT a result about the image. If VTOR was not
+   set to 0 see the note at the top; it IS set here, and the remaining cause is unknown.
+   === restoring PX4 via nRST (a core-only reset is NOT sufficient) ===
+   PX4 app back up after ~10s

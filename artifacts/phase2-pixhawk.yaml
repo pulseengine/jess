@@ -1655,6 +1655,17 @@ artifacts:
       variable and completes on silicon; it is specified and its expected effect predicted
       before any run. The nc2 double fault is recorded as its own finding. Any wrong word stops
       the bet and outranks the release. Plan: docs/plan-v0.8.0.md B2.
+      MEASURED 2026-11-22, RESULT FAIL (r0 not repeatable). Pre-registered in 7b1a231 before any
+      run; data and RESULT.md in hardware/silicon/evidence/b2-rt1176-2026-11-22/. 60 load-to-RAM
+      attempts: ekf 1/20, ekf_nc1 0/20, ekf_n15 1/20 completed, against a floor of 10/20 per
+      image. Zero wrong words: both completions equal their expected line in all 31 words. 73 of
+      the 75 load logs (60 plus the 15 of the B2b diagnostic) show "external reset detected"
+      mid-run; the 2 that do not are the 2 completions. The replacement control B (ekf_n15, trip
+      count 15, 1 loaded byte different) completed once on silicon and matched its wasmtime
+      prediction committed before the run (fold 0x4A3FE1A4). B2b (RUNFOR_MS 3000 -> 200, one
+      variable): 0 of 15, so a shorter run window does not avoid the reset. Criterion 3 (oracle
+      exit 0 over 3 judged runs per image) was not reached. Load-to-RAM is therefore not a base
+      for B4; the owner ruled 2026-11-24 that the reset is diagnosed first (read-only SWD).
     tags: [phase-2, on-target, silicon, ladder, r0]
     fields:
       test-method: manual-test

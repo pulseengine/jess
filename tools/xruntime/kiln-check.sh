@@ -1,118 +1,105 @@
 #!/usr/bin/env bash
-# Cross-runtime check: does kiln execute the SHIPPED meld-fused core the same way wasmtime does?
+# Cross-runtime check: does kiln compute what wasmtime computes on the SHIPPED meld-fused core?
 #
-# WHAT THIS REPLACES. scripts/jess-build.sh ran
-#     "$KILND" "$FUSED" --function run-stabilization 2>/dev/null || true
-# and reported "kiln check inconclusive (non-gating)" whenever it failed. It failed EVERY time,
-# and could not have done otherwise:
-#   * the fused core exports no `run-stabilization`. kiln says so plainly —
-#     "[Runtime][E07DA] Function not found" — and then LISTS the five exports it does have.
-#     meld's fusion renames them to `pulseengine:falcon-cascade/<stage>@<ver>#<fn>`.
-#   * wasmtime's side of the "comparison" invoked that name on a DIFFERENT artifact (the
-#     pre-fusion component), so the two halves were never looking at the same thing.
-#   * `2>/dev/null || true` then made "kiln disagreed" and "kiln could not run" the same
-#     reading — the exact confusion varve#130 recorded as reporting exit 127 as a refusal.
-# The JUnit evidence still carried a `kiln-xruntime` testcase whose value was always 0.
+# HISTORY, kept because each step was a real defect:
+#   * scripts/jess-build.sh once ran `kilnd "$FUSED" --function run-stabilization 2>/dev/null
+#     || true`. The fused core has no such export, so it failed every time, and `|| true` made
+#     "disagreed" and "could not run" the same reading (AFD-116).
+#   * The next version compared the i32 each export returns. That is a POINTER into the return
+#     area, measured constant (9488) across three argument sets, so the agreement said nothing
+#     about the arithmetic. It was labelled an EXECUTION check, not a value differential.
+#   * kiln 0.6.0 decodes the return area itself and prints the record ("returned a 16-byte
+#     record through memory: m1: f32 ..."), which made the old `[0] i32` parse read nothing.
+#   * kiln 0.9.0 dropped the `kilnd` name and takes its options BEFORE the module path
+#     (`kiln --invoke E --arg X mod.wasm`), as `wasmtime run` does.
 #
-# WHAT THIS CLAIMS, AND WHAT IT DOES NOT. kiln 0.5.0 (SR-58) can invoke exports on a
-# meld-fused CORE module, which is what jess ships. Both engines are driven over the SAME
-# artifact, the SAME export and the SAME arguments, and must agree.
+# WHAT THIS CLAIMS NOW: a VALUE differential on mixer#mix. wasmtime's side comes from
+# tools/cascade-differential/cascade_ref.py, which instantiates the SAME module under
+# wasmtime-py, runs rate#tick -> mixer#mix, and dereferences the return area. kiln is then
+# driven with wasmtime's torque as mixer#mix's four flattened f32, and its decoded m1..m4 must
+# equal wasmtime's pwm BIT FOR BIT as f32 (see f32bits); a mismatch prints both.
+# Plus: every one of the five stage exports must EXECUTE under kiln.
 #
-# It is NOT a value differential, and saying so matters: every cascade export returns an i32
-# that is a POINTER into the return area, and that pointer was MEASURED to be constant (9488)
-# across three different argument sets. Two engines agreeing on a fixed address is not
-# evidence about the arithmetic. What this does establish is that a second, independent engine
-# LOADS AND EXECUTES the shipped fused core across all five stage exports without trapping,
-# and returns what wasmtime returns. Modest, but true — and it is a real executed result where
-# the previous check was a permanently-failing no-op.
-#
-# Making it a value differential needs kiln to dereference the return area (read N bytes at the
-# returned pointer). Filed upstream; until then this check is deliberately labelled down.
+# NOT CLAIMED: the other four stages' values (only mixer is compared), or anything about a
+# non-saturated operating point. cascade_ref's operating point saturates m1/m2/m4, so three of
+# the four outputs are the clamp value; m3 is the one interior value.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
-# The binary was RENAMED kilnd -> kiln upstream (jess#287). Resolve BOTH and prefer `kiln`,
-# rather than switching outright: jess has to work across v0.6.0 (kilnd) and whatever ships
-# the rename, without a flag day. An explicit KILND= still wins.
-if [ -n "${KILND:-}" ]; then :
-elif command -v kiln  >/dev/null 2>&1; then KILND=kiln
-elif command -v kilnd >/dev/null 2>&1; then KILND=kilnd
-else KILND=kilnd; fi   # keep the old name in the error message when neither resolves
+KILN="${KILN:-kiln}"
 MOD="${MOD:-$ROOT/.scratch/invoke/c.loom.wasm}"
+PY="${PY:-python3}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
+# Decimal tokens on stdin -> their f32 bit patterns (perl pack "f" rounds to single precision).
+f32bits() { perl -ne 'print join(" ", map { sprintf "0x%08x", unpack("L", pack("f", $_)) } split), "\n"'; }
 
-# The export name itself contains colons, so it is NOT safe to pack a field after one.
-# A first version wrote "…#mix:4" and split on the FIRST colon, yielding the export name
-# "pulseengine" — which then failed as "could not run", correctly, rather than silently
-# comparing nothing.
-# Resolved from the module, not hardcoded: the interface version moves (0.7.0 -> 0.10.0 in
-# falcon v1.139) while the signatures stay identical, so a baked version breaks a check that
-# has nothing to do with versions.
-IFACE_VER="$("${KILND}" "$MOD" --invoke __list 2>&1 | sed -n 's|.*falcon-cascade/mixer@\([0-9][0-9.]*\)#mix.*|\1|p' | head -1)"
-[ -n "$IFACE_VER" ] || IFACE_VER="$(wasm-tools print "$MOD" 2>/dev/null | sed -n 's|.*falcon-cascade/mixer@\([0-9][0-9.]*\)#mix.*|\1|p' | head -1)"
-[ -n "$IFACE_VER" ] || fail "could not determine the falcon interface version from $MOD —
-   refusing to guess it (that is 'could not run', not a failed check)"
-CMP_EXPORT="pulseengine:falcon-cascade/mixer@$IFACE_VER#mix"
-ARGS4="0.25 0.5 0.75 0.125"
-
-invoke_kiln() {  # $1 export, rest args -> prints the i32 or nothing
-  local e="$1"; shift
-  local a=() x
-  for x in "$@"; do a+=(--arg "$x"); done
-  "$KILND" "$MOD" --invoke "$e" "${a[@]}" 2>&1 | sed -n 's/.*\[0\] i32 \([0-9-]*\).*/\1/p' | head -1
-}
-invoke_wasmtime() { local e="$1"; shift; wasmtime run --invoke "$e" "$MOD" "$@" 2>/dev/null | tail -1; }
-
-[ -f "$MOD" ] || fail "fused core not found: $MOD"
-command -v wasmtime >/dev/null || fail "wasmtime not on PATH"
-command -v "$KILND" >/dev/null || [ -x "$KILND" ] \
-  || fail "neither 'kiln' nor 'kilnd' found (tried '$KILND') — that is 'could not run the check', NOT 'the check failed'"
-
-# kilnd must be >= 0.5.0: earlier builds have no --invoke and cannot reach a fused core at all.
-kv="$("$KILND" --version 2>&1 | head -1)"
-# Accepts BOTH names. The mechanism is right and bites CLOSED (a pre-0.5.0 build prints a
-# banner, has no --invoke, and must refuse rather than report "inconclusive") — but it was
-# applied to a STALE FACT: after the upstream rename it would refuse a perfectly good
-# `kiln 0.7.0` for a reason that no longer exists. A correct check on an outdated premise.
+[ -f "$MOD" ] || fail "fused core not found: $MOD — could not run"
+command -v "$KILN" >/dev/null 2>&1 || [ -x "$KILN" ] \
+  || fail "'$KILN' not found — that is 'could not run the check', NOT 'the check failed'"
+kv="$("$KILN" --version 2>&1 | head -1)"
 case "$kv" in
-  "kiln "*|"kilnd "*) : ;;
-  *) fail "$KILND does not report a version ('$kv'). Pre-0.5.0 builds print a banner instead and
-   have no --invoke, so this check cannot run against them — refusing rather than reporting
-   'inconclusive', which is how the previous version hid a permanent failure." ;;
+  "kiln "*) : ;;
+  *) fail "$KILN does not report a kiln version ('$kv') — refusing rather than guessing" ;;
 esac
 echo "  kiln: $kv"
 
-e="$CMP_EXPORT"
-k="$(invoke_kiln "$e" $ARGS4)"
-w="$(invoke_wasmtime "$e" $ARGS4)"
-# BOTH must produce a value. An empty reading is "could not run"; treating it as agreement is
-# precisely the defect being fixed here.
-[ -n "$k" ] || fail "kiln produced no value for $e — could not run"
-[ -n "$w" ] || fail "wasmtime produced no value for $e — could not run"
-[ "$k" = "$w" ] || fail "CROSS-RUNTIME DISAGREEMENT on $e: kiln=$k wasmtime=$w"
-echo "  $e -> kiln=$k wasmtime=$w  AGREE"
+# The interface version moves between falcon releases while the signatures stay, so read it
+# from the module (kiln lists the exports when asked for one that does not exist).
+IFACE_VER="$("$KILN" --invoke __list "$MOD" 2>&1 | sed -n 's|.*falcon-cascade/mixer@\([0-9][0-9.]*\)#mix.*|\1|p' | head -1)"
+[ -n "$IFACE_VER" ] || fail "could not read the falcon interface version from $MOD — could not run"
 
-# And every stage export must at least LOAD AND EXECUTE under kiln. This is the part that is
-# genuinely about the shipped artifact rather than about one function.
-# Each export is driven with ITS OWN arity. The cascade is not uniform — three distinct
-# shapes, measured from the fused module's core signatures:
-#   ekf#estimate  (param f32 x6) -> i32      position/attitude/rate #tick (param i32) -> i32
-#   mixer#mix     (param f32 x4) -> i32
-# A first version passed six zeros to all five, so four of them failed on arity and the count
-# read 1/5 — a number that says nothing about the artifact. Passing the wrong arity everywhere
-# and then reporting the survivors is the shape of a metric that measures the harness.
-n=0; total=0; failed=""
+# kiln's decoded record -> "m1 m2 m3 m4" as f32 BIT PATTERNS.
+# Compared as bits, not decimal strings: kiln prints the shortest decimal that round-trips the
+# f32 (0.3489921) while cascade_ref.py prints %.9g of it (0.348992109). Both are the same f32;
+# a string compare called that a disagreement (measured on the first run of this version).
+kiln_record() {  # $1 export, rest = args
+  local e="$1"; shift; local a=() x
+  for x in "$@"; do a+=(--arg "$x"); done
+  "$KILN" --invoke "$e" "${a[@]}" "$MOD" 2>&1 \
+    | awk '$1 ~ /^m[1-4]:$/ && $2 == "f32" { printf "%s%s", (n++ ? " " : ""), $3 } END { print "" }' | f32bits
+}
+
+# wasmtime's side. cascade_ref.py prints "torque tx=.. ty=.. tz=.. thrust=.." and
+# "pwm m1=.. m2=.. m3=.. m4=..", both already at %.9g.
+ref="$("$PY" "$ROOT/tools/cascade-differential/cascade_ref.py" "$MOD" 2>&1)" \
+  || { printf '%s\n' "$ref" | sed 's/^/   /' >&2; fail "the wasmtime reference could not run (PY=$PY needs the wasmtime module)"; }
+torque="$(printf '%s\n' "$ref" | awk '$1=="torque"{for(i=2;i<=5;i++){split($i,kv,"="); printf "%s%s", (i>2?" ":""), kv[2]} print ""}')"
+w_pwm="$(printf '%s\n' "$ref" | awk '$1=="pwm"{for(i=2;i<=5;i++){split($i,kv,"="); printf "%s%s", (i>2?" ":""), kv[2]} print ""}' | f32bits)"
+[ "$(wc -w <<<"$torque")" -eq 4 ] || fail "could not read wasmtime's torque from cascade_ref.py — could not run"
+[ "$(wc -w <<<"$w_pwm")" -eq 4 ] || fail "could not read wasmtime's pwm from cascade_ref.py — could not run"
+
+e="pulseengine:falcon-cascade/mixer@$IFACE_VER#mix"
+# shellcheck disable=SC2086
+k_pwm="$(kiln_record "$e" $torque)"
+[ "$(wc -w <<<"$k_pwm")" -eq 4 ] || fail "kiln returned ${k_pwm:-nothing} for $e, not a 4-field record — could not run"
+echo "  $e($torque)"
+echo "    wasmtime  $w_pwm"
+echo "    kiln      $k_pwm"
+[ "$k_pwm" = "$w_pwm" ] || fail "CROSS-RUNTIME VALUE DISAGREEMENT on $e"
+echo "    AGREE on all 4 outputs"
+
+# Every stage export kiln CAN drive must execute. The cascade is not uniform: ekf#estimate takes
+# 6 f32 and mixer#mix 4 f32 as values, but the three #tick exports take 18 values that the
+# Canonical ABI flattens into ONE pointer to an argument block. Earlier versions of this check
+# passed `0` as that pointer and counted the run as "executed" — 3 of its 5 were runs on an
+# arbitrary address. kiln 0.9.0 refuses that ([E1771], SR-60: it cannot lower the block yet),
+# which is right. Those 3 are reported as NOT DRIVABLE, never as executed and never as failed.
+n=0; total=0; failed=""; undrivable=""
 for spec in "ekf@$IFACE_VER#estimate:0 0 0 0 0 0" \
-            "position@$IFACE_VER#tick:0" \
-            "attitude@$IFACE_VER#tick:0" \
+            "position@$IFACE_VER#tick:" \
+            "attitude@$IFACE_VER#tick:" \
             "mixer@$IFACE_VER#mix:0.25 0.5 0.75 0.125" \
-            "rate@$IFACE_VER#tick:0"; do
-  stage="${spec%%:*}"; a="${spec#*:}"
-  full="pulseengine:falcon-cascade/$stage"
-  total=$((total+1))
-  if "$KILND" "$MOD" --invoke "$full" $(for x in $a; do printf -- '--arg %s ' "$x"; done) >/dev/null 2>&1
+            "rate@$IFACE_VER#tick:"; do
+  stage="${spec%%:*}"; a="${spec#*:}"; total=$((total+1))
+  if [ -z "$a" ]; then
+    out="$("$KILN" --invoke "pulseengine:falcon-cascade/$stage" --arg 0 "$MOD" 2>&1)"
+    if grep -q 'E1771' <<<"$out"; then undrivable="$undrivable $stage"; continue; fi
+    fail "kiln did NOT refuse the pointer-argument export $stage — a run on address 0 would be counted as executed"
+  fi
+  # shellcheck disable=SC2046
+  if "$KILN" --invoke "pulseengine:falcon-cascade/$stage" $(for x in $a; do printf -- '--arg %s ' "$x"; done) "$MOD" >/dev/null 2>&1
   then n=$((n+1)); else failed="$failed $stage"; fi
 done
-[ "$n" -eq "$total" ] || fail "kiln executed only $n/$total stage exports; failed:$failed"
-echo "  kiln executed $n/$total stage exports of the shipped fused core"
-echo "NOTE: agreement is on a return-area POINTER, measured constant across inputs — this is an"
-echo "      EXECUTION check, not a value differential (see the header)."
+nu=$(wc -w <<<"$undrivable" | tr -d " ")
+[ -z "$failed" ] || fail "kiln failed on a value-argument export:$failed"
+echo "  of $total stage exports: $n executed under kiln, $nu not drivable by kiln (pointer arguments, SR-60):$undrivable"
+echo "  VALUE differential: 1 of $total (mixer). Executed only: $((n-1)). Not run: $nu."
