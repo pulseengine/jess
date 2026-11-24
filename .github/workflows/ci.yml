@@ -826,10 +826,11 @@ jobs:
           DUMP_WORDS: /tmp/ekf-words
       # The SAME oracle judges words captured on the real RT1176 (on-target-run.sh READ=ekf ->
       # WORDS_DIR=...). CI has no board, so this gates the judge: the Renode captures written
-      # above must PASS, and seven planted bad sets (another build's hash, one tick-16 word off by
-      # one ulp, no sentinel, a missing control A or B, no origin line, a control that repeats the
+      # above must PASS, and nine planted bad sets (another build's hash, one tick-16 word off by
+      # one ulp, no sentinel, a missing control A or B, control B repeating the baseline's 16 ticks,
+      # one control-B tick-15 word off by one ulp, no origin line, a control A that repeats the
       # baseline) must each FAIL for their own stated reason.
-      - name: ekf capture judge — genuine passes, 7 planted captures refused
+      - name: ekf capture judge — genuine passes, 9 planted captures refused
         run: tools/ci/test-ekf-words-dir.sh /tmp/ekf-words
       # REQ-PIX-023 / TEST-PIX-038. jess-ladder writes north-star-input.O1.json (pulseengine.eu#393,
       # objective O1) by re-running the judge above over the committed silicon evidence; it takes

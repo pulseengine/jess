@@ -10,7 +10,7 @@ set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../.." && pwd)"
 ORACLE="$ROOT/hardware/renode/cascade-invoke/run-ekf-oracle.sh"
 G="${1:?usage: test-ekf-words-dir.sh <genuine capture dir>}"
-for f in ekf ekf_nc1 ekf_nc2; do
+for f in ekf ekf_nc1 ekf_n15; do
   [ -f "$G/$f.words" ] || { echo "FAIL: genuine capture $G/$f.words missing — could not run"; exit 1; }
 done
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -57,8 +57,20 @@ fresh no-control;   rm "$T/no-control/ekf_nc1.words"
 run_case no-control fail "'could not run' on the target"
 
 # control B was never observed: it must not pass as "a different fold"
-fresh no-control-b; rm "$T/no-control-b/ekf_nc2.words"
+fresh no-control-b; rm "$T/no-control-b/ekf_n15.words"
 run_case no-control-b fail "control B was NOT observed"
+
+# control B reports the baseline's 16-tick words: it completed, but did not run one tick fewer
+fresh blind-control-b
+{ sed -n 1p "$T/blind-control-b/ekf_n15.words"; sed -n 2,3p "$T/blind-control-b/ekf.words"; } > "$T/blind-control-b/x" \
+  && mv "$T/blind-control-b/x" "$T/blind-control-b/ekf_n15.words"
+run_case blind-control-b fail "control B ran 0x00000010 iterations, expected 0x0000000F"
+
+# control B ran 15 ticks but one tick-15 state word is off by one ulp
+fresh flipped-b
+v="$(sed -n 3p "$T/flipped-b/ekf_n15.words" | awk '{print $21}')"
+word "$T/flipped-b/ekf_n15.words" 20 "$(printf '0x%08X' $(( v ^ 1 )))"
+run_case flipped-b fail "control B tick 15 state does NOT match the wasmtime reference"
 
 # where the words executed is not stated
 fresh no-origin;    sed -i.bak '2d' "$T/no-origin/ekf.words"

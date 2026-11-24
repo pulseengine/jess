@@ -39,7 +39,7 @@ RUNFOR="${RUNFOR:-4.0}"
 WORDS=31                          # 1 trip count + 14 tick1 + 14 tickN + fold + sentinel
 
 # WHERE THE WORDS COME FROM. By default this script runs each image on Renode. With
-# WORDS_DIR=<dir> it runs nothing: it reads <dir>/{ekf,ekf_nc1,ekf_nc2}.words, as written by
+# WORDS_DIR=<dir> it runs nothing: it reads <dir>/{ekf,ekf_nc1,ekf_n<N-1>}.words, as written by
 # tools/bench/on-target-run.sh READ=ekf on the real RT1176, and judges them with the SAME code
 # below. Each capture names the sha256 of the ELF that produced it; a capture whose hash is not
 # this tree's ELF is REFUSED, so words from another build cannot pass for this one. Its
@@ -246,28 +246,40 @@ nc1_f="$(norm "${W1[29]}")"
    own input, so bit-exactness above attributes nothing."
 echo "   perturbed-gy control completed, folded $nc1_f != $g_f  (a wrong-but-plausible result IS caught)"
 
-# CONTROL B (LIVENESS ONLY) — init skipped. Labelled honestly: an image that never ran reports
-# the same all-zero fold, so three different breakages are indistinguishable here. This answers
-# "did anything survive", not "are the embedder promises load-bearing" (clean-room finding on
-# the soak's equivalent control).
-NC2="${ELF_DIR:-$SCRATCH/invoke}/ekf_nc2.elf"
-[ -f "$NC2" ] || fail "ekf_nc2.elf missing — build.sh must build the controls"
-W2=( $(read_ekf "$NC2") )
-# AN EMPTY READ IS NOT A DIFFERENT FOLD. Without this check an unreadable control B left nc2_f
-# empty, "" != the baseline fold, and the run printed Result: PASS with control B never
-# observed (found 2026-11-17 when the init-skipped image locked up on the real RT1176 and
-# left no capture). Control A always had this check; control B did not.
+# CONTROL B (ATTRIBUTIVE, ITERATION COUNT) — the baseline with one tick fewer (EKF_N=N-1, one
+# loaded byte different at N=16). It is judged IN FULL against wasmtime at N-1: trip word, tick-1
+# state (unchanged), tick-(N-1) state and fold. So it must complete and be RIGHT, which a control
+# that merely "folds differently" never had to be. It replaced the init-skipped image (ekf_nc2),
+# which attributed nothing and does not complete on silicon (AFD-153).
+NB=$((N - 1))
+NBE="${ELF_DIR:-$SCRATCH/invoke}/ekf_n$NB.elf"
+[ -f "$NBE" ] || fail "ekf_n$NB.elf missing — build.sh must build the controls"
+W2=( $(read_ekf "$NBE") )
+# AN EMPTY READ IS NOT A DIFFERENT FOLD. An unreadable control B once left its fold empty,
+# "" != the baseline fold, and the run printed Result: PASS with control B never observed.
 [ "${#W2[@]}" -eq "$WORDS" ] || fail "control B returned ${#W2[@]} words, not $WORDS — control B was NOT observed"
-nc2_f="$(norm "${W2[29]}")"
-if [ "$nc2_f" = "$g_f" ]; then
-  fail "control B folded identically with the embedder init skipped — the promises are not load-bearing"
-fi
-echo "   init-skipped control folded $nc2_f != $g_f (LIVENESS ONLY — attributes nothing; see note)"
+[ "$(norm "${W2[30]}")" = "0x1E55E4F0" ] || fail "control B did not COMPLETE — a crash is not a control"
+[ "$(norm "${W2[0]}")" = "$(norm "$NB")" ] || fail "control B ran $(norm "${W2[0]}") iterations, expected $(norm "$NB")"
+ref_rc=0
+REFB="$("$PY" "$ROOT/tools/cascade-differential/ekf_ref.py" "$MOD" "$NB" --format json 2>"$SCRATCH/invoke/ekf_ref_b.err")" \
+  || ref_rc=$?
+[ "$ref_rc" -eq 0 ] || { sed 's/^/   /' "$SCRATCH/invoke/ekf_ref_b.err" >&2; fail "the reference generator failed at N=$NB (exit $ref_rc) — control B could not be judged"; }
+rb_tN="$("$PY" -c "import json,sys;print(' '.join('0x%08X'%w for w in json.loads(sys.argv[1])['tickN']))" "$REFB")"
+rb_f="$("$PY"  -c "import json,sys;print('0x%08X'%json.loads(sys.argv[1])['fold'])" "$REFB")"
+b_t1=""; for i in $(seq 1 14);  do b_t1="$b_t1$(norm "${W2[$i]}") "; done; b_t1="${b_t1% }"
+b_tN=""; for i in $(seq 15 28); do b_tN="$b_tN$(norm "${W2[$i]}") "; done; b_tN="${b_tN% }"
+nb_f="$(norm "${W2[29]}")"
+[ "$b_t1" = "$r_t1" ] || fail "control B tick 1 state does NOT match the wasmtime reference"
+[ "$b_tN" = "$rb_tN" ] || { show "tickN" "$b_tN" "$rb_tN"; fail "control B tick $NB state does NOT match the wasmtime reference at N=$NB"; }
+[ "$nb_f" = "$rb_f" ] || fail "control B fold over $NB ticks: target $nb_f reference $rb_f"
+[ "$nb_f" != "$g_f" ] || fail "control B folded IDENTICALLY to the baseline with one tick fewer — the fold does not see the iteration count"
+echo "   one-tick-fewer control: $NB iterations, tick $NB state and fold $nb_f match wasmtime at N=$NB, != $g_f"
 
 echo
 [ -n "$WORDS_DIR" ] && WHERE="$(sed -n '2s/^origin //p' "$WORDS_DIR/ekf.words")"
 echo "Result: PASS — falcon's ESTIMATOR ran $N ticks on $WHERE and tracked"
 echo "        the wasmtime reference bit-exact on all 14 state words at tick 1 and tick $N,"
 echo "        and across a fold of all $((14 * N)) state words. The estimator integrates"
-echo "        (tick1 != tickN), and perturbing ONE of its six live inputs moves the fold."
+echo "        (tick1 != tickN), perturbing ONE of its six live inputs moves the fold, and one"
+echo "        tick fewer (control B) matches wasmtime at N=$NB in full."
 echo "        This is the FIRST jess measurement of any cascade stage other than rate/mixer."
