@@ -58,7 +58,9 @@ WD="${WD:-$D/with-device}"
 DEVS="${DEVS:-pixhawk-6xrt mcu-link}"
 DEV="${DEV:-}"            # back-compat: DEV=x is honoured as a single-device DEVS
 [ -n "$DEV" ] && DEVS="$DEV"
-TTY="${TTY:-/dev/ttyACM0}"
+# The FMU console by its stable name. /dev/ttyACMn numbering moves when the host reboots: on
+# 2026-11-22 ttyACM0 became an unrelated USB radio and the gate read the wrong device.
+TTY="${TTY:-/dev/serial/by-id/usb-Dronecode_Project__Inc._PX4_FMU_v6XRT.x_0-if00}"
 OOCD_CFG="${OOCD_CFG:-$D/openocd/rt1176-swd.cfg}"
 SRST_CFG="${SRST_CFG:-$D/openocd/rt1176-srst.cfg}"
 SETTLE="${SETTLE:-3}"
@@ -117,7 +119,10 @@ echo "   claims asserted: $DEVS (held: ${WITH_DEVICE_CLAIM:-<unset>})"
 # Halting the M7 stops the flight controller. On a quadrotor that is catastrophic if armed, so
 # this is FAIL-CLOSED: "could not determine" blocks exactly like "armed".
 if [ -x "$D/preflight-disarmed.py" ] || [ -f "$D/preflight-disarmed.py" ]; then
-  python3 "$D/preflight-disarmed.py" "$TTY" --lib "$D" || fail "pre-flight gate refused — not proceeding"
+  # BOUNDED. The gate blocked ~5 min in the kernel's set_termios on 2026-11-22 and needed a kill.
+  # "Could not determine" must exit, not hang: a timeout refuses exactly like any other refusal.
+  timeout 30 python3 "$D/preflight-disarmed.py" "$TTY" --lib "$D" \
+    || fail "pre-flight gate refused (or did not answer within 30 s) — not proceeding"
 else
   fail "preflight-disarmed.py missing next to this script — refusing to halt the M7 without
    proving the vehicle is disarmed"
@@ -151,9 +156,13 @@ restore_px4() {
   timeout 45 openocd -f "$SRST_CFG" -c "init" -c "reset run" -c "shutdown" >/dev/null 2>&1
   for i in $(seq 1 12); do
     sleep 5
-    case "$(lsusb -d 3643:001d 2>/dev/null)" in
-      *"PX4 FMU"*) echo "   PX4 app back up after ~$((i*5))s"; return 0;;
-    esac
+    # The KERNEL's product string, not lsusb's. The bootloader and the app share 3643:001d, and
+    # lsusb prints its id-database name for both, so `lsusb | grep "PX4 FMU"` matched the
+    # bootloader and reported the app up while it was not (B2, 2026-11-22: the next gate got EIO
+    # when the bootloader dropped off). The kernel says "PX4 BL FMU v6XRT.x" vs "PX4 FMU v6XRT.x".
+    if grep -qx 'PX4 FMU v6XRT.x' /sys/bus/usb/devices/*/product 2>/dev/null; then
+      echo "   PX4 app back up after ~$((i*5))s"; return 0
+    fi
   done
   echo "FAIL: PX4 did NOT come back within 60s. Check lsusb: it may be sitting in the bootloader
    ('PX4 BL'), which chains to the app on its own, or it may need a power cycle." >&2
