@@ -1666,6 +1666,16 @@ artifacts:
       variable): 0 of 15, so a shorter run window does not avoid the reset. Criterion 3 (oracle
       exit 0 over 3 judged runs per image) was not reached. Load-to-RAM is therefore not a base
       for B4; the owner ruled 2026-11-24 that the reset is diagnosed first (read-only SWD).
+      RERUN B2r 2026-11-24, ALL THREE CRITERIA MET. The reset was an M7 lockup (SRC_SRSR
+      0x10000004, #327); the loader now sets PRIMASK=1 before resume and refuses unless it reads
+      back as 1 (#328), the one variable changed. Pre-registered in 4044e8a before any run, loader
+      sha256 recorded in 25ca0aa; same images, expected lines and campaign.sh as B2. 60 of 60
+      attempts completed and matched their expected line (ekf 20/20, ekf_nc1 20/20, ekf_n15
+      20/20); zero wrong words; 0 of 60 logs show "external reset detected". All 20 rounds judged
+      by run-ekf-oracle.sh at e950706 (control B judged in full at N=15) exit 0; a one-ulp flip in
+      one tick-16 word makes the same judge exit 1. Evidence:
+      hardware/silicon/evidence/b2r-rt1176-2026-11-24/. Status stays draft until a fresh-context
+      review re-derives this from the evidence; the B2 FAIL above stands as its own record.
     tags: [phase-2, on-target, silicon, ladder, r0]
     fields:
       test-method: manual-test
