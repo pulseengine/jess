@@ -1516,9 +1516,11 @@ artifacts:
           equal, and that refusal is self-tested along with a "dead output" guard.
         5 ATTRIBUTIVE CONTROL — one imu scalar (gy) perturbed with the embedder init fully intact; the
           fold must move. Attributive because all six inputs were measured live.
-        6 LIVENESS CONTROL — init skipped. Labelled honestly as liveness only: an image that never ran
-          reports the same all-zero fold, so it answers "did anything survive", not "are the embedder
-          promises load-bearing".
+        6 ITERATION-COUNT CONTROL (since 2026-11-24) — the baseline with one tick fewer (EKF_N=N-1;
+          at N=16, 1 of 84,737 loaded bytes differs). Judged in full against wasmtime at N-1: trip
+          word, tick-1 and tick-(N-1) state, fold (0x4A3FE1A4 at N=15), and the fold must differ
+          from the baseline's. It replaced the init-skipped liveness control (ekf_nc2), which
+          attributed nothing and does not complete on silicon (AFD-153).
 
       SCOPE, stated because it is easy to overstate: both sides run the SAME c.loom.wasm, so the
       reference is an independent BACKEND, not an independent artifact. This covers SYNTH'S LOWERING

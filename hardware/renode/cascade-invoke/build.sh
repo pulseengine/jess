@@ -412,14 +412,23 @@ arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/ekf_nc1.o" "$OUT/init.o
     -o "$OUT/ekf_nc1.elf" || fail "ekf_nc1 link"
 cmp -s "$OUT/ekf.elf" "$OUT/ekf_nc1.elf" && fail "ekf_nc1.elf is byte-identical to ekf.elf — the control is inert"
 
-# CONTROL B (liveness only) — init skipped. Labelled honestly: an image that never ran reports
-# the same all-zero fold, so this answers "did anything survive", not "are the promises
-# load-bearing". Same limitation the soak's control carries.
-[ -f "$OUT/nc2.o" ] || fail "nc2.o missing — step 5 must run before the ekf controls are linked"
-arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/nc2.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
-    -o "$OUT/ekf_nc2.elf" || fail "ekf_nc2 link"
-cmp -s "$OUT/ekf.elf" "$OUT/ekf_nc2.elf" && fail "ekf_nc2.elf is byte-identical to ekf.elf — the control is inert"
-echo "   ekf_nc1.elf (perturbed gy, full init) and ekf_nc2.elf (no init) linked and both differ"
+# CONTROL B (attributive, iteration count) — the baseline with ONE tick fewer: boot-ekf.S
+# assembled under --defsym EKF_N=N-1, linked from the same objects. It replaced the init-skipped
+# image (ekf_nc2), which does not complete on silicon (AFD-153) and attributed nothing even in
+# Renode. The oracle judges this image against wasmtime at N-1 in full (trip word, tick-N state,
+# fold), so it must complete AND be right, not merely differ. The object is named boot_ekf.o in
+# its own directory so the symbol table carries the same file name as the baseline's; at N=16 the
+# loaded bytes then differ from ekf.elf in exactly one byte (the `mov.w r0, #EKF_N` immediate).
+NB=$(( ${EKF_N:-16} - 1 ))
+[ "$NB" -ge 1 ] || fail "control B needs EKF_N >= 2 (EKF_N=${EKF_N:-16})"
+mkdir -p "$OUT/nb"
+arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard \
+  -Wa,--defsym,EKF_N=$NB "$D/boot-ekf.S" -o "$OUT/nb/boot_ekf.o" || fail "boot-ekf.S at EKF_N=$NB"
+arm-none-eabi-ld -T "$D/link.ld" "$OUT/nb/boot_ekf.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
+    -o "$OUT/ekf_n$NB.elf" || fail "ekf_n$NB link"
+cmp -s "$OUT/ekf.elf" "$OUT/ekf_n$NB.elf" && fail "ekf_n$NB.elf is byte-identical to ekf.elf — the control is inert"
+rm -f "$OUT/ekf_nc2.elf"   # a stale init-skipped image must not be mistaken for a control
+echo "   ekf_nc1.elf (perturbed gy) and ekf_n$NB.elf (one tick fewer) linked and both differ"
 
 echo "== 5b. the paint band must be ZERO in the module's own data =="
 # harness.c paints [0x400,0x2000) with 0xDEADBEEF to measure the linear-memory high-water
