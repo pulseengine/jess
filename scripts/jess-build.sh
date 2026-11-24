@@ -45,7 +45,7 @@ cli() { # $1 = crate/dir name, $2 = binary name, $3 = optional alternate binary 
 }
 
 note "0.1.0 forward chain for $VERSION (asset $WASM_NAME)"
-LOOM="$(cli loom loom)"; MELD="$(cli meld meld)"; SYNTH="$(cli synth synth)"; KILND="$(cli kiln kiln kilnd)"
+LOOM="$(cli loom loom)"; MELD="$(cli meld meld)"; SYNTH="$(cli synth synth)"; KILN="$(cli kiln kiln)"
 
 # --- acquire the component (source build | local | released asset) -------
 note "acquire component ($MODE)"
@@ -113,7 +113,7 @@ KILN_OK=0
 # Pass the artifact and binary THIS script built/uses. Letting the checker fall back to its
 # own defaults would check a different file than the one just fused — which is the exact
 # defect being fixed here, reintroduced one layer down.
-if kout="$(MOD="$FUSED" KILND="$KILND" "$ROOT/tools/xruntime/kiln-check.sh" 2>&1)"; then
+if kout="$(MOD="$FUSED" KILN="$KILN" "$ROOT/tools/xruntime/kiln-check.sh" 2>&1)"; then
   KILN_OK=1; printf '%s\n' "$kout" | sed 's/^/  /'
 else
   printf '%s\n' "$kout" | sed 's/^/  /'
