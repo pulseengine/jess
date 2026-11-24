@@ -19,7 +19,7 @@ ok=0; n=0
 # with every origin relabelled as silicon.
 kit() {
   local d="$T/$1"; mkdir -p "$d"
-  for i in ekf ekf_nc1 ekf_nc2; do
+  for i in ekf ekf_nc1 ekf_n15; do
     cp "$INV/$i.elf" "$d/"
     sed '2s/^origin .*/origin rt1176-silicon planted-from-renode/' "$RW/$i.words" > "$d/$i.words"
   done
@@ -48,10 +48,12 @@ expect() {
 
 expect pass-path        pass    "$(kit pass)"
 expect genuine-silicon  fail    "$EV"
-# ...and it fails for the reason the evidence predicts: control B (nc2) never produced words on
-# silicon. Failing anywhere earlier would mean this tree no longer reproduces the silicon words.
+# ...and it fails for the reason the evidence predicts: at control B, which is judged last. The
+# 2026-11-17 evidence predates the one-tick-fewer control and holds neither ekf_n15.elf nor its
+# words, so the oracle stops at whichever it looks for first. Failing anywhere earlier would mean
+# this tree no longer reproduces the silicon words for the baseline and control A.
 n=$((n+1)); why="$(jq -r '.facts[] | select(.id=="pixhawk-6xrt/r0") | .detail.reason' "$T/genuine-silicon.json" 2>/dev/null)"
-case "$why" in *ekf_nc2.words*) ok=$((ok+1)); echo "  ok   genuine-silicon fails at control B: $why" ;;
+case "$why" in *ekf_n15.elf\ missing*|*ekf_n15.words*) ok=$((ok+1)); echo "  ok   genuine-silicon fails at control B: $why" ;;
   *) echo "  BAD  genuine-silicon fails for another reason: $why" ;; esac
 d="$(kit tampered)"
 read -r -a w < <(sed -n 3p "$d/ekf.words"); w[20]="$(printf '0x%08x' $(( 16#${w[20]#0x} ^ 1 )))"
