@@ -20,17 +20,16 @@
 #        0x00223104. Writing VTOR=0 before resume is mandatory and is invisible in emulation.
 #      THE SENTINEL IS THE ONLY PROOF OF COMPLETION. A run that did not finish parks all zeros,
 #        which is NOT a result. This script refuses to print results without the sentinel.
-#      THE RUN IS INTERMITTENT AND THE CAUSE IS NOT ESTABLISHED. Some attempts die with
+#      THE RUN WAS INTERMITTENT WITHOUT PRIMASK. Some attempts died with
 #        "external reset detected" and PX4 back at PC 0x00223104, EVEN WITH VTOR SET, parking all
-#        zeros with no sentinel. Identical commands then succeed. Measured in the 2026-10-01
-#        session: 2 clean runs (baseline + negative control, both bit-exact against Renode) and 2
-#        such failures after VTOR was fixed.
-#        A WATCHDOG WAS THE OBVIOUS SUSPECT AND IS REFUTED BY MEASUREMENT, on a freshly booted
-#        board, halted and read immediately: WDOG1 and WDOG2 both WCR=0x0030 (WDE clear),
-#        RTWDOG3 CS=0x00002520 (EN clear), RTWDOG4 unresponsive. No watchdog is running. The
-#        cause is therefore UNKNOWN, and this file does not pretend otherwise.
-#        The script handles it with a bounded retry — see the note on why that is legitimate
-#        here and would not be in general.
+#        zeros with no sentinel. A watchdog was refuted (WDOG1/2 WDE clear, RTWDOG3 EN clear).
+#        THE CAUSE WAS FOUND 2026-11-24 (hardware/silicon/evidence/lockup-rt1176-2026-11-24/):
+#        SRC_SRSR read 0x10000004, an M7 LOCKUP, from the first 50 ms after resume. PX4 is halted,
+#        not reset, so an interrupt it enabled can be pending at resume, and the jess image's
+#        2-word vector table has no valid handler for it or for the fault that follows.
+#        PRIMASK=1 before resume gave 10 of 10 complete and correct runs with SRSR 0, against
+#        2 of 60 in B2. This script therefore sets `reg primask 1` before `resume` (below).
+#        Which interrupt it is was not identified. The bounded retry stays as a backstop.
 #      A CORE-ONLY RESET DOES NOT RESTORE PX4. After `reset run` on the core alone the FMU did not
 #        re-enumerate at all. Restoring needs nRST (Pixhawk Debug Full pin 9), after which the
 #        board comes up as "PX4 BL" and chains to "PX4 FMU" in ~18 s.
@@ -183,6 +182,7 @@ timeout 120 openocd -f "$OOCD_CFG" \
   -c "load_image $ELF" \
   -c "mww 0xE000ED08 0x00000000" \
   -c "reg sp 0x20040000" -c "reg pc 0x8" \
+  -c "reg primask 1" -c "reg primask" \
   -c "resume" -c "sleep $RUNFOR_MS" -c "halt" \
   -c "reg pc" \
   "${RD[@]}" \
@@ -191,6 +191,10 @@ rc=$?
 
 grep -qE '[0-9]+ bytes written at address 0x00000000' "$OUT" \
   || { sed 's/^/     /' "$OUT" >&2; fail "the image never loaded — 'could not run', not a result"; }
+# PRIMASK must read back as 1 before resume (the lockup fix, see the header). The read-back is
+# openocd's report from the core, so a missing or wrong line means the fix did not reach it: refuse.
+grep -qE '^primask \(/[0-9]+\): 0x0*1[[:space:]]*$' "$OUT" \
+  || { sed 's/^/     /' "$OUT" >&2; fail "PRIMASK did not read back as 1 before resume — refusing (lockup fix not applied)"; }
 
 # Retry ONLY the non-event: a reset with no sentinel means nothing was measured.
 if grep -q 'external reset detected' "$OUT" && ! grep -q "$SENTINEL" "$OUT"; then
