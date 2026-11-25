@@ -197,6 +197,12 @@ fn check(cat_p: &str, reg_p: &str) -> R<i32> {
     // MODEL. `parts` stays loadable so `boards[].parts` can be cross-checked; it is not a
     // namespace a device may be named from.
     let cat = load(cat_p)?;
+    // An EMPTY catalogue file is `null` from rivet. It used to crash on `.get`; it is refused
+    // by name instead, since "the catalogue is empty" is the verdict, not an interpreter error.
+    if cat.is_null() {
+        println!("  CATALOGUE IS EMPTY: {cat_p} holds no document — nothing to check names against");
+        return Ok(1);
+    }
     let lockable: BTreeSet<String> = set_of(&or_dict(&get(&cat, "boards")?))?
         .into_iter()
         .chain(set_of(&or_dict(&get(&cat, "standalone")?))?)
@@ -211,6 +217,13 @@ fn check(cat_p: &str, reg_p: &str) -> R<i32> {
         Value::Object(o) => o.keys().cloned().collect(),
         _ => return crash("AttributeError: .keys() on a non-mapping"),
     };
+    // ZERO DEVICES CHECKED IS NOT A PASS. An empty registry (no content, or no `devices:`) used
+    // to print "names: 0/0 registry devices resolve" and then CATALOG OK, a green verdict over an
+    // empty denominator. Refused, so a registry that failed to load or was truncated cannot pass.
+    if used.is_empty() {
+        println!("  REGISTRY HAS NO DEVICES: {reg_p} — 0 names to check; refusing to report a pass");
+        return Ok(1);
+    }
     let mut fail = 0;
 
     let missing: Vec<&String> = used.difference(&names).collect();

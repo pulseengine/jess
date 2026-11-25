@@ -274,6 +274,8 @@ const BRANCHES: &[&str] = &[
     "exit 0",
     "exit 1",
     "crash (no check line printed)",
+    "CATALOGUE IS EMPTY",
+    "REGISTRY HAS NO DEVICES",
     "UNKNOWN TO THE CATALOGUE",
     "registry devices resolve",
     "STANDALONE ENTRY WITH NO SERIAL",
@@ -331,6 +333,7 @@ fn mutants_are_detected() {
     let mutants = [
         ("carriers > 1 -> > 2", "    if len(carriers) > 1:", "    if len(carriers) > 2:"),
         ("standalone serial rule disabled", "if not (v or {}).get('serial'))", "if False)"),
+        ("empty-registry refusal disabled", "if not used:", "if False:"),
     ];
     let cs = cases();
     for (name, from, to) in mutants {

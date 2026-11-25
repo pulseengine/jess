@@ -50,6 +50,11 @@ run_check() {
 import sys, yaml, subprocess
 cat_p, reg_p = sys.argv[1], sys.argv[2]
 cat = yaml.safe_load(open(cat_p))
+# An EMPTY catalogue file loads as None. It used to die on `None.get` with a traceback; it is
+# refused by name instead, since "the catalogue is empty" is the verdict, not a Python error.
+if cat is None:
+    print(f"  CATALOGUE IS EMPTY: {cat_p} holds no document — nothing to check names against")
+    sys.exit(1)
 # A device name may resolve to a BOARD, an ADAPTER or a SYNTHETIC entry — and NEVER to a PART.
 # THE RULE WAS PROSE AND THEREFORE UNENFORCED. The naming rule at the head of `boards:` says
 # "EVERY DEVICE NAME IS A BOARD, NEVER A PROBE MODEL", agreed with gale on jess#266 after an
@@ -66,6 +71,12 @@ part_only = set(cat.get('parts') or {}) - lockable
 names = lockable | part_only          # resolves at all (assertion 1)
 reg = yaml.safe_load(open(reg_p)) or {}
 used = set((reg.get('devices') or {}).keys())
+# ZERO DEVICES CHECKED IS NOT A PASS. An empty registry (no file content, or no `devices:`)
+# used to print "names: 0/0 registry devices resolve" and then CATALOG OK — a green verdict over
+# an empty denominator. Refused, so a registry that failed to load or was truncated cannot pass.
+if not used:
+    print(f"  REGISTRY HAS NO DEVICES: {reg_p} — 0 names to check; refusing to report a pass")
+    sys.exit(1)
 fail = 0
 
 missing = sorted(used - names)
