@@ -1,0 +1,15 @@
+[package]
+name = "check-catalog"
+version = "0.1.0"
+edition = "2021"
+description = "Assert the bench hardware catalogue and a device registry agree (names, aliases, provenance)"
+license = "Apache-2.0"
+publish = false
+
+# Port of the Python embedded in tools/bench/check-catalog.sh (jess#290). The YAML is read
+# through `rivet yaml to-json` (rivet's own parser, org policy), never parsed here. The old
+# script is kept as tools/bench/check-catalog.ref.sh and is the equivalence oracle:
+# tests/equivalence.rs runs both and asserts identical stdout and exit code.
+
+[dependencies]
+serde_json = { version = "1", features = ["preserve_order"] }

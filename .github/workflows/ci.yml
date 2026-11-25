@@ -237,6 +237,17 @@ jobs:
       # LIVES HERE, not in bench-tool: it verifies every `measured-by` citation names a real
       # artifact, which needs `rivet` on PATH. bench-tool does not install it, so the first
       # placement failed closed with "CANNOT VERIFY" — correct refusal, wrong job.
+      # jess#290: the check is a Rust port (tools/bench/check-catalog/) that reads the YAML through
+      # `rivet yaml to-json`. The old Python script is kept as check-catalog.ref.sh and is the
+      # equivalence oracle: the harness runs both on the real files, named edge cases and 150
+      # seeded random cases, requires identical stdout and exit code and every output branch
+      # reached, and plants two mutants in the reference that must each be detected. It FAILS,
+      # never skips, if the reference (python3 + PyYAML) cannot run.
+      - name: check-catalog port builds, and equals the Python reference (jess#290)
+        working-directory: jess
+        run: |
+          cargo build --release --locked --manifest-path tools/bench/check-catalog/Cargo.toml
+          cargo test --release --locked --manifest-path tools/bench/check-catalog/Cargo.toml -- --nocapture
       - name: hardware catalogue agrees with the registry (+ its own negative controls)
         working-directory: jess
         run: tools/bench/check-catalog.sh --self-test
