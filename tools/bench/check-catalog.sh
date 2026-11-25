@@ -225,16 +225,26 @@ if [ "${1:-}" = "--self-test" ]; then
 
   # NC3/NC4 cover assertion 3. Injected into a COPY of the real registry, so they exercise the
   # same reader the real check uses rather than a hand-built fixture that could drift from it.
-  python3 - "$REG" "$t/alias-unknown.yaml" "$t/alias-collide.yaml" <<'PYNC'
+  python3 - "$CAT" "$REG" "$t/alias-unknown.yaml" "$t/alias-collide.yaml" <<'PYNC' \
+    || { echo "  NC3/NC4 FAILED: the fixtures could not be built — the controls would be vacuous"; rm -rf "$t"; exit 1; }
 import sys, yaml
-reg = yaml.safe_load(open(sys.argv[1]))
+cat = yaml.safe_load(open(sys.argv[1]))
+reg = yaml.safe_load(open(sys.argv[2]))
 d = reg['devices']; first = sorted(d)[0]
 a = yaml.safe_load(yaml.dump(reg)); a['devices'][first]['aliases'] = ['no-such-board']
-yaml.safe_dump(a, open(sys.argv[2], 'w'))
+yaml.safe_dump(a, open(sys.argv[3], 'w'))
 b = yaml.safe_load(yaml.dump(reg))
-other = [k for k in sorted(d) if k != first][0]
+# NC4 needs a SECOND registered device for the alias to collide with. The registry has had one
+# device since AFD-147, so this used to raise IndexError, write no fixture, and NC4 "passed" on
+# run_check refusing a file that did not exist. Register a catalogue board when there is no other.
+others = [k for k in sorted(d) if k != first]
+if others:
+    other = others[0]
+else:
+    other = sorted(k for k in (cat.get('boards') or {}) if k not in d)[0]
+    b['devices'][other] = {'what': 'NC4 second device'}
 b['devices'][first]['aliases'] = [other]      # an alias that IS another device
-yaml.safe_dump(b, open(sys.argv[3], 'w'))
+yaml.safe_dump(b, open(sys.argv[4], 'w'))
 PYNC
   if run_check "$CAT" "$t/alias-unknown.yaml" >/dev/null 2>&1; then
     echo "  NC3 FAILED: an alias the catalogue does not contain did not trip the check"
@@ -250,7 +260,8 @@ PYNC
   # NC5/NC6 cover assertion 1b — the rule that was prose for a month (AFD-136). Both inject a
   # PART name (a probe model) built from the catalogue's own `parts:` section, so the control
   # cannot drift from the thing it controls.
-  python3 - "$CAT" "$REG" "$t/dev-is-part.yaml" <<'PYNC2'
+  python3 - "$CAT" "$REG" "$t/dev-is-part.yaml" <<'PYNC2' \
+    || { echo "  NC5 FAILED: the fixture could not be built — the control would be vacuous"; rm -rf "$t"; exit 1; }
 import sys, yaml
 cat = yaml.safe_load(open(sys.argv[1])); reg = yaml.safe_load(open(sys.argv[2]))
 lockable = set(cat.get('boards') or {}) | set(cat.get('standalone') or {}) | set(cat.get('synthetic') or {})
@@ -271,7 +282,8 @@ PYNC2
   # NC6 group covers the SHARPENED alias rule: ambiguity, not shape. Fixtures are derived from
   # the real catalogue, so they cannot drift from the thing they control. The ambiguous case is
   # REAL — `stlink-v2-1` is carried by two catalogue boards, which is gale#397's actual shape.
-  python3 - "$CAT" "$REG" "$t/alias-ambig.yaml" "$t/alias-one.yaml" "$t/alias-wrong.yaml" <<'PYNC4'
+  python3 - "$CAT" "$REG" "$t/alias-ambig.yaml" "$t/alias-one.yaml" "$t/alias-wrong.yaml" <<'PYNC4' \
+    || { echo "  NC6 FAILED: the fixtures could not be built — the controls would be vacuous"; rm -rf "$t"; exit 1; }
 import sys, yaml
 cat = yaml.safe_load(open(sys.argv[1])); reg = yaml.safe_load(open(sys.argv[2]))
 boards = cat.get('boards') or {}
@@ -330,7 +342,8 @@ PYNC4
 
   # NC8 covers assertion 1c. Built by DELETING a serial from the real catalogue, so it cannot
   # drift from the section it guards.
-  python3 - "$CAT" "$t/cat-noserial.yaml" <<'PYNC3'
+  python3 - "$CAT" "$t/cat-noserial.yaml" <<'PYNC3' \
+    || { echo "  NC8 FAILED: the fixture could not be built — the control would be vacuous"; rm -rf "$t"; exit 1; }
 import sys, yaml
 c = yaml.safe_load(open(sys.argv[1]))
 st = c.get('standalone') or {}

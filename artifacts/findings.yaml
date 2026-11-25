@@ -9479,3 +9479,23 @@ artifacts:
       created-by: ai
       model: claude-opus-5-5
       timestamp: 2026-11-17T20:30:00Z
+
+  - id: AFD-154
+    type: ai-found-defect
+    title: "check-catalog.sh NC4 passed without a fixture: the generator raised IndexError, the shell ignored it, and run_check refused a missing file"
+    status: resolved
+    description: "NC4 (an alias that is also a device name) built its fixture by aliasing the registry's first device to its second. The registry has held one device since AFD-147, so the generator raised IndexError after writing NC3's fixture and before NC4's. The shell did not check the generator's exit code; run_check on the missing alias-collide.yaml failed, and the self-test printed 'NC4 ok'. The traceback went to stderr, which CI does not read. Found 2026-11-25 while porting the script to Rust (jess#290): the port reproduced the same stderr, and the reference had it too. The alias-collision rule had no live control. FIX: every fixture generator's exit code is checked ('NCn FAILED: the fixtures could not be built'), and NC4 registers a catalogue board as the second device when the registry has only one. MEASURED: NC4's fixture now fails with 'AMBIGUOUS ALIAS: nordic-dfu is an alias of selftest-device AND a device in its own right', and the same fixture with the alias removed exits 0 (one variable). With every board but selftest-device removed from a catalogue copy, the guard prints 'NC3/NC4 FAILED: the fixtures could not be built'. Self-test stderr went from a traceback to 0 bytes. Class: missing evidence must be red (gate-potency step 6), as in AFD-153."
+    fields:
+      detected-by: porting check-catalog.sh to Rust with the old script as equivalence oracle (jess#290)
+      discovered-at: 2026-11-25
+      severity: major
+      triage-status: resolved
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-25T02:52:05Z
+    links:
+      - type: traces-to
+        target: AFD-147
+      - type: traces-to
+        target: AFD-153
