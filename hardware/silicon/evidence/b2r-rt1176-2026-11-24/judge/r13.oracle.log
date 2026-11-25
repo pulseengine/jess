@@ -1,0 +1,50 @@
+   freshness not applicable: the ELFs are evidence from hardware/silicon/evidence/b2-rt1176-2026-11-22/images, bound to the captures by sha256
+== 1. 16 estimator ticks on the target named by the captures' origin lines ==
+   ekf.words: origin rt1176-silicon swd-load-to-ram attempt=1/1 pc=0x00000036
+   sentinel 0x1E55E4F0 present; loop reports 16 iterations actually run
+== 2. independent wasmtime reference over the SAME module and N ==
+   tick 1
+      qw          0x3F800000  matches
+      qx          0x38571C87  matches
+      qy          0xB7D71C84  matches
+      qz          0x3812CCF7  matches
+      pos-n       0x00000000  matches
+      pos-e       0x00000000  matches
+      pos-d       0x00000000  matches
+      vel-n       0xB581F691  matches
+      vel-e       0xB601F97A  matches
+      vel-d       0x00000000  matches
+      wx          0x3E99999A  matches
+      wy          0xBE19999A  matches
+      wz          0x3D8F5C29  matches
+      innovation  0x00000000  matches
+   tick 16
+      qw          0x3F7FFFF0  matches
+      qx          0x3A98A666  matches
+      qy          0xBA189445  matches
+      qz          0x3A12CCF6  matches
+      pos-n       0xB51D8F56  matches
+      pos-e       0xB59DC6CC  matches
+      pos-d       0xB027BF95  matches
+      vel-n       0xB7907360  matches
+      vel-e       0xB810AD19  matches
+      vel-d       0xB2A0619A  matches
+      wx          0x3E99999A  matches
+      wy          0xBE19999A  matches
+      wz          0x3D8F5C29  matches
+      innovation  0x00000000  matches
+   fold    0x6EC49E30  matches over all 224 state words
+== 3. controls ==
+   tick1 != tickN (the estimator integrates; the run is not a constant)
+   ekf_ref.py vacuity guard self-test PASS
+   ekf_nc1.words: origin rt1176-silicon swd-load-to-ram attempt=1/1 pc=0x00000036
+   perturbed-gy control completed, folded 0x3D0B2071 != 0x6EC49E30  (a wrong-but-plausible result IS caught)
+   ekf_n15.words: origin rt1176-silicon swd-load-to-ram attempt=1/1 pc=0x00000036
+   one-tick-fewer control: 15 iterations, tick 15 state and fold 0x4A3FE1A4 match wasmtime at N=15, != 0x6EC49E30
+
+Result: PASS — falcon's ESTIMATOR ran 16 ticks on rt1176-silicon swd-load-to-ram attempt=1/1 pc=0x00000036 and tracked
+        the wasmtime reference bit-exact on all 14 state words at tick 1 and tick 16,
+        and across a fold of all 224 state words. The estimator integrates
+        (tick1 != tickN), perturbing ONE of its six live inputs moves the fold, and one
+        tick fewer (control B) matches wasmtime at N=15 in full.
+        This is the FIRST jess measurement of any cascade stage other than rate/mixer.
