@@ -53,7 +53,13 @@ env:
   # detector: TEST/REQ/SC/L/META now matched), +1 L-001 list<string> type, +1 schema rule that
   # can never fire (AFD-144). Coverage 64.7% under both, every table row identical;
   # --fail-under 70 goes red under both (the floor gate is still potent).
-  RIVET_VERSION: v0.41.1
+  # 2026.10.32 -> 2026.11.40 (2026-11-25) moved it 0.41.1 -> 0.43.3, for `rivet yaml to-json`
+  # (jess#290). Measured on one store: both `Result: PASS (656 warnings)`; 0.43.3 adds 6 INFO
+  # lines, all the dev@0.6.0 "no verification criteria" note (META-REQ-001, REQ-PIX-001/005/007/
+  # 010/018). Coverage output identical, --fail-under 60 green and 70 red under both,
+  # triage-gate identical, snapshot differs only in its version banner and "not yet verified"
+  # -> "not yet release-ready".
+  RIVET_VERSION: v0.43.3
   # v0.24.0 adds `codegen --format wit` (AADL -> WIT, spar#319) used by the
   # WIT-derivation gate below; verified backward-compatible with jess's model
   # (parse + instance green). Bumped from v0.17.0.
@@ -67,7 +73,10 @@ env:
   # feature named `out`, an AADL reserved word (AS-5506B Annex A). Renamed to `vsys_out`;
   # both versions then emit BYTE-IDENTICAL wit/ (WIT-DERIVATION OK). Both versions had been
   # silently DROPPING that feature from the instance model (46 features, 47 after the rename).
-  SPAR_VERSION: v0.47.1
+  # 0.47.1 -> 0.49.0 (layer 2026.11.40, 2026-11-25): parse output identical, WIT-DERIVATION OK
+  # under both. Instance output differs on 43 lines, every one a connection line that now
+  # names its endpoints (`Access spi1 <-> imu1.spi` for `Access <->`); nothing else moved.
+  SPAR_VERSION: v0.49.0
   # Pinned meld for the scry sound-analysis gate (REQ-PIX-018 leg b) + the fused-core
   # reproducibility gate (TEST-PIX-026, meld#325/#341).
   #
