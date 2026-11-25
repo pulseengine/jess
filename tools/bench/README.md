@@ -78,7 +78,11 @@ which name it actually claimed. An ambiguous registry — an alias that is also 
 claimed by two devices — is **refused** (exit 2) rather than resolved, at run time and in CI.
 
 `check-catalog.sh` asserts every registry name resolves in the catalogue and every provenance
-citation exists, and carries negative controls for both. It runs in CI. Intended future: the
+citation exists, and carries negative controls for both. It runs in CI. The check is a Rust binary
+(`tools/bench/check-catalog/`, build it with `cargo build --release --locked --manifest-path
+tools/bench/check-catalog/Cargo.toml`) that reads both files through `rivet yaml to-json` (rivet
+0.42.2 or later; jess#290). `check-catalog.ref.sh` is the Python it replaced, kept as the
+equivalence oracle until it is retired in its own change. Intended future: the
 catalogue becomes a digest-pinned varve layer payload so both agents consume identical bytes by
 construction rather than by copying (varve#130).
 
