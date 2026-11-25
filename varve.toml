@@ -13,7 +13,7 @@ manifest-version = 1
 [toolchain]
 realm   = "pulseengine"
 channel = "rolling"
-layer   = "2026.10.32"
+layer   = "2026.11.40"
 # The layer NAME is not sufficient on its own: two entries for 2026.08.4 existed in the old
 # realm under different digests, and varve refuses to guess between them rather than
 # silently picking one. That refusal is the feature.
@@ -31,4 +31,11 @@ layer   = "2026.10.32"
 # EQUAL to artifacts.pins. loom stays 1.4.1 in the layer, as it already was in 2026.09.2:
 # the campaign keeps loom 1.4.0 through artifacts.pins (AFD-142, loom#448), and nothing that
 # builds the lowered object dispatches loom from the layer.
-digest  = "sha256:53e2cdf8a2e9755cdefd8fd3dbeddab9deca8de28ca8994ddcc427856265ea53"
+# MOVED 2026-11-25: 2026.10.32 -> 2026.11.40, resolved by `varve install` against the committed
+# realm and then recorded (`varve outdated`: newest signed for line 2026.11, index #41). It moves
+# the two tools the layer is the authority for: rivet 0.41.1 -> 0.43.3 (needed for `rivet yaml
+# to-json`, jess#290) and spar 0.47.1 -> 0.49.0. The layer also carries meld 0.70.0, synth 0.91.0
+# and loom 1.5.4; artifacts.pins stays the authority for those (meld 0.65.1, synth 0.89.0, loom
+# 1.4.0) and CI passes them explicitly, so the lowered object does not change. Locally, a script
+# that falls back to `varve run meld|loom|synth` now gets the layer's newer version.
+digest  = "sha256:18dd29cde4a6012794ecd3acd931504f1bfbff97b50e7ed18d1f4cb1bcfd9964"
