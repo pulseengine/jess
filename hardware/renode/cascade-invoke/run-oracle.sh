@@ -51,6 +51,8 @@ sysbus ReadDoubleWord 0x20011108
 sysbus ReadDoubleWord 0x2001110C
 sysbus ReadDoubleWord 0x20011110
 sysbus ReadDoubleWord 0x20011114
+sysbus ReadDoubleWord 0x20011F00
+sysbus ReadDoubleWord 0x20011F04
 echo "E"
 EOF
   ( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @$RESC
@@ -77,10 +79,16 @@ IFACE_VER="$(cat "$SCRATCH/invoke/iface.ver" 2>/dev/null || true)"
 V="${IFACE_VER:+@$IFACE_VER}"
 
 W=($(read_words "$E"))
-[ "${#W[@]}" -ge 11 ] || fail "could not read the result blocks (got ${#W[@]} words)"
+[ "${#W[@]}" -ge 13 ] || fail "could not read the result blocks and the exception log (got ${#W[@]} words, need 13)"
 SENT="${W[10]}"
 [ "$(printf '%d' "$SENT")" = "$(printf '%d' 0x1E55D09E)" ] \
   || fail "completion sentinel absent (got $SENT) — the harness did not reach the end"
+# THE EXCEPTION LOG (vectors.inc). With a full vector table an exception RETURNS instead of
+# crashing the run, so a run can now complete having taken one. Renode raises none in this image:
+# require the log magic (the log was loaded with this image) and a count of 0.
+[ "$(printf "%d" "${W[11]:-0}")" = "$(printf "%d" 0x1E55E7C0)" ] || fail "exception-log magic is ${W[11]:-absent}, not 0x1E55E7C0 — the log was not loaded with this image"
+[ "$(printf "%d" "${W[12]}")" = 0 ] || fail "the image took $(printf "%d" "${W[12]}") exception(s) in Renode (log at 0x20011F00) — expected 0"
+echo "   exception log: magic present, 0 exceptions taken"
 
 echo "== stage 1 — rate$V#tick on emulated RT1176 Cortex-M7 =="
 printf '   ret offset %s\n   tx %s\n   ty %s\n   tz %s\n   thrust %s\n' "${W[0]}" "${W[1]}" "${W[2]}" "${W[3]}" "${W[4]}"

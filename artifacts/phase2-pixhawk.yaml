@@ -1706,3 +1706,32 @@ artifacts:
     links:
       - type: verifies
         target: REQ-PIX-011
+
+  - id: TEST-PIX-041
+    type: test-spec
+    title: "Every cascade-invoke image carries a full vector table: 256 entries, an exception log, and a silicon run with interrupts enabled"
+    status: draft
+    release: v0.8.0
+    description: >
+      The images had a 2-word vector table (SP, reset), so on silicon a PX4 interrupt pending at
+      resume, and the fault after it, vectored into code bytes and locked up the M7 (SRC_SRSR
+      0x10000004, hardware/silicon/evidence/lockup-rt1176-2026-11-24/). vectors.inc gives every
+      image 256 entries and a default handler that logs each exception at 0x20011F00. An IRQ is
+      disabled and the handler returns, SysTick and PendSV are cleared, and a fault parks with
+      its PC recorded. Mechanical checks:
+      build.sh asserts 256 of 256 table words in invoke.elf, soak.elf and ekf.elf (3 negative
+      controls: a changed handler word, the old 2-word table, a wrong log magic);
+      run-oracle.sh, run-soak-oracle.sh and run-ekf-oracle.sh require the log magic and 0
+      exceptions in Renode (each negative-controlled with the count set to 1). on-target-run.sh
+      takes the entry PC from the ELF header (the constant 0x8 assumed the 2-word table), reports
+      the log, and fails on a parked fault. Silicon: pre-registered in
+      hardware/silicon/evidence/vectors-rt1176-2026-11-26/ with three arms: P (PRIMASK=1, new
+      table), V (PRIMASK=0, new table: the test) and C (PRIMASK=0, old table: the control).
+    tags: [phase-2, on-target, silicon, ladder]
+    fields:
+      test-method: manual-test
+    links:
+      - type: verifies
+        target: REQ-PIX-011
+      - type: traces-to
+        target: TEST-PIX-039

@@ -260,6 +260,30 @@ for sym in jess_rate_tick jess_mixer_mix jess_ekf_estimate; do
 done
 
 echo "== 4. compile + link =="
+# THE FULL VECTOR TABLE (vectors.inc), asserted on each LINKED image rather than trusted from the
+# source: 256 words at 0x0, word 0 = _stack_top, word 1 = _reset|1, and all 254 others =
+# jess_default_handler|1; plus the exception-log magic at jess_exc_log. Prints its denominator.
+check_vectors() {
+  local elf="$1" sym st rs dh n bad i w W
+  sym="$(arm-none-eabi-nm "$elf")"
+  st="$(printf "%s\n" "$sym" | awk "\$3==\"_stack_top\"{print \$1}")"
+  rs="$(printf "%s\n" "$sym" | awk "\$3==\"_reset\"{print \$1}")"
+  dh="$(printf "%s\n" "$sym" | awk "\$3==\"jess_default_handler\"{print \$1}")"
+  [ -n "$st" ] && [ -n "$rs" ] && [ -n "$dh" ] || fail "$(basename "$elf"): _stack_top, _reset or jess_default_handler missing — no full vector table"
+  [ "$(printf "%s\n" "$sym" | awk "\$3==\"jess_vectors\"{print \$1}")" = 00000000 ] || fail "$(basename "$elf"): jess_vectors is not at 0x00000000"
+  arm-none-eabi-objcopy -O binary -j .vectors "$elf" "$elf.vec" || fail "$(basename "$elf"): cannot extract .vectors"
+  W=( $(od -An -v -tx4 "$elf.vec") ); rm -f "$elf.vec"
+  n=${#W[@]}
+  [ "$n" -eq 256 ] || fail "$(basename "$elf"): vector table has $n words, not 256"
+  [ "$((16#${W[0]}))" -eq "$((16#$st))" ] || fail "$(basename "$elf"): word 0 is 0x${W[0]}, not _stack_top 0x$st"
+  [ "$((16#${W[1]}))" -eq "$(( 16#$rs | 1 ))" ] || fail "$(basename "$elf"): word 1 is 0x${W[1]}, not _reset|1"
+  bad=0; for ((i=2; i<256; i++)); do [ "$((16#${W[i]}))" -eq "$(( 16#$dh | 1 ))" ] || bad=$((bad+1)); done
+  [ "$bad" -eq 0 ] || fail "$(basename "$elf"): $bad of 254 handler words do not point at jess_default_handler|1"
+  arm-none-eabi-objcopy -O binary -j .exclog "$elf" "$elf.log" || fail "$(basename "$elf"): cannot extract .exclog"
+  w="$(od -An -v -tx4 "$elf.log" | awk "{print \$1; exit}")"; rm -f "$elf.log"
+  [ "$w" = 1e55e7c0 ] || fail "$(basename "$elf"): exception-log magic is $w, not 1e55e7c0"
+  echo "   $(basename "$elf"): vector table 256 of 256 words checked (SP, reset, 254 x default handler), exception log loaded"
+}
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot.S"    -o "$OUT/boot.o"    || fail "boot.S"
 # -ffixed-r9/-r10/-r11: the synth --relocatable ABI (synth#1131, docs/embedder-abi-relocatable-arm.md)
 # RESERVES these three for the embedder — R11 linmem base, R10 linmem size, R9 globals base — and
@@ -278,6 +302,7 @@ arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -ffreestand
 LG="$(arm-none-eabi-gcc -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -print-libgcc-file-name)"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
     -o "$OUT/invoke.elf" || fail "link"
+check_vectors "$OUT/invoke.elf"
 
 left="$(arm-none-eabi-nm "$OUT/invoke.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
 [ -z "$left" ] || fail "undefined after link: $left"
@@ -308,6 +333,7 @@ echo "== 4b. build the N-TICK SOAK image (TEST-PIX-033) =="
 arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard "$D/boot-soak.S" -o "$OUT/boot_soak.o" || fail "boot-soak.S"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_soak.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
     -o "$OUT/soak.elf" || fail "soak link"
+check_vectors "$OUT/soak.elf"
 left="$(arm-none-eabi-nm "$OUT/soak.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
 [ -z "$left" ] || fail "undefined after soak link: $left"
 ns=$(arm-none-eabi-nm "$OUT/soak.elf" | grep -cE ' T (jess_rate_tick|jess_mixer_mix|_reset|jess_init|jess_call_soak)$')
@@ -383,6 +409,7 @@ arm-none-eabi-gcc -c -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard \
   ${EKF_N:+-Wa,--defsym,EKF_N=$EKF_N} "$D/boot-ekf.S" -o "$OUT/boot_ekf.o" || fail "boot-ekf.S"
 arm-none-eabi-ld -T "$D/link.ld" "$OUT/boot_ekf.o" "$OUT/harness.o" "$OUT/init.o" "$OUT/cascade_named.o" "$LG" \
     -o "$OUT/ekf.elf" || fail "ekf link"
+check_vectors "$OUT/ekf.elf"
 left="$(arm-none-eabi-nm "$OUT/ekf.elf" | awk '$1=="U"||$2=="U"{print $NF}' | sort -u)"
 [ -z "$left" ] || fail "undefined after ekf link: $left"
 ne=$(arm-none-eabi-nm "$OUT/ekf.elf" | grep -cE ' T (jess_ekf_estimate|_reset|jess_init|jess_call_ekf)$')

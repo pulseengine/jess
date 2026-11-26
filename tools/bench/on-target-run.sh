@@ -26,7 +26,8 @@
 #        THE CAUSE WAS FOUND 2026-11-24 (hardware/silicon/evidence/lockup-rt1176-2026-11-24/):
 #        SRC_SRSR read 0x10000004, an M7 LOCKUP, from the first 50 ms after resume. PX4 is halted,
 #        not reset, so an interrupt it enabled can be pending at resume, and the jess image's
-#        2-word vector table has no valid handler for it or for the fault that follows.
+#        2-word vector table had no valid handler for it or for the fault that follows (the
+#        cascade-invoke images carry a full table since 2026-11-26, vectors.inc).
 #        PRIMASK=1 before resume gave 10 of 10 complete and correct runs with SRSR 0, against
 #        2 of 60 in B2. This script therefore sets `reg primask 1` before `resume` (below).
 #        Which interrupt it is was not identified. The bounded retry stays as a backstop.
@@ -85,6 +86,26 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 ELF="$1"; shift
 RESTORE=0; for a in "$@"; do [ "$a" = "--restore" ] && RESTORE=1; done
 [ -f "$ELF" ] || fail "image not found: $ELF"
+# THE ENTRY POINT, from the ELF header (e_entry at offset 24), not a constant. This was `reg pc 0x8`,
+# which held only while every jess image had a 2-word vector table so that _reset sat at 0x8. The
+# cascade-invoke images now carry the full 256-word table (vectors.inc) and _reset is past it; a
+# constant 0x8 would start the core inside the table. Thumb sets bit 0 of e_entry; the PC clears it.
+[ "$(od -An -v -tx1 -N6 "$ELF" | tr -d " \n")" = 7f454c460101 ] \
+  || fail "$ELF is not a 32-bit little-endian ELF — cannot read its entry point"
+ENTRY_RAW="$(od -An -v -tx1 -j24 -N4 "$ELF" | awk "{print \$4 \$3 \$2 \$1}")"
+[ "${#ENTRY_RAW}" -eq 8 ] || fail "could not read e_entry from $ELF"
+ENTRY="$(printf "0x%x" $(( 16#$ENTRY_RAW & ~1 )))"
+[ "$ENTRY" != 0x0 ] || fail "$ELF has entry point 0 — refusing to start the core there"
+# PRIMASK AT RESUME. 1 (the default) is the lockup fix, see the header. 0 exists ONLY for the
+# pre-registered vector-table run (hardware/silicon/evidence/vectors-rt1176-2026-11-26/): it leaves
+# interrupts enabled so that a pending PX4 interrupt reaches the image's own handler, which is
+# the thing that run measures. It is never the way to run an image for a result.
+PRIMASK_AT_RESUME="${PRIMASK_AT_RESUME:-1}"
+case "$PRIMASK_AT_RESUME" in
+  1) ;;
+  0) echo "   DIAGNOSTIC: PRIMASK_AT_RESUME=0 — interrupts stay ENABLED at resume (vector-table run only)" ;;
+  *) fail "PRIMASK_AT_RESUME=$PRIMASK_AT_RESUME is not 0 or 1" ;;
+esac
 if [ "$READ" = "ekf" ]; then
   CAPTURE="${CAPTURE:-$(basename "$ELF" .elf).words}"
   # Remove a previous capture FIRST, so a run that fails below cannot leave an older run's words
@@ -175,14 +196,16 @@ if [ "$READ" = "ekf" ]; then
 else
   RD=( -c "mdw 0x20011000 5" -c "mdw 0x20011100 6" )
 fi
+# The exception log (vectors.inc), read for every image: 6 words at 0x20011F00.
+RD+=( -c "mdw 0x20011F00 6" )
 while : ; do
 attempt=$((attempt+1))
 timeout 120 openocd -f "$OOCD_CFG" \
   -c "init" -c "halt" \
   -c "load_image $ELF" \
   -c "mww 0xE000ED08 0x00000000" \
-  -c "reg sp 0x20040000" -c "reg pc 0x8" \
-  -c "reg primask 1" -c "reg primask" \
+  -c "reg sp 0x20040000" -c "reg pc $ENTRY" \
+  -c "reg primask $PRIMASK_AT_RESUME" -c "reg primask" \
   -c "resume" -c "sleep $RUNFOR_MS" -c "halt" \
   -c "reg pc" \
   "${RD[@]}" \
@@ -191,10 +214,11 @@ rc=$?
 
 grep -qE '[0-9]+ bytes written at address 0x00000000' "$OUT" \
   || { sed 's/^/     /' "$OUT" >&2; fail "the image never loaded — 'could not run', not a result"; }
-# PRIMASK must read back as 1 before resume (the lockup fix, see the header). The read-back is
-# openocd's report from the core, so a missing or wrong line means the fix did not reach it: refuse.
-grep -qE '^primask \(/[0-9]+\): 0x0*1[[:space:]]*$' "$OUT" \
-  || { sed 's/^/     /' "$OUT" >&2; fail "PRIMASK did not read back as 1 before resume — refusing (lockup fix not applied)"; }
+# PRIMASK must read back as PRIMASK_AT_RESUME (1 unless the vector-table run asked for 0) before
+# resume. The read-back is openocd's report from the core, so a missing or wrong line means the
+# setting did not reach it: refuse.
+grep -qE "^primask \(/[0-9]+\): 0x0*${PRIMASK_AT_RESUME}[[:space:]]*\$" "$OUT" \
+  || { sed "s/^/     /" "$OUT" >&2; fail "PRIMASK did not read back as $PRIMASK_AT_RESUME before resume — refusing"; }
 
 # Retry ONLY the non-event: a reset with no sentinel means nothing was measured.
 if grep -q 'external reset detected' "$OUT" && ! grep -q "$SENTINEL" "$OUT"; then
@@ -214,6 +238,29 @@ done
    NOT yet reliable and the cause is unestablished. Do not read a single clean run as stability."
 
 PC="$(grep -oE '^pc \(/32\): 0x[0-9a-f]+' "$OUT" | tail -1 | awk '{print $3}')"
+
+# THE EXCEPTION LOG (vectors.inc), reported BEFORE the result is judged so that a run which did not
+# finish still says what it took. Words: magic, count, first IPSR, last IPSR, fault marker, fault PC.
+XL=( $(grep -oE "^0x20011f00: ([0-9a-f]{8} ?){6}" "$OUT" | head -1 | cut -d: -f2-) )
+[ "${#XL[@]}" -eq 6 ] || { sed "s/^/     /" "$OUT" >&2; fail "read ${#XL[@]} of 6 exception-log words at 0x20011F00 — could not read it"; }
+# The magic proves the log came from THIS load only if the image carries the section: an older
+# image leaves 0x20011F00 holding whatever the previous run wrote, magic included.
+if ! LC_ALL=C grep -qa "\.exclog" "$ELF"; then
+  echo "   exception log: ABSENT (no .exclog section in this image, predates vectors.inc); nothing is known about exceptions"
+elif [ "${XL[0]}" != 1e55e7c0 ]; then
+  fail "this image carries .exclog but 0x20011F00 holds magic ${XL[0]}, not 1e55e7c0 — the load did not write it"
+else
+  XN=$((16#${XL[1]}))
+  if [ "$XN" -eq 0 ]; then
+    echo "   exception log: 0 exceptions taken"
+  else
+    echo "   exception log: $XN exception(s) taken; first IPSR $((16#${XL[2]})), last IPSR $((16#${XL[3]})) (IPSR 16+n = IRQ n)"
+  fi
+  if [ "${XL[4]}" = deadfa17 ]; then
+    fail "the image FAULTED: exception $((16#${XL[3]})) at PC 0x${XL[5]}, parked by jess_default_handler.
+   These parking words are not a result."
+  fi
+fi
 
 if [ "$READ" = "ekf" ]; then
   # openocd prints `mdw` as lines of up to 8 words, each prefixed by its address. Take every word
@@ -250,7 +297,7 @@ if [ "$got_sent" != "$SENTINEL" ]; then
    (A run immediately after a board reset can need a longer SETTLE.)"
 fi
 
-echo "   halted at PC $PC (0x52 = the spin loop at the end of _reset)"
+echo "   halted at PC $PC (expected: the spin loop at the end of _reset; entry was $ENTRY)"
 echo "   RESULT 0x20011000 (ret-offset + 4 torque words): $RES"
 echo "   CHAIN  0x20011100 (pwm-offset + 4 pwm + sentinel): $CHN"
 echo "   sentinel $SENTINEL present — the image ran to completion"

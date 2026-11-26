@@ -50,7 +50,7 @@ SRC_N="$(grep -oE '^\s*\.equ\s+SOAK_N,\s*[0-9]+' "$D/boot-soak.S" | grep -oE '[0
 [ -n "$SRC_N" ] || fail "could not read SOAK_N from boot-soak.S"
 [ "$SRC_N" = "$N" ] || fail "SOAK_N in boot-soak.S is $SRC_N but the oracle is checking N=$N"
 
-read_soak() {   # $1 = elf ; echoes 11 hex words
+read_soak() {   # $1 = elf ; echoes 13 hex words: 11 soak + 2 exception-log (vectors.inc)
 cat > $RESC <<EOF
 using sysbus
 mach create "t35"
@@ -70,6 +70,8 @@ sysbus ReadDoubleWord 0x2001121C
 sysbus ReadDoubleWord 0x20011220
 sysbus ReadDoubleWord 0x20011224
 sysbus ReadDoubleWord 0x20011228
+sysbus ReadDoubleWord 0x20011F00
+sysbus ReadDoubleWord 0x20011F04
 echo "E"
 EOF
 ( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @$RESC
@@ -90,18 +92,18 @@ print(" ".join(out))'
 # image in place and the oracle passes on it. That happened for real: a bash-3.2 array bug
 # broke build.sh's pinned path while this oracle still reported PASS on stale artifacts —
 # the AFD-047 staleness class again. Refuse an image older than any of its inputs.
-for src in "$D/harness.c" "$D/boot-soak.S" "$D/link.ld" "$MOD"; do
+for src in "$D/harness.c" "$D/boot-soak.S" "$D/vectors.inc" "$D/link.ld" "$MOD"; do
   [ -f "$src" ] || fail "missing build input $src"
   # Fail only if the input is STRICTLY newer. `-nt` is false for equal mtimes, and a single
   # build.sh run writes the module and the ELF within the same second, so the naive
   # "ELF must be newer" form rejects a perfectly fresh build.
   [ "$src" -nt "$E" ] && fail "$(basename "$src") is NEWER than soak.elf — STALE image; re-run build.sh (a failed build leaves the previous image in place)"
 done
-echo "   soak.elf is newer than harness.c, boot-soak.S, link.ld and the module"
+echo "   soak.elf is newer than harness.c, boot-soak.S, vectors.inc, link.ld and the module"
 
 echo "== 1. run $N ticks on emulated RT1176 =="
 W=( $(read_soak "$E") )
-[ "${#W[@]}" -eq 11 ] || fail "expected 11 words from the soak region, got ${#W[@]} (${W[*]:-none})"
+[ "${#W[@]}" -eq 13 ] || fail "expected 13 words (11 soak + 2 exception log), got ${#W[@]} (${W[*]:-none})"
 
 # CONTROL 1 — completion. Without this a truncated run is indistinguishable from a
 # miscompile, and RUNFOR is a guess.
@@ -113,6 +115,11 @@ sent="$(norm "${W[10]}")"
 # would still report 64. (Clean-room finding.)
 ran="$(norm "${W[0]}")"
 [ "$ran" = "$(printf '0x%08X' "$N")" ] || fail "the loop ran $ran iterations, expected $N"
+# THE EXCEPTION LOG (vectors.inc): an exception now returns instead of crashing the run, so
+# require the magic and a count of 0 here, where Renode raises none.
+[ "$(norm "${W[11]}")" = 0x1E55E7C0 ] || fail "exception-log magic is $(norm "${W[11]}"), not 0x1E55E7C0 — the log was not loaded with this image"
+[ "$(norm "${W[12]}")" = 0x00000000 ] || fail "the soak took $((W[12])) exception(s) in Renode (log at 0x20011F00) — expected 0"
+echo "   exception log: magic present, 0 exceptions taken"
 echo "   sentinel 0x1E55B0A5 present; loop reports $N iterations actually run"
 
 echo "== 2. independent wasmtime reference over the SAME module and N =="
@@ -170,7 +177,7 @@ echo "   soak_ref.py vacuity guard self-test PASS"
 NC1E="$SCRATCH/invoke/soak_nc1.elf"
 [ -f "$NC1E" ] || fail "soak_nc1.elf missing — run build.sh; without it nothing shows this oracle catches a plausible wrong answer"
 N1=( $(read_soak "$NC1E") )
-[ "${#N1[@]}" -eq 11 ] || fail "soak_nc1 returned ${#N1[@]} words, expected 11"
+[ "${#N1[@]}" -eq 13 ] || fail "soak_nc1 returned ${#N1[@]} words, expected 13"
 [ "$(norm "${N1[10]}")" = "0x1E55B0A5" ] || fail "soak_nc1 did not COMPLETE — a crashed control is not evidence"
 n1_fold="$(norm "${N1[9]}")"
 [ "$n1_fold" != "$r_f" ] || fail "perturbing wy did not change the fold — the soak is insensitive to its input"
@@ -192,7 +199,7 @@ echo "   (a wrong-but-plausible on-target result IS caught)"
 NC2E="$SCRATCH/invoke/soak_nc2.elf"
 if [ -f "$NC2E" ]; then
   N2=( $(read_soak "$NC2E") )
-  [ "${#N2[@]}" -eq 11 ] || fail "soak_nc2 returned ${#N2[@]} words, expected 11"
+  [ "${#N2[@]}" -eq 13 ] || fail "soak_nc2 returned ${#N2[@]} words, expected 13"
   n2_fold="$(norm "${N2[9]}")"
   [ "$(norm "${N2[10]}")" = "0x1E55B0A5" ] || fail "soak_nc2 did not complete (sentinel $(norm "${N2[10]}"))"
   [ "$n2_fold" = "$NULL_FOLD" ] || fail "soak_nc2 folded $n2_fold, expected the all-zero fold $NULL_FOLD — its meaning has changed and the label 'liveness' no longer describes it"

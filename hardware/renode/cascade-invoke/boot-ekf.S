@@ -35,9 +35,8 @@
     .equ EKF_N,   16
     .endif
 
-    .section .vectors, "a"
-    .word _stack_top
-    .word _reset + 1
+    @ The full vector table and default handler, shared by all three images (vectors.inc).
+#include "vectors.inc"
 
     .text
     .global _reset
