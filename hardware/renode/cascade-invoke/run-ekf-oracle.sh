@@ -97,18 +97,29 @@ fi
 if [ -n "$ELF_DIR" ]; then
   echo "   freshness not applicable: the ELFs are evidence from $ELF_DIR, bound to the captures by sha256"
 else
-for src in "$D/harness.c" "$D/boot-ekf.S" "$D/link.ld" "$MOD"; do
+for src in "$D/harness.c" "$D/boot-ekf.S" "$D/vectors.inc" "$D/link.ld" "$MOD"; do
   [ -f "$src" ] || fail "missing build input $src"
   # Strictly newer only: `-nt` is false for equal mtimes, and one build.sh run writes the
   # module and the ELF inside the same second.
   [ "$src" -nt "$E" ] && fail "$(basename "$src") is NEWER than ekf.elf — STALE image; re-run build.sh (a failed build leaves the previous image in place)"
 done
-echo "   ekf.elf is newer than harness.c, boot-ekf.S, link.ld and the module"
+echo "   ekf.elf is newer than harness.c, boot-ekf.S, vectors.inc, link.ld and the module"
 fi
 
 read_ekf() {   # $1 = elf ; echoes $WORDS hex words
   if [ -n "$WORDS_DIR" ]; then read_capture "$1"; return; fi
   local w; w="$(read_renode "$1")"
+  # The last two words are the exception log (vectors.inc). An exception now RETURNS instead of
+  # crashing the run, so a run can complete having taken one; Renode raises none in these images.
+  # Require the magic and a count of 0, then pass on only the $WORDS result words. On a refusal
+  # nothing is echoed, so the caller fails its word count with this reason on stderr.
+  local a; a=( $w )
+  if [ "${#a[@]}" -ne $((WORDS + 2)) ] || [ "$(norm "${a[WORDS]}")" != 0x1E55E7C0 ] || [ "$(norm "${a[WORDS+1]}")" != 0x00000000 ]; then
+    echo "FAIL: $(basename "$1"): exception log is [${a[WORDS]:-absent} ${a[WORDS+1]:-absent}], need magic 0x1E55E7C0 and 0 exceptions taken" >&2
+    return 0
+  fi
+  w="${a[*]:0:WORDS}"
+  echo "   $(basename "$1"): exception log magic present, 0 exceptions taken" >&2
   if [ -n "$DUMP_WORDS" ]; then
     mkdir -p "$DUMP_WORDS"
     { echo "sha256 $(sha "$1")"
@@ -149,6 +160,8 @@ read_renode() {   # $1 = elf ; echoes $WORDS hex words
     for i in $(seq 0 $((WORDS - 1))); do
       printf 'sysbus ReadDoubleWord 0x%08X\n' $((0x20011400 + 4 * i))
     done
+    echo "sysbus ReadDoubleWord 0x20011F00"   # the exception log (vectors.inc): magic, count
+    echo "sysbus ReadDoubleWord 0x20011F04"
     echo 'echo "E"'
   } > "$RESC"
   ( cd "$ROOT" && "$RENODE" --console --disable-xwt -e "include @$RESC

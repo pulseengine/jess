@@ -1,0 +1,4 @@
+campaign: RUNFOR_MS=3000 PRIMASK_AT_RESUME=1
+   claims asserted: pixhawk-6xrt mcu-link (held: mcu-link,pixhawk-6xrt)
+  CANNOT DETERMINE: reading /dev/serial/by-id/usb-Dronecode_Project__Inc._PX4_FMU_v6XRT.x_0-if00 failed (error: (5, 'Input/output error')). Refusing.
+FAIL: pre-flight gate refused (or did not answer within 30 s) — not proceeding

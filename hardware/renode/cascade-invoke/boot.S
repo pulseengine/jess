@@ -24,9 +24,8 @@
     .equ RESULT,  0x20011000        @ torque, from the SINGLE rate#tick of the chain
     .equ CHAIN,   0x20011100        @ motor-pwm, from the mixer fed by that same call        @ where the harness parks observables for the oracle
 
-    .section .vectors, "a"
-    .word _stack_top
-    .word _reset + 1
+    @ The full vector table and default handler, shared by all three images (vectors.inc).
+#include "vectors.inc"
 
     .text
     .global _reset

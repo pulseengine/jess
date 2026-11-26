@@ -1,0 +1,7 @@
+round	image	primask	rc	outcome	reset	exceptions	utc
+1	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:00:08Z
+2	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:00:38Z
+3	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:01:09Z
+4	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:01:39Z
+5	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:02:10Z
+6	ekf	1	1	refused	-	none	2026-11-26T08:02:15Z

@@ -19,9 +19,8 @@
     .equ ARGOFF,  0x0000E000        @ argument vector, as in the chain image
     .equ SOAK_N,  64                @ tick count; the oracle passes the SAME N to the reference
 
-    .section .vectors, "a"
-    .word _stack_top
-    .word _reset + 1
+    @ The full vector table and default handler, shared by all three images (vectors.inc).
+#include "vectors.inc"
 
     .text
     .global _reset

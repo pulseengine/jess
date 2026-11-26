@@ -16,5 +16,8 @@ SECTIONS {
   .rodata : { *(.rodata*) } > ITCM
   /* Linear memory and the globals table are RAM the harness owns; the synth object
      addresses them through fp/r9, so they are reserved here, not linked into. */
+  /* The exception log (vectors.inc). Its initial words come from the ELF load, so an
+     interrupt taken on the first instruction after resume is still recorded. */
+  .exclog 0x20011F00 : { KEEP(*(.exclog)) } > DTCM
   .bss  0x20012000 : { *(.bss*) *(COMMON) } > DTCM
 }
