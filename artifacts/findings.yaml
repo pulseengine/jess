@@ -9499,3 +9499,20 @@ artifacts:
         target: AFD-147
       - type: traces-to
         target: AFD-153
+  - id: AFD-155
+    type: ai-found-defect
+    title: "The F100 gale-nano silicon rung ran an object with gale-nano's INTERNAL export set; the correctly fused gale-nano does not fit the F100's 8 KB under any sound meld option"
+    status: open
+    description: "synth 0.89.0 lowered the gale-nano 0.9.0 COMPONENT by decoding it as one core module, which merged its nested modules' index spaces (synth#1191, refused from 0.91.0). The object exported gust:sched/tasks wiring and none of gust:os time/log/spawn/timer, and the F100 rung (hardware/silicon/f100-gale-nano) aliased three of those internal exports to satisfy its imports. Its silicon result (AFD-113 and successors) is therefore evidence about that mis-decoded object, not about gale-nano as declared. Fused first with meld 0.65.1 and lowered with synth 0.91.0, 37 of 38 exports lower on cortex-m3/m4f/m7dp; the one skip is gust:os/timer@0.1.0#sleep (i64 argument, synth#929), and the residual is poll-task, read32, write32. MEASURED 2026-11-26, extract_init.py on each fused module, same 11 data segments (1541 B): --memory shared --address-rebase puts the highest data address at 264209 B; --pack-rebase at 11873 B; --share-stack is refused as unsound (the nested modules call each other, up to 4096 B along the chain). The raw component's figure was 3089 B, inside the rung's 4096 B linear-memory window, only because of the merged decode. So the F100 rung cannot be rebuilt on the correct object as it stands: the window is 4096 B and the part has 8192 B of RAM. Owner decision 20261125T000518-91c481 (fuse-skip-sleep) adopted synth 0.91.0 for the lowering gate; its F100 silicon re-run is blocked on this geometry. Open: a smaller fused layout (meld) or a reduced gale-nano build for the I/O MCU (gale)."
+    fields:
+      detected-by: re-deriving the F100 gale-nano rung on synth 0.91.0 with meld fusion first (#330)
+      discovered-at: 2026-11-26
+      severity: major
+      triage-status: open
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-11-26T05:20:00Z
+    links:
+      - type: traces-to
+        target: AFD-113

@@ -773,13 +773,23 @@ jobs:
       # The gale-nano lowering claim, verified against the PINNED artifact rather than the
       # brief. NOTE the embedder-init flags: without them synth correctly refuses (#1041,
       # 11 active data segments) and the result reads as "gale-nano does not lower".
-      - name: gust:hal — gale-nano lowers ALL exported functions on all 3 cores (counts, not a word-grep), residual by symbol
+      - name: gust:hal — fused gale-nano lowers every export but EXACTLY {timer#sleep} on all 3 cores (counts + named skip set), residual by symbol
         run: |
           set -euo pipefail
           G=.scratch/galenano/gale-nano.wasm
           test -f "$G"
+          # FUSE FIRST (owner decision 20261125T000518-91c481, option fuse-skip-sleep). synth
+          # >= 0.91.0 refuses a COMPONENT (#1191): decoding one as a core module merged its
+          # nested index spaces, so 0.89.0's object exported gale-nano's INTERNAL
+          # gust:sched/tasks wiring and none of gust:os time/log/spawn/timer. The fused core
+          # module carries the declared export set.
+          .scratch/meld/meld fuse "$G" --memory shared --address-rebase -o /tmp/gn.fused.wasm > /tmp/gn.fuse.log 2>&1 \
+            || { cat /tmp/gn.fuse.log; echo "meld could not fuse gale-nano"; exit 1; }
           for core in cortex-m3 cortex-m4f cortex-m7dp; do
-            .scratch/synthpin/synth compile "$G" -t $core --cortex-m --relocatable --all-exports \
+            # --allow-skipped-exports turns synth's #952 refusal back into a partial object;
+            # the EXACT skipped set is asserted below, so the skip is checked, not tolerated.
+            .scratch/synthpin/synth compile /tmp/gn.fused.wasm -t $core --cortex-m --relocatable --all-exports \
+              --allow-skipped-exports \
               --embedder-data-init --embedder-global-init -o /tmp/gn.$core.o > /tmp/gn.$core.log 2>&1
             # ASSERT THE DENOMINATOR, not the absence of a word. This used to be
             #     n=$(grep -ci 'skip' log || true); [ "$n" = 0 ] || exit 1
@@ -807,8 +817,15 @@ jobs:
               echo "  than letting it pass over a log it can no longer parse."
               cat /tmp/gn.$core.log; exit 1
             fi
-            [ "$f" = "$c" ] || { echo "$core: lowered $c of $f exported functions"; cat /tmp/gn.$core.log; exit 1; }
-            echo "$core: exit 0, $c/$f exported functions lowered, $(stat -c%s /tmp/gn.$core.o) B"
+            # THE ONE ALLOWED SKIP, by name: gust:os/timer#sleep takes an i64, and synth marshals
+            # one 32-bit register per argument (synth#929), so it declines rather than drop the
+            # high half. Asserted as an exact set AND as a count, so a second skip, a renamed
+            # one, or a sleep that starts lowering each turns this red.
+            sk=$({ grep -oE "skipping function '[^']+'" /tmp/gn.$core.log || true; } | sed -E "s/skipping function '([^']+)'/\1/" | sort -u | tr '\n' ' ')
+            [ "$sk" = "gust:os/timer@0.1.0#sleep " ] \
+              || { echo "$core: skipped set is '$sk', expected exactly 'gust:os/timer@0.1.0#sleep'"; cat /tmp/gn.$core.log; exit 1; }
+            [ "$c" = "$((f - 1))" ] || { echo "$core: lowered $c of $f exported functions, expected $((f - 1)) (one named skip)"; cat /tmp/gn.$core.log; exit 1; }
+            echo "$core: exit 0, $c/$f exported functions lowered, skipped exactly: $sk($(stat -c%s /tmp/gn.$core.o) B)"
           done
           u=$(arm-none-eabi-nm /tmp/gn.cortex-m3.o | awk '$1=="U"||$2=="U"{print $NF}' | sort -u | tr '\n' ' ')
           echo "gale-nano native residual: $u"
