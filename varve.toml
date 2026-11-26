@@ -13,7 +13,7 @@ manifest-version = 1
 [toolchain]
 realm   = "pulseengine"
 channel = "rolling"
-layer   = "2026.11.40"
+layer   = "2026.11.44"
 # The layer NAME is not sufficient on its own: two entries for 2026.08.4 existed in the old
 # realm under different digests, and varve refuses to guess between them rather than
 # silently picking one. That refusal is the feature.
@@ -38,4 +38,11 @@ layer   = "2026.11.40"
 # and loom 1.5.4; artifacts.pins stays the authority for those (meld 0.65.1, synth 0.89.0, loom
 # 1.4.0) and CI passes them explicitly, so the lowered object does not change. Locally, a script
 # that falls back to `varve run meld|loom|synth` now gets the layer's newer version.
-digest  = "sha256:18dd29cde4a6012794ecd3acd931504f1bfbff97b50e7ed18d1f4cb1bcfd9964"
+# MOVED 2026-11-26: 2026.11.40 -> 2026.11.44, resolved by `varve install` and then recorded
+# (`varve outdated`: newest signed for line 2026.11, index #45). `varve diff` lists 15 changed
+# and 5 removed entries, 0 added. rivet, spar, meld, synth and loom do not change. For jess
+# only kiln changes, 0.8.0 -> 0.9.0, and the `kilnd` name is gone; tools/xruntime/kiln-check.sh
+# already calls `kiln`, and gave the same verdict under both (mixer#mix 4 of 4 outputs
+# bit-identical to wasmtime, 2 of 5 exports executed, 3 not drivable). jig, plant, sieve
+# and warte change too; jess calls none of them.
+digest  = "sha256:73d5486ed887e0a62319a3e8c1bb823119e8e1e2e6ffbe543af4d653e01bad5e"
