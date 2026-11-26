@@ -101,6 +101,10 @@ galenano/gale-nano.wasm       6f91ded4df5939b0cb41c4d6f3444173aecaaaf40f00783bc9
 # NOT varve-pinned: the campaign runs 0.91.0 (layer 2026.10.32 carries 0.88.0).
 #
 # BUMPED 0.89.0 -> 0.91.0 (2026-11-24). A CORRECTNESS FIX on jess's path, every byte attributed.
+# GALE-NANO (owner decision 20261125T000518-91c481, fuse-skip-sleep): 0.91.0 refuses a component
+# (#1191), so ci.yml meld-fuses gale-nano first; 37 of 38 exports lower on all 3 cores and the ONE
+# skip, gust:os/timer#sleep (i64 arg, synth#929), is asserted by name. The F100 gale-nano rung is
+# NOT rebuilt: the fused module does not fit the F100 window under any sound meld option (AFD-155).
 # One variable (the synth binary), build.sh from e950706, 39 outputs: 25 BYTE-IDENTICAL, including
 # the fused c.wasm and c.loom.wasm inputs. 14 differ: cascade.o, cascade_named.o, the 9 ELFs that
 # link them (all at identical size), and 3 logs. cascade.o differs in exactly 15 .text bytes, all
