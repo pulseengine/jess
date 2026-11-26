@@ -260,7 +260,7 @@ artifacts:
     type: requirement
     title: Maximal-wasm gale-nano on the STM32F100 I/O MCU - minimal verified gale subset + kiln async scheduler, synth-compiled, thin native register shim
     status: draft
-    release: v0.9.0
+    release: v0.10.0
     description: >
       gale-nano = {gale sem/mutex/msgq/timeout/event control primitives} +
       kiln-async scheduler + a ~4-item native shim (vector table+reset, one SysTick
@@ -388,7 +388,7 @@ artifacts:
     type: requirement
     title: Firmware-update + non-volatile persistence architecture for the RT1176 target (must be modeled before finalizing the storage/ROM route)
     status: draft
-    release: v0.8.0
+    release: v0.9.0
     description: >
       jess must define how (a) parameters/calibration persist and (b) firmware is
       updated on the Pixhawk 6X-RT, BEFORE committing to the "own driver, no i.MX
@@ -415,7 +415,7 @@ artifacts:
     type: requirement
     title: PX4-on-Renode HITL — boot the real fmu-v6xrt firmware on the RT1176 model, then co-simulate with Gazebo physics in lockstep
     status: draft
-    release: v0.8.0
+    release: v0.9.0
     description: >
       Take the Renode RT1176 platform from boot-a-stub-firmware (REQ-PIX-005) to
       running the REAL PX4 fmu-v6xrt firmware, then to a hardware-in-the-loop
@@ -647,7 +647,7 @@ artifacts:
     type: requirement
     title: The combined M7(falcon)+F100(gust) vehicle is simulatable on two parallel tracks - wasmtime (hardware-free SIL) and Renode (real-hardware) - over sensors -> control + failsafe -> motors + inter-node IPC
     status: draft
-    release: v0.9.0
+    release: v0.10.0
     description: >
       The whole two-node vehicle (not one piece) must be developable + verifiable in
       simulation, early, without waiting on hardware. Two tracks run in parallel on the
@@ -964,7 +964,7 @@ artifacts:
     type: test-spec
     title: Fused-core byte-reproducibility oracle - `meld fuse --reproducible` is byte-stable AND path-independent (meld#325 UUID/timestamp + meld#341 path-dependence both resolved; CI-gated on meld v0.41.3)
     status: valid
-    release: v0.9.0
+    release: v0.10.0
     description: >
       tools/repro/fuse-repro-oracle.sh - characterizes how far the meld-fused falcon core is a
       BYTE-STABLE artifact, the prerequisite for a re-verifiable REQ-PIX-018 attestation, a
@@ -1000,7 +1000,7 @@ artifacts:
     type: test-spec
     title: Gust F100 byte-exact pass-through oracle - the failsafe forwards per-motor commands un-re-mixed, verified against relay's real PART-P02 conformance fixture (incl. asymmetric-zero rotor-out rows)
     status: valid
-    release: v0.9.0
+    release: v0.10.0
     description: >
       tools/gust/passthrough-oracle.sh - closes the PART-P02 (a) MUST of REQ-PIX-004: the F100 gust
       failsafe forwards the M7's per-motor commands BYTE-EXACT (no re-mix, no per-motor floors), so a
@@ -1032,7 +1032,7 @@ artifacts:
     type: test-spec
     title: Gust F100 byte-exact pass-through EXECUTES on the emulated Cortex-M3 (F100) in Renode - asymmetric rotor-out zeros survive un-re-mixed on real M3 semantics
     status: valid
-    release: v0.9.0
+    release: v0.10.0
     description: >
       hardware/renode/gust-m3/passthrough-m3.robot - the ON-TARGET execution rung above the
       host-level property oracle (TEST-PIX-027) for REQ-PIX-004 PART-P02 (a). The gust pass-through
@@ -1061,7 +1061,7 @@ artifacts:
     type: test-spec
     title: Sigil attestation gate - the reproducible meld-fused falcon core is sigil-signed + verified, and a 1-byte tamper is detected (DD-023 terminal FIRST-FLASH rung)
     status: valid
-    release: v0.9.0
+    release: v0.10.0
     description: >
       tools/sigil-gate/ - closes DD-023 / REQ-PIX-021's terminal "sigil-signed flashable set" step
       at the fused-core level. run.sh fetches a pinned falcon component -> meld fuse --reproducible
@@ -1088,7 +1088,7 @@ artifacts:
     type: test-spec
     title: Inter-core NavState crossing - the 16xf32 NavState message crosses M4 -> shared SRAM -> M7 byte-exact on the dual-core RT1176 Renode model (REQ-PIX-007)
     status: valid
-    release: v0.9.0
+    release: v0.10.0
     description: |-
       hardware/renode/navstate-xcore/ - proves the payload-fidelity half of REQ-PIX-007: the 3-core partition's sole M7<->M4 crossing is the NavState message (16 x f32 = 64 B, DD-025/PART), and it must cross the shared-SRAM ring BYTE-EXACT (no corruption, no partial read) or the M7 flight core acts on a torn estimator state. Built on the proven dual-core RT1176 model (hardware/renode/vehicle/rt1176-dualcore.repl: cpu_m7 + cpu_m4 on the shared sysbus, SHMEM ring @0x20400000, full NXP MU doorbell). cpu_m4 (estimator core) writes the 16-word NavState to SHMEM then publishes a READY flag @0x20400040 LAST (flag-last release order); cpu_m7 (flight core) spins on the flag (acquire), copies the 16 words to its DTCM @0x20010000. ORACLE (navstate-crossing.robot, renode-test): asserts ALL 16 DTCM output words == the producer pattern 0x4E560000+i - so the NavState survived M4 -> shared-SRAM -> M7 bit-for-bit. CONFIRMED GREEN 2026-07-23 (jess local, Renode 1.16.1; 16/16 words byte-exact). WIRED into .github/workflows/ci.yml renode-smoke job. Hermetic: committed producer/consumer ELFs (arm-none-eabi, build.sh regenerates; ELF addresses + the robot are a matched pair). This is the inter-core IPC foundation the FIRST-FLASH 3-core model needs; the MU doorbell datapath (M4->M7 RR0) is separately exercised by the vehicle multinode demo (TEST-PIX-019). WIT-TYPING DONE 2026-07-23 (AFD-036 resolved): the NavState is now a structured WIT record - hardware/pixhawk6x-rt.aadl carries VehicleState.nav (16xf32) + ActuatorCmd.pwm (4xf32), ports bound to the data implementations, and `spar codegen` emits `record vehicle-state-nav {qw:f32 ..baz:f32}` + `record actuator-cmd-pwm {m0..m3:f32}` (verified by the TEST-PIX-023 WIT-derivation gate). So REQ-PIX-007 now has BOTH halves: the byte-exact crossing (this test) + the typed contract (the record). NEXT RUNG: swap the fixed pattern for gale's verified k_msgq (gale v0.4.0, DD-023) + relay's real estimator NavState when the M4 estimator lowers on-target.
 
@@ -1124,7 +1124,7 @@ artifacts:
     type: requirement
     title: jess CI gates the falcon wasm with witness (MC/DC branch coverage) + scry (sound abstract interpretation), on the meld-fused core
     status: implemented
-    release: v0.9.0
+    release: v0.10.0
     description: >
       Inbound jess#91 (avrabe, org release-consistency campaign; hub pulseengine.eu#98):
       jess builds/consumes wasm firmware but gates CI only on rivet + spar - add the
@@ -1207,7 +1207,7 @@ artifacts:
     type: requirement
     title: Hardware-first root-of-trust on the 6X-RT - bind the SE050 secure element + HAB secure boot, with an automatic software fallback (sigil/relay-sec) gated on hardware presence/health
     status: draft
-    release: v0.8.0
+    release: v0.9.0
     description: >
       jess implements the DD-020 hardware-first / software-fallback root-of-trust on the
       Pixhawk 6X-RT. Two layers:
@@ -1668,6 +1668,16 @@ artifacts:
       variable): 0 of 15, so a shorter run window does not avoid the reset. Criterion 3 (oracle
       exit 0 over 3 judged runs per image) was not reached. Load-to-RAM is therefore not a base
       for B4; the owner ruled 2026-11-24 that the reset is diagnosed first (read-only SWD).
+      RERUN B2r 2026-11-24, ALL THREE CRITERIA MET. The reset was an M7 lockup (SRC_SRSR
+      0x10000004, #327); the loader now sets PRIMASK=1 before resume and refuses unless it reads
+      back as 1 (#328), the one variable changed. Pre-registered in 4044e8a before any run, loader
+      sha256 recorded in 25ca0aa; same images, expected lines and campaign.sh as B2. 60 of 60
+      attempts completed and matched their expected line (ekf 20/20, ekf_nc1 20/20, ekf_n15
+      20/20); zero wrong words; 0 of 60 logs show "external reset detected". All 20 rounds judged
+      by run-ekf-oracle.sh at e950706 (control B judged in full at N=15) exit 0; a one-ulp flip in
+      one tick-16 word makes the same judge exit 1. Evidence:
+      hardware/silicon/evidence/b2r-rt1176-2026-11-24/. Status stays draft until a fresh-context
+      review re-derives this from the evidence; the B2 FAIL above stands as its own record.
     tags: [phase-2, on-target, silicon, ladder, r0]
     fields:
       test-method: manual-test

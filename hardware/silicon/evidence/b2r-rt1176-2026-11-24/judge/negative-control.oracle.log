@@ -1,0 +1,36 @@
+   freshness not applicable: the ELFs are evidence from hardware/silicon/evidence/b2-rt1176-2026-11-22/images, bound to the captures by sha256
+== 1. 16 estimator ticks on the target named by the captures' origin lines ==
+   ekf.words: origin rt1176-silicon swd-load-to-ram attempt=1/1 pc=0x00000036
+   sentinel 0x1E55E4F0 present; loop reports 16 iterations actually run
+== 2. independent wasmtime reference over the SAME module and N ==
+   tick 1
+      qw          0x3F800000  matches
+      qx          0x38571C87  matches
+      qy          0xB7D71C84  matches
+      qz          0x3812CCF7  matches
+      pos-n       0x00000000  matches
+      pos-e       0x00000000  matches
+      pos-d       0x00000000  matches
+      vel-n       0xB581F691  matches
+      vel-e       0xB601F97A  matches
+      vel-d       0x00000000  matches
+      wx          0x3E99999A  matches
+      wy          0xBE19999A  matches
+      wz          0x3D8F5C29  matches
+      innovation  0x00000000  matches
+   tick 16
+      qw          0x3F7FFFF0  matches
+      qx          0x3A98A666  matches
+      qy          0xBA189445  matches
+      qz          0x3A12CCF6  matches
+      pos-n       0xB51D8F56  matches
+      pos-e       target 0xB59DC6CD  reference 0xB59DC6CC  DIFFERS
+      pos-d       0xB027BF95  matches
+      vel-n       0xB7907360  matches
+      vel-e       0xB810AD19  matches
+      vel-d       0xB2A0619A  matches
+      wx          0x3E99999A  matches
+      wy          0xBE19999A  matches
+      wz          0x3D8F5C29  matches
+      innovation  0x00000000  matches
+FAIL: tick 16 state does NOT match the wasmtime reference

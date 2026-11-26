@@ -333,7 +333,7 @@ artifacts:
     type: design-decision
     title: gale-nano (gust) failsafe mixer is FIXED-POINT (Q8) - keeps the STM32F100 path synth-gap-free
     status: accepted
-    release: v0.9.0
+    release: v0.10.0
     description: >
       The gale-nano failsafe app's mixer SHALL be fixed-point (Q8), not float.
       Grounded in a measured op-set profile (iter#37, gale-side on gale#65,
@@ -648,7 +648,7 @@ artifacts:
     type: design-decision
     title: Update + persistence architecture - flight TCB carries NO i.MX ROM; persistence=FRAM-own-driver; the ROM question lives ONLY in the on-ground update bootloader
     status: accepted
-    release: v0.8.0
+    release: v0.9.0
     description: >
       Models jess's firmware-update + persistence path on the RT1176 (REQ-PIX-015),
       a PREREQUISITE for finalizing the storage/ROM route (the user's point: "we
@@ -914,7 +914,7 @@ artifacts:
     type: design-decision
     title: Two-track simulation for the combined M7+F100 vehicle - wasmtime (hardware-free SIL) parallel to Renode (real-hardware model), same components, plus physical silicon
     status: accepted
-    release: v0.9.0
+    release: v0.10.0
     description: >
       The flight system is TWO cooperating nodes (M7 falcon + relay-hal = primary
       sensing/control/GCS-CAN; F100 gust = always-alive failsafe: RC-in, failsafe PWM,
@@ -968,7 +968,7 @@ artifacts:
     type: design-decision
     title: Root-of-trust = HARDWARE-FIRST (SE050 secure element + i.MX RT HAB secure boot) with a SOFTWARE FALLBACK (sigil + relay-sec) when the hardware is absent/unprovisioned/unhealthy
     status: accepted
-    release: v0.8.0
+    release: v0.9.0
     description: >
       The 6X-RT security root-of-trust decision (user direction: "hardware with a
       software fallback if the hardware does not provide"). GROUNDED in the PX4
