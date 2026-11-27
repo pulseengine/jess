@@ -118,6 +118,9 @@ env:
   # five comments in this file as the thing keeping them in step and was never invoked — and
   # this very bump proved it, by going green with the two files disagreeing (AFD-137).
   MELD_VERSION: v0.70.0
+  # kiln: the advisory runtime for the scry-run component (tools/scry-gate/wasm-equiv.sh); the
+  # same version covalent 2026.11.28 carries.
+  KILN_VERSION: v0.9.0
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
@@ -1061,6 +1064,24 @@ jobs:
           mkdir -p /tmp/wtm && tar xJf /tmp/wasmtime.tar.xz -C /tmp/wtm --strip-components=1
           sudo install -m755 /tmp/wtm/wasmtime /usr/local/bin/wasmtime
           wasmtime --version
+      - name: Fetch pinned kiln release (advisory runtime)
+        # Advisory: a failed fetch must not fail the job; wasm-equiv.sh then prints
+        # "kiln (advisory): could not run".
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          gh release download "$KILN_VERSION" --repo pulseengine/kiln \
+            --pattern "kiln-${KILN_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            --pattern 'SHA256SUMS.txt' --dir /tmp/kiln
+          cd /tmp/kiln
+          exp=$(grep "kiln-${KILN_VERSION}-x86_64-unknown-linux-gnu.tar.gz" SHA256SUMS.txt | awk '{print $1}')
+          act=$(sha256sum "kiln-${KILN_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | awk '{print $1}')
+          test -n "$exp" && test "$exp" = "$act" || { echo "checksum mismatch"; exit 1; }
+          tar xzf "kiln-${KILN_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          install -m755 "$(find . -name kiln -type f | head -1)" /usr/local/bin/kiln
+          kiln --version
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: scry-run component matches native (wasm32-wasip2 under wasmtime)
         run: |
           set -o pipefail

@@ -41,8 +41,9 @@ tools/scry-gate/run.sh /path/core.wasm    # a local fused core
 `wasm-equiv.sh <fused-core.wasm>` builds scry-run for `wasm32-wasip2`, runs it under wasmtime
 and compares it with the native build: 2 cases (the fused core, and a non-wasm file), stdout and
 exit code must match, and a one-byte negative control must be reported as a difference. Exit 2
-means it could not run. CI runs it in the scry-gate job after `run.sh`. kiln is added as an
-advisory runtime after kiln#480. Panic paths are not compared (native exits 101, the component
+means it could not run. CI runs it in the scry-gate job after `run.sh`. kiln 0.9.0 runs as an
+advisory runtime: the component is fused with `meld fuse --reproducible --emit-import-map` and
+run with `kiln --wasi --import-map`; its result is printed, never gated. Panic paths are not compared (native exits 101, the component
 traps).
 
 ## Why the baseline omits sha/bytes
