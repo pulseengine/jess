@@ -4,7 +4,12 @@
 #
 # Owner decision 2026-11-27 ("run what we build"): jess's host tools run as components on our
 # own engine where they can. scry-run needs no host-only feature (it reads one file and prints
-# JSON), so the component is the first one. kiln joins as an advisory runtime after kiln#480.
+# JSON), so the component is the first one.
+#
+# kiln, ADVISORY: kiln runs meld-fused components, not raw ones (by design), so the component is
+# fused with `meld fuse --reproducible --emit-import-map` and run with `kiln --wasi --import-map`.
+# The same two cases are compared against native and reported as "kiln (advisory): N of 2", or as
+# "could not run". The kiln result never changes this script's exit code.
 #
 # Cases (the denominator is printed):
 #   1. the fused falcon core run.sh produced   -> both exit 0, stdout identical
@@ -15,7 +20,7 @@
 # Exit 0 = every case identical. 1 = a case differed. 2 = could not run (no wasmtime, no
 # wasm32-wasip2 target, no input): "could not run" is never reported as "identical".
 #
-# Not covered: panic paths (native unwinds and exits 101, the component traps), and kiln.
+# Not covered: panic paths (native unwinds and exits 101, the component traps); kiln is reported, not gated.
 # stderr is required identical only in the failing case; in case 1 it is reported.
 #
 # Usage: tools/scry-gate/wasm-equiv.sh <fused-core.wasm>
@@ -25,6 +30,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
 CRATE="$ROOT/tools/scry-gate/scry-run"
 WORK="$ROOT/tools/scry-gate/.work/equiv"
 WASMTIME="${WASMTIME:-wasmtime}"
+KILN="${KILN:-kiln}"
+MELD="${MELD:-meld}"
 cannot() { echo "COULD NOT RUN: $*" >&2; exit 2; }
 
 FUSED="${1:-}"
@@ -56,6 +63,7 @@ cp "$0" "$WORK/in/case2.wasm"
 run_case() {
   local c="$1" expect="$2" n w
   "$NATIVE" "$WORK/in/$c.wasm" >"$WORK/$c.native.out" 2>"$WORK/$c.native.err"; n=$?
+  echo "$n" >"$WORK/$c.native.rc"
   "$WASMTIME" run ${WT_FLAGS[@]+"${WT_FLAGS[@]}"} --dir "$WORK/in::/in" "$COMPONENT" "/in/$c.wasm" \
     >"$WORK/$c.wasm.out" 2>"$WORK/$c.wasm.err"; w=$?
   local ok=1
@@ -88,6 +96,30 @@ if cmp -s "$WORK/case1.native.out" "$WORK/mutant.out"; then
   echo "NEGATIVE CONTROL FAILED: the comparator did not see a one-byte change" >&2; exit 1
 fi
 echo "negative control: one changed byte is reported as a difference"
+
+# kiln, advisory: computed and printed, never part of the exit code.
+kiln_advisory() {
+  "$KILN" --version >/dev/null 2>&1 || { echo "kiln (advisory): could not run, '$KILN' not found"; return; }
+  "$MELD" --version >/dev/null 2>&1 || { echo "kiln (advisory): could not run, '$MELD' not found"; return; }
+  local fused="$WORK/scry-run.fused.wasm" imap="$WORK/scry-run.imports.json"
+  "$MELD" fuse "$COMPONENT" -o "$fused" --reproducible --emit-import-map "$imap" >"$WORK/kiln.meld.log" 2>&1 \
+    || { echo "kiln (advisory): could not run, meld fuse failed (see $WORK/kiln.meld.log)"; return; }
+  echo "kiln (advisory): $("$KILN" --version 2>&1 | head -1), $("$MELD" --version 2>&1 | head -1), fused $(wc -c <"$fused" | tr -d ' ') B"
+  local ks=0 c n k
+  for c in case1 case2; do
+    n=$(cat "$WORK/$c.native.rc")
+    "$KILN" --wasi --wasi-fs "$WORK/in" --import-map "$imap" "$fused" "$WORK/in/$c.wasm" \
+      >"$WORK/$c.kiln.out" 2>"$WORK/$c.kiln.err"; k=$?
+    if [ "$n" = "$k" ] && cmp -s "$WORK/$c.native.out" "$WORK/$c.kiln.out"; then
+      ks=$((ks + 1)); echo "  $c: kiln exit $k, stdout identical"
+    else
+      echo "  $c: kiln exit $k (native $n), stdout $(cmp -s "$WORK/$c.native.out" "$WORK/$c.kiln.out" && echo identical || echo DIFFERS)"
+      head -5 "$WORK/$c.kiln.err" | sed 's/^/    /'
+    fi
+  done
+  echo "kiln (advisory): $ks of 2 cases identical to native"
+}
+kiln_advisory
 
 echo "Result: $same of $total cases identical (native vs wasm32-wasip2 under wasmtime)"
 [ "$same" = "$total" ]
