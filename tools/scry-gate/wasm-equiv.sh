@@ -8,15 +8,15 @@
 #
 # Cases (the denominator is printed):
 #   1. the fused falcon core run.sh produced   -> both exit 0, stdout identical
-#   2. a file that is not wasm (this script)   -> both exit non-zero, stdout identical
+#   2. a file that is not wasm (this script)   -> both exit non-zero, stdout AND stderr identical
 # Negative control: the comparator is run on case 1's output against a copy with one byte
 # changed, and must report a difference, or this script fails.
 #
 # Exit 0 = every case identical. 1 = a case differed. 2 = could not run (no wasmtime, no
 # wasm32-wasip2 target, no input): "could not run" is never reported as "identical".
 #
-# Not covered: panic paths (native unwinds and exits 101, the component traps), stderr is
-# compared but reported only, and kiln.
+# Not covered: panic paths (native unwinds and exits 101, the component traps), and kiln.
+# stderr is required identical only in the failing case; in case 1 it is reported.
 #
 # Usage: tools/scry-gate/wasm-equiv.sh <fused-core.wasm>
 set -uo pipefail
@@ -56,6 +56,12 @@ run_case() {
   cmp -s "$WORK/$c.native.out" "$WORK/$c.wasm.out" \
     || { echo "  $c: stdout DIFFER"; diff "$WORK/$c.native.out" "$WORK/$c.wasm.out" | head -10; ok=0; }
   local e=identical; cmp -s "$WORK/$c.native.err" "$WORK/$c.wasm.err" || e=differs
+  # A failing case must fail the same way: identical stderr, so a component that never started
+  # (a runtime error, exit 1, empty stdout) cannot pass as "answered no".
+  if [ "$expect" = nonzero ] && [ "$e" = differs ]; then echo "  $c: stderr DIFFER"; ok=0; fi
+  if [ "$ok" = 0 ]; then
+    echo "  $c: component stderr (first 15 lines):"; head -15 "$WORK/$c.wasm.err" | sed 's/^/    /'
+  fi
   echo "  $c: exit $n/$w, stdout $(wc -c <"$WORK/$c.native.out" | tr -d ' ') B sha256 $(shasum -a 256 "$WORK/$c.native.out" | awk '{print $1}'), stderr $e"
   [ "$ok" = 1 ]
 }
