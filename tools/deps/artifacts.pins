@@ -305,6 +305,16 @@ synthpin/synth               2d6d8aad2b60de292313e0de371532d48efcd73626c6cbc0c5f
 #                     the other 14 sections, code and data included, are identical. 0.65.x's
 #                     changes are all --memory multi / nested-list adapters; jess uses
 #                     --memory shared.
+#   0.65.1 -> 0.70.0  NO-OP for jess (measured 2026-11-27): c.loom.wasm, cascade.o and all 9 ELFs
+#                     (invoke, soak, ekf and their negative controls) are BYTE-IDENTICAL, 26 of
+#                     31 build outputs. The fused c.wasm differs in 3 bytes at the same 68,406 B,
+#                     all inside `wsc.transformation.attestation`'s tool version string; the
+#                     fused-output hash recorded in that section is the same under both
+#                     (49419729...). The other 4 differ only by the build directory's name
+#                     (init.json, jess_wasm_init.c, ekf.dis, soak.dis; identical once the path
+#                     is normalised). The darwin binary below is byte-identical to the meld in
+#                     varve layer 2026.11.44, so this also clears check-drift's
+#                     "campaign pin behind the varve layer" advisory.
 #
 # THE LAYOUT MOVES, so anything that hardcodes a linear-memory offset goes wrong. The one consumer
 # that did — tools/cascade-differential/linmem-capture.sh, fixed 0xac18 and 0xb024 — now takes
@@ -312,8 +322,8 @@ synthpin/synth               2d6d8aad2b60de292313e0de371532d48efcd73626c6cbc0c5f
 # and requires a unit quaternion there as a positive control. Its old fixed-offset check would
 # have stayed GREEN under this bump: both dumps shift together, so it compared two reads of the
 # same wrong place.
-meld/meld                    e84e2daf84d6d229fe78e0719da8672c9a09272e861f9d0989403265f2284bb0  release:pulseengine/meld@v0.65.1!meld-v0.65.1-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
-meld/meld                    e61e4f3ad1d73f2f99565c08f3c347cee8aa98136a384965291ba306fc2ab1af  release:pulseengine/meld@v0.65.1!meld-v0.65.1-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
+meld/meld                    6fb83ae4b4082a66dfdfbaf35a5d2733814600d7e917b9edebf023bf7bf12f40  release:pulseengine/meld@v0.70.0!meld-v0.70.0-aarch64-apple-darwin.tar.gz!meld      platform=aarch64-apple-darwin
+meld/meld                    441be8758ed518316eda51eaf2071efe34bc46e0714987de5e1fc8b86e4bd70b  release:pulseengine/meld@v0.70.0!meld-v0.70.0-x86_64-unknown-linux-gnu.tar.gz!meld  platform=x86_64-unknown-linux-gnu
 # loom STAYS AT 1.4.0 DELIBERATELY, and this is the one pin that is BEHIND the varve layer
 # (both 2026.09.2 and 2026.10.23 carry 1.4.1), so a layer migration would adopt 1.4.1 by
 # accident unless this line keeps saying no. check-drift.sh reports the gap as
