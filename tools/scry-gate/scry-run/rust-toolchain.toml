@@ -1,0 +1,6 @@
+# Pinned so CI builds the same component as a local build (fleet rule: Rust >= 1.100, pinned).
+# 1.100.0's std imports wasi:cli/exit `exit-with-code` on wasm32-wasip2 even though main exits
+# through std::process::exit; wasm-equiv.sh detects it and runs wasmtime -S cli-exit-with-code.
+[toolchain]
+channel = "1.100.0"
+targets = ["wasm32-wasip2"]

@@ -36,6 +36,15 @@ tools/scry-gate/run.sh falcon-v1.113.0    # a specific release
 tools/scry-gate/run.sh /path/core.wasm    # a local fused core
 ```
 
+## scry-run as a WASI p2 component
+
+`wasm-equiv.sh <fused-core.wasm>` builds scry-run for `wasm32-wasip2`, runs it under wasmtime
+and compares it with the native build: 2 cases (the fused core, and a non-wasm file), stdout and
+exit code must match, and a one-byte negative control must be reported as a difference. Exit 2
+means it could not run. CI runs it in the scry-gate job after `run.sh`. kiln is added as an
+advisory runtime after kiln#480. Panic paths are not compared (native exits 101, the component
+traps).
+
 ## Why the baseline omits sha/bytes
 
 `baseline.json` records the **stable soundness invariants** as evidence, not the
