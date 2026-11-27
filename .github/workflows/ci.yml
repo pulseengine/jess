@@ -275,7 +275,9 @@ jobs:
         run: |
           cargo build --release --locked --target wasm32-wasip2
           EQUIV_PORT_BIN="$PWD/component-run.sh" cargo test --release --locked -- --nocapture
-          cd ../../.. && CHECK_CATALOG=tools/bench/check-catalog/component-run.sh tools/bench/check-catalog.sh --self-test
+      - name: hardware catalogue agrees with the registry, run through the component
+        working-directory: jess
+        run: CHECK_CATALOG=tools/bench/check-catalog/component-run.sh tools/bench/check-catalog.sh --self-test
       # AFD-124: a pin-path rename left three consumers on the OLD path, and two of them passed
       # locally against the stale artifact still sitting in .scratch — the bump was reported green
       # against the very artifact it replaced. This asserts every .scratch directory a script
