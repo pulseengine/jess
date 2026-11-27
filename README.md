@@ -141,4 +141,4 @@ PX4's `mavlink_shell.py` and the toolchain binaries — are **not redistributed*
 fetched by digest into the gitignored `.scratch/` by `tools/deps/fetch.sh` and remain under their
 own licenses; `tools/deps/artifacts.pins` records where each one comes from.
 
-Part of the [PulseEngine](https://github.com/pulseengine) toolchain.
+Part of the [PulseEngine](https://github.com/pulseengine) WebAssembly Component Model engine.
