@@ -10,7 +10,7 @@
 use scry_analyze_core::{
     analyze, AnalysisConfig, DiagnosticSeverity, SoundnessTag, StackBound,
 };
-use std::process::ExitCode;
+use std::io::Write;
 
 fn stack_bound(b: &StackBound) -> String {
     match b {
@@ -20,12 +20,21 @@ fn stack_bound(b: &StackBound) -> String {
     }
 }
 
-fn main() -> ExitCode {
+// Exit through std::process::exit (fleet exit-code rule). Measured with Rust 1.100.0: the
+// wasm32-wasip2 build still imports wasi:cli/exit `exit-with-code`, so wasm-equiv.sh enables it
+// in wasmtime (-S cli-exit-with-code) and asserts exit codes 0 and 1 through the component.
+fn main() {
+    let code = run();
+    let _ = std::io::stdout().flush();
+    std::process::exit(code);
+}
+
+fn run() -> i32 {
     let path = match std::env::args().nth(1) {
         Some(p) => p,
         None => {
             eprintln!("usage: scry-run <fused-core.wasm>");
-            return ExitCode::FAILURE;
+            return 1;
         }
     };
     let bytes = std::fs::read(&path).expect("read fused core wasm");
@@ -36,7 +45,7 @@ fn main() -> ExitCode {
         Err(e) => {
             // scry could NOT soundly analyze the fused core -> hard gate failure.
             eprintln!("scry ERROR (analysis did not complete): {e:?}");
-            return ExitCode::FAILURE;
+            return 1;
         }
     };
 
@@ -88,5 +97,5 @@ fn main() -> ExitCode {
         r.invariants.points.len(), r.function_summaries.len(), r.call_graph.len(),
         edges_unsound, r.diagnostics.len(), diag_unsound
     );
-    ExitCode::SUCCESS
+    0
 }

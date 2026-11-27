@@ -39,6 +39,15 @@ NATIVE="$CRATE/target/release/scry-run"
 COMPONENT="$CRATE/target/wasm32-wasip2/release/scry-run.wasm"
 echo "component: $(wc -c <"$COMPONENT" | tr -d ' ') B, sha256 $(shasum -a 256 "$COMPONENT" | awk '{print $1}')"
 echo "runtime:   $("$WASMTIME" --version)"
+# Rust >= 1.100 std on wasm32-wasip2 imports wasi:cli/exit `exit-with-code` even when main exits
+# through std::process::exit (measured with 1.100.0), and wasmtime 42 links it only with
+# -S cli-exit-with-code. Without the flag the component cannot start (CI run 45984297106).
+WT_FLAGS=()
+if grep -aq exit-with-code "$COMPONENT"; then
+  WT_FLAGS=(-S cli-exit-with-code); echo "imports exit-with-code: yes -> wasmtime -S cli-exit-with-code"
+else
+  echo "imports exit-with-code: no"
+fi
 
 cp "$FUSED" "$WORK/in/case1.wasm"
 cp "$0" "$WORK/in/case2.wasm"
@@ -47,7 +56,7 @@ cp "$0" "$WORK/in/case2.wasm"
 run_case() {
   local c="$1" expect="$2" n w
   "$NATIVE" "$WORK/in/$c.wasm" >"$WORK/$c.native.out" 2>"$WORK/$c.native.err"; n=$?
-  "$WASMTIME" run --dir "$WORK/in::/in" "$COMPONENT" "/in/$c.wasm" \
+  "$WASMTIME" run ${WT_FLAGS[@]+"${WT_FLAGS[@]}"} --dir "$WORK/in::/in" "$COMPONENT" "/in/$c.wasm" \
     >"$WORK/$c.wasm.out" 2>"$WORK/$c.wasm.err"; w=$?
   local ok=1
   [ "$n" = "$w" ] || { echo "  $c: exit native=$n component=$w DIFFER"; ok=0; }

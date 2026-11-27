@@ -1,6 +1,6 @@
-# Pinned so CI builds the same component as a local build. CI run 45984297106: the runner's newer
-# toolchain made the wasm32-wasip2 build import `wasi:cli/exit` `exit-with-code`, which wasmtime
-# 42.0.1 does not provide by default, so the component could not start. 1.99.1 does not import it.
+# Pinned so CI builds the same component as a local build (fleet rule: Rust >= 1.100, pinned).
+# 1.100.0's std imports wasi:cli/exit `exit-with-code` on wasm32-wasip2 even though main exits
+# through std::process::exit; wasm-equiv.sh detects it and runs wasmtime -S cli-exit-with-code.
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 targets = ["wasm32-wasip2"]
