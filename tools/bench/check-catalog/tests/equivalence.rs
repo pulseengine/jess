@@ -33,6 +33,15 @@ fn path_env() -> String {
     }
 }
 
+/// The port under test: this crate's native binary, or, with EQUIV_PORT_BIN set, another runner
+/// of the same port (component-run.sh, which runs the wasm32-wasip2 component under wasmtime).
+fn port_bin() -> String {
+    match std::env::var("EQUIV_PORT_BIN") {
+        Ok(b) if !b.is_empty() => b,
+        _ => env!("CARGO_BIN_EXE_check-catalog").to_string(),
+    }
+}
+
 struct Out {
     code: i32,
     stdout: String,
@@ -44,7 +53,7 @@ fn run(script: &Path, cat: &Path, reg: &Path) -> Out {
         .env("PATH", path_env())
         .env("CAT", cat)
         .env("REG", reg)
-        .env("CHECK_CATALOG", env!("CARGO_BIN_EXE_check-catalog"))
+        .env("CHECK_CATALOG", port_bin())
         .current_dir(repo())
         .output()
         .expect("run bash");
@@ -309,7 +318,7 @@ fn fingerprint() {
         h = (h ^ b as u64).wrapping_mul(0x0100_0000_01b3);
     }
     eprintln!("port source fingerprint: fnv64 {h:016x} ({} bytes of src/main.rs)", src.len());
-    eprintln!("binary under test: {}", env!("CARGO_BIN_EXE_check-catalog"));
+    eprintln!("binary under test: {}", port_bin());
 }
 
 #[test]
