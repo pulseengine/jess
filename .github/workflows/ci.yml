@@ -1045,6 +1045,22 @@ jobs:
         run: tools/scry-gate/run.sh | tee -a "$GITHUB_STEP_SUMMARY"
         env:
           GH_TOKEN: ${{ github.token }}
+      # scry-run as a WASI p2 component (owner decision 2026-11-27, "run what we build"):
+      # the wasm32-wasip2 build under wasmtime must match the native build byte for byte on
+      # the fused core the step above produced. Exit 2 (could not run) fails the job too.
+      - name: wasmtime 42.0.1 (sha256-pinned) + wasm32-wasip2 target
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/wasmtime.tar.xz https://github.com/bytecodealliance/wasmtime/releases/download/v42.0.1/wasmtime-v42.0.1-x86_64-linux.tar.xz
+          echo "dd5253f3cb521bb094f9951c3d2c45c746b31e5723b07ce56f162ec9bab44d59  /tmp/wasmtime.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/wtm && tar xJf /tmp/wasmtime.tar.xz -C /tmp/wtm --strip-components=1
+          sudo install -m755 /tmp/wtm/wasmtime /usr/local/bin/wasmtime
+          rustup target add wasm32-wasip2
+          wasmtime --version
+      - name: scry-run component matches native (wasm32-wasip2 under wasmtime)
+        run: |
+          set -o pipefail
+          tools/scry-gate/wasm-equiv.sh tools/scry-gate/.work/falcon.fused.wasm | tee -a "$GITHUB_STEP_SUMMARY"
       # TEST-PIX-026 — fused-core byte-reproducibility (meld#325): two --reproducible
       # fusions of the same falcon component must be byte-identical (negative-controlled
       # against default no-flag fusion). Prerequisite for a re-verifiable REQ-PIX-018
