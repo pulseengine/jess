@@ -11,9 +11,9 @@
 manifest-version = 1
 
 [toolchain]
-realm   = "pulseengine"
+realm   = "covalent"
 channel = "rolling"
-layer   = "2026.11.44"
+layer   = "2026.11.28"
 # The layer NAME is not sufficient on its own: two entries for 2026.08.4 existed in the old
 # realm under different digests, and varve refuses to guess between them rather than
 # silently picking one. That refusal is the feature.
@@ -45,4 +45,16 @@ layer   = "2026.11.44"
 # already calls `kiln`, and gave the same verdict under both (mixer#mix 4 of 4 outputs
 # bit-identical to wasmtime, 2 of 5 exports executed, 3 not drivable). jig, plant, sieve
 # and warte change too; jess calls none of them.
-digest  = "sha256:73d5486ed887e0a62319a3e8c1bb823119e8e1e2e6ffbe543af4d653e01bad5e"
+# MOVED 2026-11-27 (owner decision: covalent is the standard layer): pulseengine/rolling
+# 2026.11.44 -> covalent/rolling 2026.11.28, resolved by `varve install` and then recorded (signed
+# index counter 29). covalent signs nothing of its own here (0 tools) and composes two layers,
+# each verified against its own realm's root: pulseengine 2026.11.45 (sha256:e13fb390..., 20
+# tools) and pulseengine-wasm 2026.11.6 (sha256:0d699621..., 7 tools). varve-realms.toml is the
+# published varve v0.48.0 copy, which adds those two realms; the covalent root matches
+# realm-root.pub in pulseengine/covalent-layers.
+# For jess: `varve diff 2026.11.44 2026.11.45` changes none of the tools jess calls (rivet 0.43.3,
+# spar 0.49.0, meld 0.70.0, synth 0.91.0, loom 1.5.4, kiln 0.9.0 unchanged). NEW through the shim:
+# wasm-tools 1.263.0, wasmtime 51.0.0 and wac 0.12.0, where ci.yml pins 1.245.1, 42.0.1 and
+# 0.10.1 explicitly. CI is unaffected; locally a script that reaches the varve shim now gets
+# the layer's versions instead of a refusal.
+digest  = "sha256:da7f6b48f875349c020e46ba52958f022db4c03b90b70bf91c718ccbbebbbbce"
