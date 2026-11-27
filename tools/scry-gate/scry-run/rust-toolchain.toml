@@ -1,0 +1,6 @@
+# Pinned so CI builds the same component as a local build. CI run 45984297106: the runner's newer
+# toolchain made the wasm32-wasip2 build import `wasi:cli/exit` `exit-with-code`, which wasmtime
+# 42.0.1 does not provide by default, so the component could not start. 1.99.1 does not import it.
+[toolchain]
+channel = "1.99.1"
+targets = ["wasm32-wasip2"]
