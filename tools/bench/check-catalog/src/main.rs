@@ -128,6 +128,21 @@ fn py_list<'a, I: IntoIterator<Item = &'a String>>(it: I) -> String {
 /// Read a YAML file through `rivet yaml to-json`. A missing file, invalid YAML or a refused
 /// construct is exit 1 from rivet with the reason on stderr; the reference raised there too.
 fn load(path: &str) -> R<Value> {
+    // Component mode (wasm32-wasip2 cannot spawn rivet): the caller, component-run.sh, has
+    // already converted each input with `rivet yaml to-json` and passes the JSON file instead.
+    // `path` stays the name the user gave (it appears in messages); CHECK_CATALOG_JSON_FOR_<i> /
+    // CHECK_CATALOG_JSON_FILE_<i> say which converted file holds that input.
+    if std::env::var("CHECK_CATALOG_INPUT").as_deref() == Ok("json") {
+        let file = (0..8)
+            .find(|i| std::env::var(format!("CHECK_CATALOG_JSON_FOR_{i}")).as_deref() == Ok(path))
+            .and_then(|i| std::env::var(format!("CHECK_CATALOG_JSON_FILE_{i}")).ok())
+            .unwrap_or_else(|| path.to_string());
+        let bytes = std::fs::read(&file).map_err(|e| Crash(format!("cannot read {file}: {e}")))?;
+        return match serde_json::from_slice(&bytes) {
+            Ok(v) => Ok(v),
+            Err(e) => crash(&format!("`rivet yaml to-json {path}` printed invalid JSON: {e}")),
+        };
+    }
     let out = match Command::new("rivet").args(["yaml", "to-json", path]).output() {
         Ok(o) => o,
         Err(e) => return crash(&format!("cannot run `rivet yaml to-json {path}`: {e}")),
@@ -399,13 +414,23 @@ enum Prov {
 /// The artifact IDs `rivet list --format json` reports. Like the reference, rivet's exit
 /// code is not consulted: only its stdout, which must parse.
 fn provenance_ids() -> Result<BTreeSet<String>, Prov> {
-    let out = match Command::new("rivet").args(["list", "--format", "json"]).output() {
-        Ok(o) => o,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(Prov::NotFound),
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => return Err(Prov::Other("PermissionError")),
-        Err(_) => return Err(Prov::Other("OSError")),
+    // Component mode: component-run.sh ran `rivet list --format json` and names its stdout here,
+    // or "!NotFound" / "!PermissionError" / "!OSError" when rivet could not be started.
+    let stdout = match std::env::var("CHECK_CATALOG_PROVENANCE") {
+        Ok(f) => match f.as_str() {
+            "!NotFound" => return Err(Prov::NotFound),
+            "!PermissionError" => return Err(Prov::Other("PermissionError")),
+            "!OSError" => return Err(Prov::Other("OSError")),
+            _ => std::fs::read(&f).map_err(|_| Prov::Other("OSError"))?,
+        },
+        Err(_) => match Command::new("rivet").args(["list", "--format", "json"]).output() {
+            Ok(o) => o.stdout,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(Prov::NotFound),
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => return Err(Prov::Other("PermissionError")),
+            Err(_) => return Err(Prov::Other("OSError")),
+        },
     };
-    let text = String::from_utf8(out.stdout).map_err(|_| Prov::Other("UnicodeDecodeError"))?;
+    let text = String::from_utf8(stdout).map_err(|_| Prov::Other("UnicodeDecodeError"))?;
     let d: Value = serde_json::from_str(&text).map_err(|_| Prov::Other("JSONDecodeError"))?;
     let arts = match &d {
         Value::Array(_) => d.clone(),

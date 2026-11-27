@@ -246,14 +246,36 @@ jobs:
       # seeded random cases, requires identical stdout and exit code and every output branch
       # reached, and plants two mutants in the reference that must each be detected. It FAILS,
       # never skips, if the reference (python3 + PyYAML) cannot run.
+      # Built from the crate directory so its rust-toolchain.toml (1.100.0 + wasm32-wasip2) applies;
+      # rustup reads the toolchain file from the working directory, not from --manifest-path.
       - name: check-catalog port builds, and equals the Python reference (jess#290)
-        working-directory: jess
+        working-directory: jess/tools/bench/check-catalog
         run: |
-          cargo build --release --locked --manifest-path tools/bench/check-catalog/Cargo.toml
-          cargo test --release --locked --manifest-path tools/bench/check-catalog/Cargo.toml -- --nocapture
+          rustup toolchain install && rustc --version
+          cargo build --release --locked
+          cargo test --release --locked -- --nocapture
       - name: hardware catalogue agrees with the registry (+ its own negative controls)
         working-directory: jess
         run: tools/bench/check-catalog.sh --self-test
+      # The same port as a wasm32-wasip2 component under wasmtime (owner decision 2026-11-27, "run
+      # what we build"). component-run.sh does the two rivet calls a component cannot make and
+      # hands it the JSON; the check logic, output and exit code are the component's. The same
+      # harness (Python reference, every case, the planted mutants) and the same self-test run
+      # against it.
+      - name: wasmtime 42.0.1 (sha256-pinned)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/wasmtime.tar.xz https://github.com/bytecodealliance/wasmtime/releases/download/v42.0.1/wasmtime-v42.0.1-x86_64-linux.tar.xz
+          echo "dd5253f3cb521bb094f9951c3d2c45c746b31e5723b07ce56f162ec9bab44d59  /tmp/wasmtime.tar.xz" | sha256sum -c -
+          mkdir -p /tmp/wtm && tar xJf /tmp/wasmtime.tar.xz -C /tmp/wtm --strip-components=1
+          sudo install -m755 /tmp/wtm/wasmtime /usr/local/bin/wasmtime
+          wasmtime --version
+      - name: check-catalog component equals the Python reference, and passes the self-test
+        working-directory: jess/tools/bench/check-catalog
+        run: |
+          cargo build --release --locked --target wasm32-wasip2
+          EQUIV_PORT_BIN="$PWD/component-run.sh" cargo test --release --locked -- --nocapture
+          cd ../../.. && CHECK_CATALOG=tools/bench/check-catalog/component-run.sh tools/bench/check-catalog.sh --self-test
       # AFD-124: a pin-path rename left three consumers on the OLD path, and two of them passed
       # locally against the stale artifact still sitting in .scratch — the bump was reported green
       # against the very artifact it replaced. This asserts every .scratch directory a script

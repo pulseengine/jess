@@ -10,6 +10,11 @@ publish = false
 # through `rivet yaml to-json` (rivet's own parser, org policy), never parsed here. The old
 # script is kept as tools/bench/check-catalog.ref.sh and is the equivalence oracle:
 # tests/equivalence.rs runs both and asserts identical stdout and exit code.
+#
+# It also builds as a wasm32-wasip2 component. component-run.sh runs it under wasmtime: it does the
+# two rivet calls on the host (a component cannot spawn) and passes the JSON in through
+# CHECK_CATALOG_INPUT=json, CHECK_CATALOG_JSON_FOR_<i>/_FILE_<i> and CHECK_CATALOG_PROVENANCE.
+# EQUIV_PORT_BIN=component-run.sh runs the same harness against the component.
 
 [dependencies]
 serde_json = { version = "1", features = ["preserve_order"] }
