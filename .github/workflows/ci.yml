@@ -117,7 +117,7 @@ env:
   # asserted: `check-drift.sh --committed-only` runs in rivet-validate below. It was cited in
   # five comments in this file as the thing keeping them in step and was never invoked — and
   # this very bump proved it, by going green with the two files disagreeing (AFD-137).
-  MELD_VERSION: v0.65.1
+  MELD_VERSION: v0.70.0
   # The gale + relay rivet externals are git-links pinned in rivet.yaml/rivet.lock;
   # the rivet-validate job's `rivet sync` git-fetches each at its pin (gale for the
   # stpa hazard trace gale:L-1/H-2; relay for the silicon-binding cross-links
