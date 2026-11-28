@@ -660,7 +660,7 @@ fn an_ambiguous_registry_is_refused() {
 
 // ── jess#280: an unreadable lockdir must say CANNOT DETERMINE, not BUSY ─────────────────────
 //
-// On fourpi.local the lockdir is `pi:pi` and the standard account is `r`, so an exclusive flock
+// On bench-host-C the lockdir is `pi:pi` and the standard account is `r`, so an exclusive flock
 // could not be taken and EVERY device reported busy forever. It failed closed, which is the right
 // direction — but "I cannot tell" rendered as "it is claimed" is absence-looks-like-data in a
 // safety tool, and it sent the reporter hunting a holder (`pid 4827`) that was not running.
@@ -669,7 +669,7 @@ fn an_ambiguous_registry_is_refused() {
 
 #[test]
 fn an_unwritable_lock_file_is_undetermined_not_busy() {
-    // MODELS THE REAL CASE: on fourpi.local the lock files were created by `pi` and the standard
+    // MODELS THE REAL CASE: on bench-host-C the lock files were created by `pi` and the standard
     // account `r` cannot write them. A read-only lock file reproduces that exactly without
     // needing a second account.
     //
@@ -864,7 +864,7 @@ fn an_already_permissive_lockdir_is_not_narrowed() {
 /// `--status` MUST CARRY THE THIRD STATE IN ITS EXIT CODE TOO.
 ///
 /// This is the jess#280 defect one level up, and it was found by running the FIXED binary on
-/// fourpi.local: every device printed `UNKNOWN — Permission denied` and the process still
+/// bench-host-C: every device printed `UNKNOWN — Permission denied` and the process still
 /// exited 0. A caller that branches on the exit code, or greps for `CLAIMED` and finds none,
 /// reads "the board is clear" out of "nothing could be read" — which is exactly the
 /// could-not-run/answered-no conflation the tri-state exists to prevent.

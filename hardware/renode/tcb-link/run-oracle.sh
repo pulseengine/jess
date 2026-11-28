@@ -14,7 +14,7 @@
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$D/../../.." && pwd)"   # repo root: boot.resc uses @hardware/... (repo-root-relative, matching CI)
-RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
+RENODE="${RENODE:-$HOME/renode-1.16.1/Contents/MacOS/renode}"
 ELF="$D/tcb-link.elf"
 
 [ -x "$RENODE" ] || { echo "EXEC ORACLE SKIP: renode not found at $RENODE (set RENODE=...)" >&2; exit 2; }

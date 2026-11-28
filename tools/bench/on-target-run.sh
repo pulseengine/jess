@@ -47,7 +47,7 @@ D="$(cd "$(dirname "$0")" && pwd)"
 WD="${WD:-$D/with-device}"
 # BOTH CHANNELS, because this script drives both (AFD-136). It asserted only `pixhawk-6xrt` while
 # running openocd through the MCU-Link and reading the board's tty for the pre-flight gate. The
-# registry on fourpi.local states the rule this violated, in its own words: "Distinct from
+# registry on bench-host-C states the rule this violated, in its own words: "Distinct from
 # mcu-link, which is the SWD path to the same silicon — holding one does not imply the other, and
 # a flash-then-observe sequence needs both." This IS a flash-then-observe sequence.
 # The separation of the two names is DELIBERATE and stays: the USB console and the SWD port are

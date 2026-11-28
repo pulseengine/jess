@@ -19,7 +19,7 @@
 # Both are asserted below. This is the failure mode AFD-055 and AFD-056 were about.
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
-RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
+RENODE="${RENODE:-$HOME/renode-1.16.1/Contents/MacOS/renode}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE" >&2; exit 2; }
 [ -f "$ROOT/.scratch/invoke/invoke.elf" ] || fail "image missing — run build.sh first"

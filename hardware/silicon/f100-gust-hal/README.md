@@ -29,7 +29,7 @@ the whole rung would be measuring nothing.
 calls, which hold the linear-memory base, size and globals table in those registers. The build
 gates on `verify-embedder`, which checks the emitted code rather than trusting the flags.
 
-## Result, 2026-09-07 — STM32VLDISCOVERY (STM32F100, Cortex-M3), ST-LINK/V1, `fourpi` bench
+## Result, 2026-09-07 — STM32VLDISCOVERY (STM32F100, Cortex-M3), ST-LINK/V1, `bench-host-C` bench
 
 ```
 LEG (only the CLOCK_EN word differs)     IDCODE      GPIOC_ODR   completion

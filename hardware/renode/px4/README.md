@@ -66,7 +66,7 @@ with real C# peripheral models (or re-based imxrt1064 models) as semantics matte
 ## PX4 built from source — boot path fully DECODED (iter#43)
 
 Built PX4 fmu-v6xrt from source (pinned Arm GNU 12.3.Rel1 toolchain + full python
-deps, under /Volumes/Home) → a symbol'd `.elf` (20,314 symbols). With symbols the
+deps, on a separate data volume) → a symbol'd `.elf` (20,314 symbols). With symbols the
 fault resolves exactly: PC `0x20242E72` = **`imxrt_octl_flash_initialize`**, which:
 ```
 memcpy(cfg, 0x30256aa8, 512); *cfg = 'FCFB';

@@ -230,7 +230,7 @@ parts:
       - >
         ON LINUX THE KERNEL CLAIMS THE WHOLE PROBE. This part exposes exactly ONE USB interface
         (:1.0, bInterfaceClass 08 mass-storage) and `usb-storage` binds it — MEASURED on
-        wohl.local. There is no second interface for openocd to fall back to, so the
+        bench-host-A. There is no second interface for openocd to fall back to, so the
         `usb-storage` quirk `0483:3744:i` is not a convenience, it is the ONLY route. Contrast
         stlink-v2-1, whose DAP lives on a separate vendor-class interface. Symptom without the
         quirk: HLA stops after "clock speed 1000 kHz" and exits 1.
@@ -253,7 +253,7 @@ parts:
     caveats:
       - >
         VID:PID CANNOT SELECT A BOARD. This probe model is onboard on many NUCLEOs, so a host can
-        carry several reporting the identical 0483:374b — MEASURED on wohl.local, which has TWO
+        carry several reporting the identical 0483:374b — MEASURED on bench-host-A, which has TWO
         (the WB55RG's and the G031K8's). Any tool that selects "the ST-LINK/V2-1" picks
         NONDETERMINISTICALLY between two different parts. Selection MUST be by probe serial (a
         24-hex string here, unlike stlink-v1). This is not hypothetical: unpinned openocd attached
@@ -292,13 +292,13 @@ parts:
     measured-by: [AFD-092, AFD-123]
 
 # THE NAMING RULE, agreed with gale on jess#266: EVERY DEVICE NAME IS A BOARD, NEVER A PROBE
-# MODEL. Two boards on wohl.local carry the same ST-LINK/V2-1 (0483:374b), so a probe-model name
+# MODEL. Two boards on bench-host-A carry the same ST-LINK/V2-1 (0483:374b), so a probe-model name
 # is one bench lock for two devices — AFD-082's vacuous lock by construction instead of by typo.
 # This cost a real attach already: unpinned openocd reached the G031K8 while a claim on another
 # board was held (gale#397), and only an IDCODE check stopped a flash.
 #
 # The rename this rule forced: `stlink-v3` was a DEVICE name meaning the NUCLEO-G474RE here and
-# the NUCLEO-WL55JC1 on wohl.local. It is now a PART name only. Registries carry `aliases:` so the
+# the NUCLEO-WL55JC1 on bench-host-A. It is now a PART name only. Registries carry `aliases:` so the
 # old name takes the SAME flock as the new one during the transition — otherwise the rename itself
 # would open the window it exists to close.
 boards:
@@ -361,7 +361,7 @@ boards:
   nordic-dfu:
     what: >
       A Nordic Semiconductor device sitting in its Open DFU Bootloader (1915:521f), serial
-      <serial: see host-local registry>, on wohl.local. A BOARD, not a probe — which board is NOT ESTABLISHED.
+      <serial: see host-local registry>, on bench-host-A. A BOARD, not a probe — which board is NOT ESTABLISHED.
     usb: { vid: 0x1915, pid: 0x521f }
     serial: "<serial-in-host-local-registry>"   # placeholder: the real probe serial is kept in the bench host's host-local registry (see devices.yaml), not in this repo
     role: unassigned — present on the bench, no jess work depends on it yet.
@@ -396,14 +396,14 @@ boards:
 # than by model. The naming rule at the head of `boards:` says a device name is a BOARD, never a
 # probe MODEL — because a model name is one lock for every board carrying that model. This section
 # is the other case, and the distinction is the SERIAL: `stlink-v2-1` is a model two boards on
-# wohl.local both carry, while the MCU-Link below is one physical object with one serial and
+# bench-host-A both carry, while the MCU-Link below is one physical object with one serial and
 # nothing else like it on the bench.
 # SO EVERY ENTRY HERE MUST CARRY A `serial:`, and check-catalog.sh refuses one that does not —
 # without it the entry is indistinguishable from a model name and the rule has a hole exactly the
 # shape of the thing it forbids.
 standalone:
   mcu-link:
-    what: NXP MCU-LINK r0FF debug probe, CMSIS-DAP V0.078 (1fc9:0143), on fourpi.local
+    what: NXP MCU-LINK r0FF debug probe, CMSIS-DAP V0.078 (1fc9:0143), on bench-host-C
     usb: { vid: 0x1fc9, pid: 0x0143 }
     serial: ARMCR0OKTRM5Q
     role: >
@@ -424,7 +424,7 @@ standalone:
     measured-by: [AFD-130, AFD-131, AFD-136]
 
   ft231x:
-    what: FTDI FT231X USB-UART bridge (0403:6015), on fourpi.local
+    what: FTDI FT231X USB-UART bridge (0403:6015), on bench-host-C
     usb: { vid: 0x0403, pid: 0x6015 }
     serial: D30K1YZS
     role: >

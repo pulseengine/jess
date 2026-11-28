@@ -26,7 +26,7 @@
 # EITHER changes, because either change is something jess must act on.
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
-RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
+RENODE="${RENODE:-$HOME/renode-1.16.1/Contents/MacOS/renode}"
 RENODE_DIR="$(dirname "$RENODE")"
 OUT="${OUT:-$ROOT/.scratch/mpu-probe}"; mkdir -p "$OUT"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }

@@ -38,7 +38,7 @@ tables, not a fixture for this probe.
 
 so an unkept promise is a **wrong value**, not a subtle drift.
 
-## Result, 2026-09-07 — STM32VLDISCOVERY (STM32F100, Cortex-M3), ST-LINK/V1, `fourpi` bench
+## Result, 2026-09-07 — STM32VLDISCOVERY (STM32F100, Cortex-M3), ST-LINK/V1, `bench-host-C` bench
 
 ```
 LEG (only the APPLY word differs)  read_data   read_global completion
