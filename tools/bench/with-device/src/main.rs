@@ -226,7 +226,7 @@ fn self_test() -> i32 {
     let holder_cmd = format!("touch {}; sleep 20", marker.display());
 
     // ALIASES (jess#266). Here rather than only in `cargo test` because this is the check gale
-    // can run on wohl.local, where the naming agreement actually has to hold and where there is
+    // can run on bench-host-A, where the naming agreement actually has to hold and where there is
     // no source tree. BOTH directions, because either alone is vacuous: an alias must be refused
     // while its canonical name is held, and a DIFFERENT device must stay free — a resolver that
     // collapsed every name to one key would pass the first and fail the second.
@@ -346,7 +346,7 @@ Re-run as: with-device {} --purpose '<why>' -- <your command>",
             // THE EXIT CODE MUST CARRY THE THIRD STATE TOO. Printing "UNKNOWN" and exiting 0 is
             // the jess#280 defect one level up: a caller that branches on the exit code, or
             // greps for CLAIMED and finds none, reads "nothing is claimed" out of "nothing could
-            // be read". Measured on fourpi.local on 2026-10-02 — every device UNKNOWN, exit 0.
+            // be read". Measured on bench-host-C on 2026-10-02 — every device UNKNOWN, exit 0.
             // So an unreadable state exits 4, exactly as a claim attempt does. 0 now means the
             // scan ANSWERED for every device, whether free or claimed.
             let rows = scan_status();

@@ -8,7 +8,7 @@ campaign: RUNFOR_MS=3000 PRIMASK_AT_RESUME=1
    exception log: 0 exceptions taken
    halted at PC 0x000004b2
    sentinel 1e55e4f0 present — the image ran to completion
-   31 words from 0x20011400 written to /home/r/jess-vt/run-P/ekf.a2.words (bound to sha256 3c9bb09b88bf7be1c603a9297149c0b326379f8f12c3f7dcc1c445bfd2068e41)
+   31 words from 0x20011400 written to ~/jess-vt/run-P/ekf.a2.words (bound to sha256 3c9bb09b88bf7be1c603a9297149c0b326379f8f12c3f7dcc1c445bfd2068e41)
    judge them with: WORDS_DIR=<dir> hardware/renode/cascade-invoke/run-ekf-oracle.sh
    === restoring PX4 via nRST (a core-only reset is NOT sufficient) ===
    PX4 app back up after ~10s

@@ -6,7 +6,7 @@ had been sized to fit the artifact (256 KB of SRAM against the part's 8 KB), so 
 could not have reproduced the failure the hardware would have.
 
 These scripts run the **same image** against the **same relay fixture rows** on an actual
-STM32F100 (STM32VLDISCOVERY, ST-LINK/V1, on the `fourpi` bench), over SWD.
+STM32F100 (STM32VLDISCOVERY, ST-LINK/V1, on the `bench-host-C` bench), over SWD.
 
 ## Result, 2026-09-05
 

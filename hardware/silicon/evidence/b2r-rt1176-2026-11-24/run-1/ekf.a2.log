@@ -7,7 +7,7 @@ campaign: RUNFOR_MS=3000
    settling 3s before the first halt (see the note on reset state)
    halted at PC 0x00000036
    sentinel 1e55e4f0 present — the image ran to completion
-   31 words from 0x20011400 written to /home/r/jess-b2/b2r/run-1/ekf.a2.words (bound to sha256 28d297f3461fae3216bf15660cfcdac4546799e1929acedd74e9fbd7265f9505)
+   31 words from 0x20011400 written to ~/jess-b2/b2r/run-1/ekf.a2.words (bound to sha256 28d297f3461fae3216bf15660cfcdac4546799e1929acedd74e9fbd7265f9505)
    judge them with: WORDS_DIR=<dir> hardware/renode/cascade-invoke/run-ekf-oracle.sh
    === restoring PX4 via nRST (a core-only reset is NOT sufficient) ===
    PX4 app back up after ~10s

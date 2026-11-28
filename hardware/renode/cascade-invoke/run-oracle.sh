@@ -15,7 +15,7 @@
 #       else would tell us the promises were kept.
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
-RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
+RENODE="${RENODE:-$HOME/renode-1.16.1/Contents/MacOS/renode}"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
 E="$SCRATCH/invoke/invoke.elf"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }

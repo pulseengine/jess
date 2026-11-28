@@ -3,8 +3,8 @@ Resource          ${RENODEKEYWORDS}
 *** Test Cases ***
 Invoke rate tick on ARM
     Execute Command    mach create "inv"
-    Execute Command    machine LoadPlatformDescription @/Volumes/Home/git/pulseengine/jess/hardware/renode/pixhawk6xrt.repl
-    Execute Command    sysbus LoadELF @/Volumes/Home/git/pulseengine/jess/hardware/renode/cascade-m7/falcon-cascade-m7.elf
+    Execute Command    machine LoadPlatformDescription @${CURDIR}/../../hardware/renode/pixhawk6xrt.repl
+    Execute Command    sysbus LoadELF @${CURDIR}/../../hardware/renode/cascade-m7/falcon-cascade-m7.elf
     # boot: init linmem, set r9, init globals, then spin at 0x16c
     Execute Command    emulation RunFor "0.05"
     ${pc}=   Execute Command    cpu PC

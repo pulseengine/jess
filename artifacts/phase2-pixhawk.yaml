@@ -434,7 +434,7 @@ artifacts:
       frontier at timer/AON peripheral init. Renode installed locally for the
       interactive loop; CI stays the hermetic regression gate.
       Status iter#43: PX4 BUILT FROM SOURCE (pinned Arm GNU 12.3.Rel1 + full python
-      deps, /Volumes/Home) -> symbol'd ELF (20314 syms). Boot path fully DECODED: the
+      deps, a separate data volume) -> symbol'd ELF (20314 syms). Boot path fully DECODED: the
       post-console blocker is imxrt_octl_flash_initialize -> the i.MX RT1176 BOOT-ROM
       ROM-API (FlexSPI-NOR). Exact ABI captured (chip-ver reg 0x40C84800==0x001170A0;
       ROM tree @ base+0x1C; tree+12->driver; driver+4->init). A stub to this ABI moved

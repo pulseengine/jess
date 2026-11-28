@@ -21,7 +21,7 @@
 #       reference where they are equal, and that refusal is itself self-tested.
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
-RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
+RENODE="${RENODE:-$HOME/renode-1.16.1/Contents/MacOS/renode}"
 PY="${PY:-python3}"
 SCRATCH="${SCRATCH:-$ROOT/.scratch}"
 E="$SCRATCH/invoke/soak.elf"

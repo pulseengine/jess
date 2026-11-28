@@ -12,7 +12,7 @@
 # vacuous metric this campaign keeps catching in its own checkers.
 set -uo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$D/../../.." && pwd)"
-RENODE="${RENODE:-/Users/r/renode-1.16.1/Contents/MacOS/renode}"
+RENODE="${RENODE:-$HOME/renode-1.16.1/Contents/MacOS/renode}"
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 [ -x "$RENODE" ] || { echo "SKIP: renode not at $RENODE (set RENODE=)" >&2; exit 2; }
 [ -f "$ROOT/hardware/renode/cascade-m7/falcon-cascade-m7.elf" ] || fail "cascade ELF missing"

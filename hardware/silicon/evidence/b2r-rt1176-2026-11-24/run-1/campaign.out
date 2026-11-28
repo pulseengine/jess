@@ -58,4 +58,4 @@
 20	ekf	0	match	2026-11-24T22:58:23Z
 20	ekf_nc1	0	match	2026-11-24T22:58:54Z
 20	ekf_n15	0	match	2026-11-24T22:59:24Z
-done: 60 attempts recorded in /home/r/jess-b2/b2r/run-1/attempts.tsv
+done: 60 attempts recorded in ~/jess-b2/b2r/run-1/attempts.tsv

@@ -94,7 +94,7 @@ own registry:
 | host | registry | devices |
 |---|---|---|
 | this repo (Mac) | `tools/bench/devices.yaml` | `nucleo-g474re` (alias: `stlink-v3`), `pixhawk-6xrt`, `selftest-device` |
-| `fourpi` (Pi 4) | `~/.config/pulseengine/bench-devices.yaml` — **host-local, deliberately not committed** | `pixhawk-6xrt`, `stlink-v1` (STM32VLDISCOVERY), `selftest-device` |
+| `bench-host-C` (Pi 4) | `~/.config/pulseengine/bench-devices.yaml` — **host-local, deliberately not committed** | `pixhawk-6xrt`, `stlink-v1` (STM32VLDISCOVERY), `selftest-device` |
 
 **Use the registered name exactly.** An unregistered name is refused (exit 2) rather than
 silently given its own lock file — gale hit this immediately, having invented
@@ -113,7 +113,7 @@ with-device --require-claim pixhawk-6xrt   # exits 2, with what to do, if not he
 
 ## Why the Pi's registry is not committed
 
-There used to be a copy at `tools/bench/devices-fourpi.yaml`, described as "for review". It had
+There used to be a copy at `tools/bench/devices-<host>.yaml`, described as "for review". It had
 already drifted from the live file by the time anyone checked:
 
 ```

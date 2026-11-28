@@ -4,4 +4,4 @@
 4	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:01:39Z
 5	ekf	1	0	match	-	0 exceptions taken	2026-11-26T08:02:10Z
 6	ekf	1	1	refused	-	none	2026-11-26T08:02:15Z
-STOP: refused before load on ekf round 6 (see /home/r/jess-vt/run-P/ekf.a6.log)
+STOP: refused before load on ekf round 6 (see ~/jess-vt/run-P/ekf.a6.log)

@@ -4567,7 +4567,7 @@ artifacts:
     title: "H1 UNBLOCKED on Linux: the RT1176 ROM answers stock sdphost and the replies are not echoes — but no memory has been read yet, and three of my hypotheses were wrong (one self-inflicted)"
     status: open
     description: |-
-      2026-09-05. Operator moved the Pixhawk to a Raspberry Pi 4 (fourpi, Debian 13 trixie, aarch64)
+      2026-09-05. Operator moved the Pixhawk to a Raspberry Pi 4 (bench-host-C, Debian 13 trixie, aarch64)
       and said ssh should work. It did - as pi@bench-host-C; the .box name does not resolve from the
       Mac, mDNS .local does. This tick is the H1 retest on Linux, and the AFD-080 blocker IS BROKEN.
 
@@ -5585,7 +5585,7 @@ artifacts:
           jess release v0.7.2    -> 0.2.2   (latest, cosign + SLSA)
           varve layer 2026.09.1  -> 0.2.1   (deposited 2026-09-05)
           gale's pin             -> 0.2.1   (jess release v0.7.1)
-          fourpi bench, RUNNING  -> 0.2.2   (updated after release)
+          bench-host-C bench, RUNNING  -> 0.2.2   (updated after release)
       So the machine doing the work runs a version the signed layer does not carry, and the other
       consumer of that same bench pins a third route at the older one. Nobody is wrong; there are two
       publication paths for one artifact and they were never going to stay in step.
@@ -5948,7 +5948,7 @@ artifacts:
           read_data    -> ldr r0, [r11, #0x100]   the active data segment
           read_global  -> ldr r0, [r9]            globals table slot 0
 
-      ON REAL STM32F100 SILICON (STM32VLDISCOVERY, ST-LINK/V1, fourpi bench), 2026-09-07:
+      ON REAL STM32F100 SILICON (STM32VLDISCOVERY, ST-LINK/V1, bench-host-C bench), 2026-09-07:
           LEG (only the APPLY word differs)  read_data   read_global  completion
             init APPLIED (baseline)          44332211    5a5a0000     c0ffee00   OK
             init SKIPPED (negative control)  deadbeef    deadbeef     c0ffee00   OK
@@ -6098,7 +6098,7 @@ artifacts:
       linmem base/size and globals table in those registers; gated by verify-embedder, which
       inspects the emitted code rather than trusting the flags.
 
-      *** ON REAL STM32F100 SILICON (STM32VLDISCOVERY, ST-LINK/V1, fourpi bench) ***
+      *** ON REAL STM32F100 SILICON (STM32VLDISCOVERY, ST-LINK/V1, bench-host-C bench) ***
           LEG (only the CLOCK_EN word differs)     IDCODE      GPIOC_ODR   completion
             GPIOC clocked (baseline)               10016420    00000300    c0ffee00   OK
             clock NOT enabled (negative control)   10016420    00000000    c0ffee00   OK
@@ -6386,7 +6386,7 @@ artifacts:
     description: |-
       2026-09-07. H3 second half: ADVANCED, NOT COMPLETE. Stated that way on purpose.
 
-      *** WHAT EXECUTED ON SILICON (STM32VLDISCOVERY, ST-LINK/V1, fourpi bench) ***
+      *** WHAT EXECUTED ON SILICON (STM32VLDISCOVERY, ST-LINK/V1, bench-host-C bench) ***
       gale-nano 0.7.0 (digest-pinned 546531952a5c...) lowered for cortex-m3, linked against
       jess's real gust:hal MMIO (AFD-109), jess's generic embedder-init apply loop (AFD-107) and
       a boot shim; 4,349 B image, 0 undefined, embedder ABI verified.
@@ -7504,7 +7504,7 @@ artifacts:
 
       *** AND A THIRD DEFECT OF MY OWN, IN THE ci.yml EDIT THAT LANDED THIS ***
       CI refused the first push. run-soak-oracle.sh reported
-          SKIP: renode not at /Users/r/renode-1.16.1/Contents/MacOS/renode   (exit 2)
+          SKIP: renode not at $HOME/renode-1.16.1/Contents/MacOS/renode   (exit 2)
       on a linux runner. Cause: the new "ekf reference vacuity guards self-test" step was inserted
       after the TEST-PIX-033 step's `name:`/`run:` lines — but that step is FOUR lines, ending in an
       `env:` block carrying RENODE. The insertion went BETWEEN `run:` and `env:`, so the new step
@@ -7878,7 +7878,7 @@ artifacts:
       bench-host-A's SSH host key CHANGED between this tick and the last:
           REMOTE HOST IDENTIFICATION HAS CHANGED
           ED25519 SHA256:Ey5AUpS0PqYZz7QBng6aewN5KdqwtMM4awUxuraREI4
-          offending ECDSA key in /Users/r/.ssh/known_hosts:15
+          offending ECDSA key in $HOME/.ssh/known_hosts:15
       It is also a key TYPE change (ECDSA on record, ED25519 offered), which a reinstall or an sshd
       regeneration would produce. jess did NOT clear the known_hosts entry and did NOT reconnect: that is
       the operator's decision, and clearing it to get on with the tick is precisely the behaviour the
@@ -7976,7 +7976,7 @@ artifacts:
       the tick is precisely what the check exists to prevent. Only after the operator confirmed an
       intentional reinstall was the stale entry removed (ssh-keygen -R, retaining known_hosts.old).
       CORROBORATION AFTER THE FACT, not the basis for the decision: bench-host-A AND bench-host-B both run
-      kernel 6.18.50 while fourpi runs 6.12.75, and wohl was on 6.18.34 before the change — consistent
+      kernel 6.18.50 while bench-host-C runs 6.12.75, and wohl was on 6.18.34 before the change — consistent
       with a reinstall of the two.
     tags: [bench-inventory, hardware, afd-113, afd-123, afd-126, jess-266, gale, security, blocked, self-correction, afd-107]
     fields:
@@ -8196,8 +8196,8 @@ artifacts:
       three NUCLEOs heading toward locks while the airframe's flight controller had none of the catalogue,
       registry or tool. That conclusion is FALSE on all three counts, and the false impression is jess's
       to own:
-          /home/pi/bench/with-device                         397,936 B, executable
-          /home/pi/.config/pulseengine/bench-devices.yaml    lists pixhawk-6xrt, stlink-v1, selftest-device
+          ~pi/bench/with-device                         397,936 B, executable
+          ~pi/.config/pulseengine/bench-devices.yaml    lists pixhawk-6xrt, stlink-v1, selftest-device
           hardware-catalog.yaml                              `boards: pixhawk-6xrt` present
           tools/bench/devices.yaml                           pixhawk-6xrt present
       Every vehicle action jess has taken ran under a `with-device pixhawk-6xrt` claim, including the
@@ -8364,12 +8364,12 @@ artifacts:
           the lock file is still `pi:pi 0666`, so `pi` is not locked out — widening never narrows
       THE EXECUTION HALF OF THE BUG IS ALSO FIXED, not just diagnosed: the binary is installed at
       /usr/local/bin/with-device (0755, root) on all three hosts, so the exit-126 failure — `r` could
-      not traverse /home/pi to even execute the old copy — cannot recur. bench-host-B and bench-host-A both
+      not traverse ~pi to even execute the old copy — cannot recur. bench-host-B and bench-host-A both
       report `--self-test: PASS` as `r`. The interlock is therefore LIVE ON THE WHOLE BENCH for the
       standard account, which also unblocks AFD-113's F100 re-run on bench-host-B.
 
       *** A SECOND DEFECT OF THE SAME CLASS, FOUND BY THAT VERIFICATION, ONE LEVEL UP ***
-      On fourpi the fixed `--status` printed `UNKNOWN` for all six devices and EXITED 0. That is
+      On bench-host-C the fixed `--status` printed `UNKNOWN` for all six devices and EXITED 0. That is
       jess#280 again in the exit code: a caller that branches on the status, or greps for CLAIMED and
       finds none, reads "the board is clear" out of "nothing could be read" — and unlike the original it
       fails OPEN. `--status` now exits 4 when any device is unreadable, and says on stderr `N of M
@@ -8378,7 +8378,7 @@ artifacts:
       MUTATION TEST: changing that branch back to `exit(0)` makes the new test fail on the exit code
       while still printing UNKNOWN — so the test pins the exit code, not the message. And its CONTROL
       (`--status` over a genuinely CLAIMED device must still exit 0) is INSENSITIVE to that mutation,
-      which is what stops exit-4-on-anything from passing both. Re-measured on fourpi after the change:
+      which is what stops exit-4-on-anything from passing both. Re-measured on bench-host-C after the change:
       broken lockdir -> exit 4; writable lockdir -> exit 0. 65 tests (30 lib + 35 behavioural), clippy
       clean.
       Worth stating because it is the pattern and not an incident: the tri-state was added to the
@@ -8387,7 +8387,7 @@ artifacts:
       surfaced the one that was missed.
     tags: [bench-interlock, with-device, jess-280, relay, gate-potency, mutation-tested, afd-082, afd-128, cross-build, retraction]
     fields:
-      detected-by: relay filing jess#280 with a reproduction and a control, while installing with-device on fourpi per jess#266, 2026-10-01
+      detected-by: relay filing jess#280 with a reproduction and a control, while installing with-device on bench-host-C per jess#266, 2026-10-01
       severity: major
       triage-status: confirmed
     provenance:
@@ -8831,7 +8831,7 @@ artifacts:
       FIXED: `DEVS="${DEVS:-pixhawk-6xrt mcu-link}"`, each required INDIVIDUALLY so the refusal names the
       missing one (a single combined check would say "not under a claim" to an operator holding one of the
       two, which is the confusing half of the bug). `DEV=` still works for a single device.
-      VERIFIED ON fourpi, three cases, nothing touching hardware — TTY pointed at a nonexistent node so
+      VERIFIED ON bench-host-C, three cases, nothing touching hardware — TTY pointed at a nonexistent node so
       the pre-flight gate refuses, which happens AFTER the interlock and BEFORE any openocd:
           under pixhawk-6xrt alone -> REFUSED, "NOT UNDER A CLAIM for mcu-link"
           under mcu-link alone     -> REFUSED, "NOT UNDER A CLAIM for pixhawk-6xrt"
@@ -8869,7 +8869,7 @@ artifacts:
           bench-host-A   stlink-v3   -> renamed nucleo-wl55jc1
       and `stlink-v3` meant a DIFFERENT board on each of those two hosts, which is exactly the ambiguity
       the rule was agreed to prevent, live, for a month.
-      THREE MORE names resolved to nothing at all: `mcu-link` and `ft231x` on fourpi, `nordic-dfu` on
+      THREE MORE names resolved to nothing at all: `mcu-link` and `ft231x` on bench-host-C, `nordic-dfu` on
       wohl. Assertion 1 would have refused those — it never ran on these files.
       RENAMED WITH ALIASES, and the alias behaviour verified per host: a claim under the old name reports
       the canonical name ("'stlink-v3' is an alias for 'nucleo-g474re' — claiming 'nucleo-g474re'"), and
@@ -8956,8 +8956,8 @@ artifacts:
       board. Only an ALIAS — an explicitly secondary spelling — gets the ambiguity test.
 
       *** STATE OF THE BENCH AFTER THIS ***
-      All three host registries pass the gate, measured: fourpi CATALOG OK, gale CATALOG OK, wohl
-      CATALOG OK. Before: fourpi failed on two unresolved names, gale on two part-named devices, wohl on
+      All three host registries pass the gate, measured: bench-host-C CATALOG OK, gale CATALOG OK, wohl
+      CATALOG OK. Before: bench-host-C failed on two unresolved names, gale on two part-named devices, wohl on
       one. The five F100 scripts keep working through the `stlink-v1` -> `stm32vldiscovery` alias, which
       is now legitimate rather than merely tolerated, and AFD-113's F100 re-run on bench-host-B is
       unblocked by it.
@@ -9358,7 +9358,7 @@ artifacts:
     type: ai-found-defect
     title: "The bench ran with-device 0.5.0 with no release provenance: jess's last release (v0.7.2) shipped 0.2.2, and the queued 'stale varve copy' premise had the cause inverted"
     status: resolved
-    description: "QUEUED PREMISE (loop feature #3): 'the varve layer ships with-device 0.2.2 while jess ships 0.5.0 — a stale copy of jess's own tool; worth an upstream ask'. MEASURED instead: layer 2026.10.32 carries with-device 0.2.2 (varve inspect, all four platforms), and jess's latest release v0.7.2 (2026-09-05) ships with-device-0.2.2 assets; v0.7.1 shipped 0.2.1, v0.7.0 0.2.0. The source went 0.2.2 -> 0.3.0 at 0192371 (AFD-123, board names + alias resolution, 2026-09-30) -> 0.5.0 at f2a6365 (AFD-133, EACCES no longer reported as CLAIMED, 2026-10-02), and was never tagged. So varve was CORRECT: it carried jess's latest release. The defect was jess's: all three bench hosts run 'with-device 0.5.0' (fourpi measured by --version) built from untagged source, with no signed asset, SBOM or provenance, while the release pipeline that produces exactly those existed. An upstream ask to varve would have been misdirected. Checked that 0.5.0 names one source: the only post-0.5.0 change, 279f857 (#301), edits two comments in src/lib.rs. FIX: release v0.7.3 (tool release, no milestone scope) from main, carrying with-device 0.5.0 and the Renode model asset. NOT verified here: that the bench hosts' 0.5.0 binaries are bit-identical to what the release builds; replacing them with the signed asset is the follow-up."
+    description: "QUEUED PREMISE (loop feature #3): 'the varve layer ships with-device 0.2.2 while jess ships 0.5.0 — a stale copy of jess's own tool; worth an upstream ask'. MEASURED instead: layer 2026.10.32 carries with-device 0.2.2 (varve inspect, all four platforms), and jess's latest release v0.7.2 (2026-09-05) ships with-device-0.2.2 assets; v0.7.1 shipped 0.2.1, v0.7.0 0.2.0. The source went 0.2.2 -> 0.3.0 at 0192371 (AFD-123, board names + alias resolution, 2026-09-30) -> 0.5.0 at f2a6365 (AFD-133, EACCES no longer reported as CLAIMED, 2026-10-02), and was never tagged. So varve was CORRECT: it carried jess's latest release. The defect was jess's: all three bench hosts run 'with-device 0.5.0' (bench-host-C measured by --version) built from untagged source, with no signed asset, SBOM or provenance, while the release pipeline that produces exactly those existed. An upstream ask to varve would have been misdirected. Checked that 0.5.0 names one source: the only post-0.5.0 change, 279f857 (#301), edits two comments in src/lib.rs. FIX: release v0.7.3 (tool release, no milestone scope) from main, carrying with-device 0.5.0 and the Renode model asset. NOT verified here: that the bench hosts' 0.5.0 binaries are bit-identical to what the release builds; replacing them with the signed asset is the follow-up."
     fields:
       detected-by: "jess loop queued feature #3, checking the instrument (release assets vs layer inspect) before filing upstream"
       discovered-at: 2026-10-29
@@ -9390,7 +9390,7 @@ artifacts:
     status: open
     description: "MEASURED on the vehicle host: after three 'with-device --status' calls over ssh (used as a read-only check), all 7 .holder files in /var/tmp/pulseengine-bench carried the timestamp of those calls (mtime 00:49 local). scan_status() calls try_claim_outcome(dev, 'status probe', …) for every *.lock in the lockdir, and a successful probe writes the holder record. So the one trace of the last real claim (what jess#307 wants to keep as history) is destroyed by the command an operator uses to look. Also measured: --status enumerates LOCK FILES, not the registry, so it lists stale September locks (stlink-v1, stlink-v1-f100) for boards no longer on that host and omits a registered device that was never claimed (ft231x). Fix belongs in with-device: probe without writing the holder (or restore it), and report registered-but-never-claimed and claimed-but-unregistered separately."
     fields:
-      detected-by: "jess loop investigating jess#308: ls of fourpi's lockdir after --status calls"
+      detected-by: "jess loop investigating jess#308: ls of bench-host-C's lockdir after --status calls"
       discovered-at: 2026-10-30
       severity: minor
       triage-status: open
